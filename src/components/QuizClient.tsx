@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import TikzRenderer from "@/components/TikzRenderer";
@@ -25,16 +25,16 @@ import {
   formatDateTime,
 } from "@/utils/examTypes";
 
-export interface QuizClientProps {
-  examId: string;
-  title: string;
-  questions: ParsedQuestion[];
-  scoringConfig: ScoringConfig;
-  timing: TimingConfig;
-  maxRetries?: number;
-}
+// ── WakeLock type (may not be present in all TS lib configurations) ────────────
 
-// ── Section metadata (chuẩn Bộ GD 2025) ─────────────────────────────────────
+interface WakeLockSentinel {
+  release(): Promise<void>;
+}
+type WakeLockNav = Navigator & {
+  wakeLock?: { request(type: "screen"): Promise<WakeLockSentinel> };
+};
+
+// ── Section metadata ──────────────────────────────────────────────────────────
 
 export const SECTION_META: Record<string, { roman: string; label: string; note: string; colors: string }> = {
   multiple_choice: {
@@ -57,7 +57,89 @@ export const SECTION_META: Record<string, { roman: string; label: string; note: 
   },
 };
 
+// ── CountdownTimer ─────────────────────────────────────────────────────────────
+//
+// TASK 2 — Isolated timer component.
+//
+// KEY INSIGHT: The timer's `timeLeft` state was previously stored in the parent
+// `QuizClient`. Every second `setTimeLeft` caused QuizClient (and all its
+// children including KaTeX/TikZJax content) to re-render — this is what
+// exhausted iOS Safari's memory and caused spontaneous reloads.
+//
+// By moving `timeLeft` into this isolated component, the parent only re-renders
+// when the student actually interacts (navigation, answer selection).
+// KaTeX and TikZ content are completely unaffected by the ticking clock.
+
+interface CountdownTimerProps {
+  totalSeconds: number;
+  onExpire: () => void;
+}
+
+const CountdownTimer = memo(function CountdownTimer({
+  totalSeconds,
+  onExpire,
+}: CountdownTimerProps) {
+  const [timeLeft, setTimeLeft] = useState(totalSeconds);
+  // Always call the latest version of onExpire even if it was re-created
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
+
+  // Single stable interval — mounts once, never re-created
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []); // ← empty: mount once only, never recreated
+
+  // Fire expiry callback when timer hits 0
+  useEffect(() => {
+    if (timeLeft === 0) onExpireRef.current();
+  }, [timeLeft]);
+
+  const isWarning = timeLeft <= 300 && timeLeft > 0;
+  const isDanger  = timeLeft <= 60  && timeLeft > 0;
+
+  return (
+    <div className="sticky top-16 z-40 flex justify-end mb-4 pointer-events-none">
+      <div
+        className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg font-mono font-extrabold text-lg transition-colors ${
+          isDanger
+            ? "bg-red-600 text-white animate-pulse"
+            : isWarning
+            ? "bg-amber-400 text-white"
+            : "bg-white border border-gray-200 text-gray-800"
+        }`}
+      >
+        <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" strokeWidth={2} />
+          <path strokeLinecap="round" d="M12 6v6l4 2" strokeWidth={2} />
+        </svg>
+        {formatCountdown(timeLeft)}
+      </div>
+    </div>
+  );
+});
+
 // ── Main component ────────────────────────────────────────────────────────────
+
+export interface QuizClientProps {
+  examId: string;
+  title: string;
+  questions: ParsedQuestion[];
+  scoringConfig: ScoringConfig;
+  timing: TimingConfig;
+  maxRetries?: number;
+}
 
 export default function QuizClient({
   examId,
@@ -69,15 +151,15 @@ export default function QuizClient({
 }: QuizClientProps) {
   const { user, userProfile, login } = useAuth();
 
-  // Trạng thái màn hình
+  // ── Screen state ──────────────────────────────────────────────────────────
   const [started, setStarted] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Đồng hồ đếm ngược (giây)
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  // NOTE: `timeLeft` state has been REMOVED from this component.
+  // It now lives inside <CountdownTimer> to isolate per-second re-renders.
 
-  // Đáp án học sinh
+  // ── Student answers ───────────────────────────────────────────────────────
   const [p1Ans, setP1Ans] = useState<Record<number, number>>({});
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
@@ -85,13 +167,41 @@ export default function QuizClient({
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
 
-  // ── Retry limit: count previous submissions ───────────────────────────────
-  const [submissionCount, setSubmissionCount] = useState<number | null>(null);
+  // ── TASK 1: Wake Lock ─────────────────────────────────────────────────────
+  //
+  // Prevents the screen from dimming/locking while the student is mid-exam.
+  // The OS automatically releases the lock when the user switches apps or hides
+  // the browser — we re-request it when the tab becomes visible again.
 
-  // SAFARI FIX: depend on email string, not the `user` object reference.
-  // Firebase occasionally re-emits the same user with a new object identity,
-  // which would re-trigger the effect and loop Firestore queries.
-  const userEmail = user?.email ?? null;
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  const requestWakeLock = useCallback(async () => {
+    const nav = navigator as WakeLockNav;
+    if (!nav.wakeLock) return; // API not supported (older browsers/iOS < 16.4)
+    try {
+      // Release any stale sentinel before acquiring a new one
+      if (wakeLockRef.current) {
+        await wakeLockRef.current.release().catch(() => {});
+      }
+      wakeLockRef.current = await nav.wakeLock.request("screen");
+    } catch {
+      // User/OS denied — not a critical error, exam still works
+    }
+  }, []);
+
+  // Acquire wake lock when quiz starts; release on unmount / submission
+  useEffect(() => {
+    if (!started || isSubmitted) return;
+    requestWakeLock();
+    return () => {
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
+  }, [started, isSubmitted, requestWakeLock]);
+
+  // ── Retry limit ───────────────────────────────────────────────────────────
+  const [submissionCount, setSubmissionCount] = useState<number | null>(null);
+  const userEmail = user?.email ?? null; // stable string dep (not object ref)
 
   useEffect(() => {
     if (!userEmail) return;
@@ -113,7 +223,7 @@ export default function QuizClient({
     return () => { cancelled = true; };
   }, [userEmail, examId]);
 
-  // ── Anti-cheat ────────────────────────────────────────────────────────────
+  // ── Anti-cheat + Wake Lock re-acquire (merged visibility handler) ─────────
   const [cheatCount, setCheatCount] = useState(0);
   const [showCheatWarning, setShowCheatWarning] = useState(false);
   const cheatCountRef = useRef(0);
@@ -122,17 +232,21 @@ export default function QuizClient({
     if (!started || isSubmitted) return;
     const handleVisibility = () => {
       if (document.hidden) {
+        // Student left the exam tab
         cheatCountRef.current += 1;
         setCheatCount(cheatCountRef.current);
         setShowCheatWarning(true);
+      } else {
+        // TASK 1 edge case: tab became visible again.
+        // The OS always releases wake lock when the page is hidden — re-request it.
+        requestWakeLock();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [started, isSubmitted]);
+  }, [started, isSubmitted, requestWakeLock]);
 
-  // Phân loại câu hỏi theo phần — useMemo để tránh tạo array mới mỗi render
-  // (array mới → calculateScore / handleSubmit recreate → useEffect loops trên Safari)
+  // ── Question partitioning — memoized to avoid array churn ─────────────────
   const p1Qs = useMemo(() => questions.filter((q) => q.type === "multiple_choice"), [questions]);
   const p2Qs = useMemo(() => questions.filter((q) => q.type === "true_false"), [questions]);
   const p3Qs = useMemo(() => questions.filter((q) => q.type === "short_answer"), [questions]);
@@ -292,53 +406,44 @@ export default function QuizClient({
     ]
   );
 
+  // Keep a ref so CountdownTimer.onExpire always calls the latest handleSubmit
   const handleSubmitRef = useRef(handleSubmit);
   useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
 
-  // ── Countdown timer ───────────────────────────────────────────────────────
-  // SAFARI FIX: use a single stable interval (dep = [started] only).
-  // The old pattern re-created setInterval every second via [started, timeLeft]
-  // deps, causing rapid create/destroy cycles that crash on iOS Safari.
-  useEffect(() => {
-    if (!started) return;
-    const id = setInterval(() => {
-      setTimeLeft((t) => (t !== null && t > 0 ? t - 1 : t));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [started]); // ← intentionally ONLY `started`
+  // Stable callback passed to CountdownTimer — empty deps because it reads
+  // handleSubmit through the ref, never needs to be recreated.
+  const onExpire = useCallback(() => handleSubmitRef.current(true), []);
 
-  // Separate effect: handle time expiry (avoids logic inside the interval)
-  useEffect(() => {
-    if (started && timeLeft === 0) {
-      handleSubmitRef.current(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft]); // `started` omitted intentionally — only fires when timeLeft hits 0
+  // ── Stable answer handlers (useCallback with empty deps) ───────────────────
+  // Using functional updater form (setX(prev => ...)) means no external deps.
+  // Stable refs ensure React.memo on QuestionCard is not bypassed by handler
+  // identity changes on every parent render.
+  const onP1 = useCallback(
+    (qId: number, optIdx: number) => setP1Ans((prev) => ({ ...prev, [qId]: optIdx })),
+    []
+  );
+  const onP2 = useCallback(
+    (qId: number, stmtIdx: number, value: boolean) =>
+      setP2Ans((prev) => {
+        const cur = prev[qId] ?? new Array(4).fill(null);
+        const next = [...cur];
+        next[stmtIdx] = value;
+        return { ...prev, [qId]: next };
+      }),
+    []
+  );
+  const onP3 = useCallback(
+    (qId: number, val: string) => setP3Ans((prev) => ({ ...prev, [qId]: val })),
+    []
+  );
 
-  // ── Answer handlers ───────────────────────────────────────────────────────
-  const onP1 = (qId: number, optIdx: number) =>
-    setP1Ans((prev) => ({ ...prev, [qId]: optIdx }));
-
-  const onP2 = (qId: number, stmtIdx: number, value: boolean) =>
-    setP2Ans((prev) => {
-      const cur = prev[qId] ?? new Array(4).fill(null);
-      const next = [...cur];
-      next[stmtIdx] = value;
-      return { ...prev, [qId]: next };
-    });
-
-  const onP3 = (qId: number, val: string) =>
-    setP3Ans((prev) => ({ ...prev, [qId]: val }));
-
-  // ── Auth guard: chưa đăng nhập ────────────────────────────────────────────
+  // ── Auth guard ────────────────────────────────────────────────────────────
   if (!user) {
     return (
       <div className="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 max-w-md w-full overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-8 text-center">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-3">
-              🔐
-            </div>
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-3">🔐</div>
             <h2 className="text-xl font-extrabold text-white">{title}</h2>
           </div>
           <div className="px-8 py-8 text-center">
@@ -379,7 +484,7 @@ export default function QuizClient({
     );
   }
 
-  // ── Intro screen (chưa bắt đầu) ──────────────────────────────────────────
+  // ── Intro screen ──────────────────────────────────────────────────────────
   if (!started) {
     const retryLimitReached =
       maxRetries > 0 &&
@@ -394,18 +499,13 @@ export default function QuizClient({
         maxRetries={maxRetries}
         submissionCount={submissionCount}
         retryLimitReached={retryLimitReached}
-        onStart={() => {
-          setStarted(true);
-          setTimeLeft(timing.duration * 60);
-        }}
+        onStart={() => setStarted(true)} // CountdownTimer initialises its own state
       />
     );
   }
 
   // ── Quiz UI ───────────────────────────────────────────────────────────────
   const currentQ = questions[currentIdx];
-  const isWarning = timeLeft !== null && timeLeft <= 300 && timeLeft > 0;
-  const isDanger  = timeLeft !== null && timeLeft <= 60  && timeLeft > 0;
 
   // Section banner: show when this is the first question of a new section
   const prevType = currentIdx > 0 ? questions[currentIdx - 1].type : null;
@@ -438,26 +538,10 @@ export default function QuizClient({
     <div className="max-w-3xl mx-auto px-4 py-10 w-full flex-1 flex flex-col">
       {CheatWarningModal}
 
-      {/* ── Sticky countdown ──────────────────────────────────────────────── */}
-      {timeLeft !== null && (
-        <div className="sticky top-16 z-40 flex justify-end mb-4 pointer-events-none">
-          <div
-            className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg font-mono font-extrabold text-lg transition-colors ${
-              isDanger  ? "bg-red-600 text-white animate-pulse"
-              : isWarning ? "bg-amber-400 text-white"
-              : "bg-white border border-gray-200 text-gray-800"
-            }`}
-          >
-            <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" strokeWidth={2} />
-              <path strokeLinecap="round" d="M12 6v6l4 2" strokeWidth={2} />
-            </svg>
-            {formatCountdown(timeLeft)}
-          </div>
-        </div>
-      )}
+      {/* ── TASK 2: Isolated countdown — only this tiny component re-renders per second ── */}
+      <CountdownTimer totalSeconds={timing.duration * 60} onExpire={onExpire} />
 
-      {/* ── Section banner (hiển thị khi bắt đầu phần mới) ───────────────── */}
+      {/* ── Section banner ─────────────────────────────────────────────────── */}
       {isFirstOfSection && sectionMeta && (
         <div className={`mb-4 px-5 py-3 rounded-2xl border-2 ${sectionMeta.colors}`}>
           <p className="font-extrabold text-sm">
@@ -467,7 +551,7 @@ export default function QuizClient({
         </div>
       )}
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      {/* ── Header / progress ──────────────────────────────────────────────── */}
       <div className="mb-6">
         <div className="flex justify-between items-end mb-3">
           <div>
@@ -487,7 +571,7 @@ export default function QuizClient({
         </div>
       </div>
 
-      {/* ── Question card ─────────────────────────────────────────────────── */}
+      {/* ── Question card — memoized, only re-renders on navigation or answer change ── */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8 flex-1">
         <QuestionCard
           question={currentQ}
@@ -598,7 +682,6 @@ function IntroScreen({
   return (
     <div className="max-w-xl mx-auto px-4 py-16 w-full">
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        {/* Header band */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-10 text-white">
           <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mb-4">📝</div>
           <h1 className="text-2xl font-extrabold leading-tight">{title}</h1>
@@ -606,12 +689,11 @@ function IntroScreen({
         </div>
 
         <div className="px-8 py-6 space-y-5">
-          {/* Cấu trúc đề */}
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
             {[
-              { label: "Trắc nghiệm", count: p1Count, color: "bg-purple-50 border-purple-100 text-purple-700" },
-              { label: "Đúng/Sai",    count: p2Count, color: "bg-amber-50 border-amber-100 text-amber-700" },
-              { label: "Trả lời ngắn",count: p3Count, color: "bg-emerald-50 border-emerald-100 text-emerald-700" },
+              { label: "Trắc nghiệm",   count: p1Count, color: "bg-purple-50 border-purple-100 text-purple-700" },
+              { label: "Đúng/Sai",      count: p2Count, color: "bg-amber-50 border-amber-100 text-amber-700" },
+              { label: "Trả lời ngắn",  count: p3Count, color: "bg-emerald-50 border-emerald-100 text-emerald-700" },
             ].map(({ label, count, color }) => (
               <div key={label} className={`rounded-xl border p-3 ${color}`}>
                 <p className="text-2xl font-extrabold">{count}</p>
@@ -620,7 +702,6 @@ function IntroScreen({
             ))}
           </div>
 
-          {/* Thời gian */}
           <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">Thời gian làm bài</span>
@@ -675,9 +756,7 @@ function IntroScreen({
             <li>Khi hết giờ bài sẽ tự động được nộp.</li>
             <li>Không thể quay lại làm bài sau khi nộp.</li>
             {maxRetries > 0 && (
-              <li>
-                Số lượt làm bài: {submissionCount ?? "…"}/{maxRetries}.
-              </li>
+              <li>Số lượt làm bài: {submissionCount ?? "…"}/{maxRetries}.</li>
             )}
           </ul>
 
@@ -705,6 +784,18 @@ function IntroScreen({
 }
 
 // ── QuestionCard ──────────────────────────────────────────────────────────────
+//
+// TASK 2 — Wrapped with React.memo + custom comparator.
+//
+// The custom comparator checks ONLY whether the currently-displayed question or
+// its specific answer changed. This means:
+//   • Navigating to a different question → re-render (question.id changed)
+//   • Student selects/changes their answer → re-render (answer changed)
+//   • Timer ticks (no longer a parent re-render) → NO re-render
+//   • Progress bar or palette updates → NO re-render for the card itself
+//
+// Together with CountdownTimer isolation this eliminates the ~60 unnecessary
+// KaTeX/TikZ re-renders per minute that were crashing iOS Safari.
 
 interface CardProps {
   question: ParsedQuestion;
@@ -717,118 +808,137 @@ interface CardProps {
   onP3: (qId: number, val: string) => void;
 }
 
-function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
-  const { id, type, questionText, options, tikzCode } = question;
+const QuestionCard = memo(
+  function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
+    const { id, type, questionText, options, tikzCode } = question;
 
-  const typeBadge =
-    type === "multiple_choice"
-      ? { label: "Trắc nghiệm", cls: "bg-purple-100 text-purple-700" }
-      : type === "true_false"
-      ? { label: "Đúng / Sai",  cls: "bg-amber-100 text-amber-700" }
-      : { label: "Trả lời ngắn",cls: "bg-emerald-100 text-emerald-700" };
+    const typeBadge =
+      type === "multiple_choice"
+        ? { label: "Trắc nghiệm",   cls: "bg-purple-100 text-purple-700" }
+        : type === "true_false"
+        ? { label: "Đúng / Sai",    cls: "bg-amber-100 text-amber-700" }
+        : { label: "Trả lời ngắn", cls: "bg-emerald-100 text-emerald-700" };
 
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-          Câu {questionNumber}
-        </span>
-        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${typeBadge.cls}`}>
-          {typeBadge.label}
-        </span>
-      </div>
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+            Câu {questionNumber}
+          </span>
+          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${typeBadge.cls}`}>
+            {typeBadge.label}
+          </span>
+        </div>
 
-      {tikzCode ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
-          <div className="text-gray-900 leading-relaxed font-medium">
+        {tikzCode ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
+            <div className="text-gray-900 leading-relaxed font-medium">
+              {processLatexText(questionText)}
+            </div>
+            {/* TASK 3 — figure for the CURRENT question.
+                TikzRenderer uses <iframe> which already loads eagerly by default.
+                The `key={id}` on the parent card ensures a fresh iframe is mounted
+                (not reused) when navigating — preventing stale SVG content. */}
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
+              <TikzRenderer code={tikzCode} />
+            </div>
+          </div>
+        ) : (
+          <div className="text-gray-900 leading-relaxed font-medium mb-6">
             {processLatexText(questionText)}
           </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
-            <TikzRenderer code={tikzCode} />
+        )}
+
+        {/* P1 — Multiple choice */}
+        {type === "multiple_choice" && options && (
+          <div className="grid gap-3">
+            {options.map((opt, i) => {
+              const selected = p1Ans[id] === i;
+              return (
+                <button
+                  key={i}
+                  onClick={() => onP1(id, i)}
+                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${
+                    selected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-500" : "border-gray-300"}`}>
+                    {selected && <div className="w-3 h-3 bg-blue-500 rounded-full" />}
+                  </div>
+                  <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
+                  <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
+                    {processLatexText(opt)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </div>
-      ) : (
-        <div className="text-gray-900 leading-relaxed font-medium mb-6">
-          {processLatexText(questionText)}
-        </div>
-      )}
+        )}
 
-      {/* P1 */}
-      {type === "multiple_choice" && options && (
-        <div className="grid gap-3">
-          {options.map((opt, i) => {
-            const selected = p1Ans[id] === i;
-            return (
-              <button
-                key={i}
-                onClick={() => onP1(id, i)}
-                className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${
-                  selected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-300 hover:bg-gray-50"
-                }`}
-              >
-                <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-500" : "border-gray-300"}`}>
-                  {selected && <div className="w-3 h-3 bg-blue-500 rounded-full" />}
-                </div>
-                <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
-                <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
-                  {processLatexText(opt)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+        {/* P2 — True / False table */}
+        {type === "true_false" && options && (
+          <div className="overflow-x-auto rounded-2xl border border-amber-200">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-amber-50 border-b border-amber-200">
+                  <th className="text-center px-3 py-2.5 font-bold text-amber-700 border-r border-amber-200 w-10">Ý</th>
+                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Phát biểu</th>
+                  <th className="text-center px-4 py-2.5 font-bold text-emerald-700 border-l border-amber-200 w-20">ĐÚNG</th>
+                  <th className="text-center px-4 py-2.5 font-bold text-red-600 border-l border-amber-200 w-20">SAI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {options.map((stmt, i) => {
+                  const selected = (p2Ans[id] ?? [])[i];
+                  const isDung = selected === true;
+                  const isSai  = selected === false;
+                  return (
+                    <tr key={i} className={`border-t border-amber-100 ${i % 2 === 1 ? "bg-amber-50/30" : "bg-white"}`}>
+                      <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
+                        {String.fromCharCode(97 + i)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-800 leading-relaxed">{processLatexText(stmt)}</td>
+                      <td className="px-3 py-2 text-center border-l border-amber-100">
+                        <button
+                          onClick={() => onP2(id, i, true)}
+                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300" : "bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-700"}`}
+                        >Đúng</button>
+                      </td>
+                      <td className="px-3 py-2 text-center border-l border-amber-100">
+                        <button
+                          onClick={() => onP2(id, i, false)}
+                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-red-500 text-white shadow-sm ring-2 ring-red-300" : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-700"}`}
+                        >Sai</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {/* P2 */}
-      {type === "true_false" && options && (
-        <div className="overflow-x-auto rounded-2xl border border-amber-200">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-amber-50 border-b border-amber-200">
-                <th className="text-center px-3 py-2.5 font-bold text-amber-700 border-r border-amber-200 w-10">Ý</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Phát biểu</th>
-                <th className="text-center px-4 py-2.5 font-bold text-emerald-700 border-l border-amber-200 w-20">ĐÚNG</th>
-                <th className="text-center px-4 py-2.5 font-bold text-red-600 border-l border-amber-200 w-20">SAI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {options.map((stmt, i) => {
-                const selected = (p2Ans[id] ?? [])[i];
-                const isDung = selected === true;
-                const isSai  = selected === false;
-                return (
-                  <tr key={i} className={`border-t border-amber-100 ${i % 2 === 1 ? "bg-amber-50/30" : "bg-white"}`}>
-                    <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
-                      {String.fromCharCode(97 + i)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-800 leading-relaxed">{processLatexText(stmt)}</td>
-                    <td className="px-3 py-2 text-center border-l border-amber-100">
-                      <button
-                        onClick={() => onP2(id, i, true)}
-                        className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300" : "bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-700"}`}
-                      >Đúng</button>
-                    </td>
-                    <td className="px-3 py-2 text-center border-l border-amber-100">
-                      <button
-                        onClick={() => onP2(id, i, false)}
-                        className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-red-500 text-white shadow-sm ring-2 ring-red-300" : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-700"}`}
-                      >Sai</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* P3 */}
-      {type === "short_answer" && (
-        <ShortAnswerInput key={id} value={p3Ans[id] ?? ""} onChange={(v) => onP3(id, v)} />
-      )}
-    </div>
-  );
-}
+        {/* P3 — Short answer */}
+        {type === "short_answer" && (
+          <ShortAnswerInput key={id} value={p3Ans[id] ?? ""} onChange={(v) => onP3(id, v)} />
+        )}
+      </div>
+    );
+  },
+  // Custom comparator — re-render ONLY when question or its specific answer changes
+  (prev, next) => {
+    const id = prev.question.id;
+    return (
+      prev.question.id      === next.question.id &&
+      prev.questionNumber   === next.questionNumber &&
+      prev.p1Ans[id]        === next.p1Ans[id] &&
+      // Array comparison via JSON (P2 arrays are small: max 4 booleans)
+      JSON.stringify(prev.p2Ans[id]) === JSON.stringify(next.p2Ans[id]) &&
+      prev.p3Ans[id]        === next.p3Ans[id]
+      // onP1/onP2/onP3 are stable useCallback refs — always equal, no need to check
+    );
+  }
+);
 
 // ── ShortAnswerInput ──────────────────────────────────────────────────────────
 
