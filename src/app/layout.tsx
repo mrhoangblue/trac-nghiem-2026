@@ -5,6 +5,7 @@ import "katex/dist/katex.min.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Sidebar from "@/components/Sidebar";
+import BrowserWarning from "@/components/BrowserWarning";
 import { AuthProvider } from "@/lib/AuthContext";
 
 const geistSans = Geist({
@@ -34,6 +35,7 @@ export default function RootLayout({
     >
       <head></head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <BrowserWarning>
         <AuthProvider>
           <Header />
           <div className="flex flex-1 min-h-0">
@@ -44,6 +46,7 @@ export default function RootLayout({
           </div>
           <Footer />
         </AuthProvider>
+        </BrowserWarning>
       </body>
     </html>
   );

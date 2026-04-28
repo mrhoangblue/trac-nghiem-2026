@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import TikzRenderer from "@/components/TikzRenderer";
@@ -88,23 +88,30 @@ export default function QuizClient({
   // ── Retry limit: count previous submissions ───────────────────────────────
   const [submissionCount, setSubmissionCount] = useState<number | null>(null);
 
+  // SAFARI FIX: depend on email string, not the `user` object reference.
+  // Firebase occasionally re-emits the same user with a new object identity,
+  // which would re-trigger the effect and loop Firestore queries.
+  const userEmail = user?.email ?? null;
+
   useEffect(() => {
-    if (!user?.email) return;
+    if (!userEmail) return;
+    let cancelled = false;
     const countPrev = async () => {
       try {
         const q = query(
           collection(db, "submissions"),
           where("examId", "==", examId),
-          where("studentEmail", "==", user.email)
+          where("studentEmail", "==", userEmail)
         );
         const snap = await getDocs(q);
-        setSubmissionCount(snap.size);
+        if (!cancelled) setSubmissionCount(snap.size);
       } catch {
-        setSubmissionCount(0);
+        if (!cancelled) setSubmissionCount(0);
       }
     };
     countPrev();
-  }, [user, examId]);
+    return () => { cancelled = true; };
+  }, [userEmail, examId]);
 
   // ── Anti-cheat ────────────────────────────────────────────────────────────
   const [cheatCount, setCheatCount] = useState(0);
@@ -124,10 +131,11 @@ export default function QuizClient({
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [started, isSubmitted]);
 
-  // Phân loại câu hỏi theo phần
-  const p1Qs = questions.filter((q) => q.type === "multiple_choice");
-  const p2Qs = questions.filter((q) => q.type === "true_false");
-  const p3Qs = questions.filter((q) => q.type === "short_answer");
+  // Phân loại câu hỏi theo phần — useMemo để tránh tạo array mới mỗi render
+  // (array mới → calculateScore / handleSubmit recreate → useEffect loops trên Safari)
+  const p1Qs = useMemo(() => questions.filter((q) => q.type === "multiple_choice"), [questions]);
+  const p2Qs = useMemo(() => questions.filter((q) => q.type === "true_false"), [questions]);
+  const p3Qs = useMemo(() => questions.filter((q) => q.type === "short_answer"), [questions]);
 
   const p2AnsweredCount = Object.values(p2Ans).filter((arr) =>
     arr.some((v) => v !== null && v !== undefined)
@@ -279,7 +287,8 @@ export default function QuizClient({
     [
       isSubmitted, submitting, totalAnswered, totalQuestions,
       calculateScore, p1Qs, p2Qs, p3Qs,
-      p1Ans, p2Ans, p3Ans, examId, title, user, userProfile, cheatCount,
+      p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
+      // cheatCount intentionally OMITTED — read via cheatCountRef.current inside
     ]
   );
 
@@ -287,12 +296,24 @@ export default function QuizClient({
   useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
 
   // ── Countdown timer ───────────────────────────────────────────────────────
+  // SAFARI FIX: use a single stable interval (dep = [started] only).
+  // The old pattern re-created setInterval every second via [started, timeLeft]
+  // deps, causing rapid create/destroy cycles that crash on iOS Safari.
   useEffect(() => {
-    if (!started || timeLeft === null) return;
-    if (timeLeft <= 0) { handleSubmitRef.current(true); return; }
-    const id = setInterval(() => setTimeLeft((t) => (t !== null ? t - 1 : null)), 1000);
+    if (!started) return;
+    const id = setInterval(() => {
+      setTimeLeft((t) => (t !== null && t > 0 ? t - 1 : t));
+    }, 1000);
     return () => clearInterval(id);
-  }, [started, timeLeft]);
+  }, [started]); // ← intentionally ONLY `started`
+
+  // Separate effect: handle time expiry (avoids logic inside the interval)
+  useEffect(() => {
+    if (started && timeLeft === 0) {
+      handleSubmitRef.current(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft]); // `started` omitted intentionally — only fires when timeLeft hits 0
 
   // ── Answer handlers ───────────────────────────────────────────────────────
   const onP1 = (qId: number, optIdx: number) =>

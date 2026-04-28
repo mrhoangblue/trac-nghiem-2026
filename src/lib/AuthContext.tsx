@@ -50,8 +50,9 @@ interface AuthContextValue {
   loading: boolean;
   isAdmin: boolean;
   isMod: boolean;
-  login: () => Promise<void>;
-  logout: () => Promise<void>;
+  /** SAFARI: plain function — must not be async so popup opens inside gesture */
+  login: () => void;
+  logout: () => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -175,12 +176,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loading, user, userProfile, pathname, router]);
 
   // ── Auth actions ──────────────────────────────────────────────────────────
-  const login = async () => {
-    await signInWithPopup(auth, new GoogleAuthProvider());
+  /**
+   * SAFARI FIX: login MUST be a plain (non-async) function so that
+   * signInWithPopup is called synchronously within the user-gesture event
+   * handler. Safari's popup blocker kills popups opened after ANY async
+   * boundary (even a single microtask from `async/await`).
+   *
+   * onAuthStateChanged handles the result — no need to await here.
+   */
+  const login = () => {
+    signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
+      // Silently ignore user-cancelled / popup-closed errors
+      if (err?.code !== "auth/popup-closed-by-user") {
+        console.error("signInWithPopup error:", err);
+      }
+    });
   };
 
-  const logout = async () => {
-    await signOut(auth);
+  const logout = () => {
+    signOut(auth).catch((err) => console.error("signOut error:", err));
   };
 
   const isAdmin = userProfile?.role === "admin";

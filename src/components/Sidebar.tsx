@@ -77,7 +77,7 @@ export default function Sidebar() {
   // ── Admin / Mod sidebar ──────────────────────────────────────────────────────
   if (isMod) {
     return (
-      <aside className="w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+      <aside className="hidden md:block w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
         <nav className="p-3">
           <SectionLabel>Quản lý</SectionLabel>
           <SideLink
@@ -138,7 +138,7 @@ export default function Sidebar() {
 
   // ── Student sidebar: exam category tree ──────────────────────────────────────
   return (
-    <aside className="w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+    <aside className="hidden md:block w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
       <nav className="p-3">
         <SideLink href="/" icon="🏠" active={pathname === "/"}>
           Tất cả đề thi
