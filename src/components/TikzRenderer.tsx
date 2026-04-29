@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 
 interface TikzRendererProps {
   code: string;
@@ -20,8 +20,10 @@ interface TikzRendererProps {
 export default function TikzRenderer({ code, caption }: TikzRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Build a full self-contained HTML document
-  const htmlContent = `<!DOCTYPE html>
+  // Memoised so React never passes a new `srcDoc` string to the iframe unless
+  // `code` actually changes — prevents the iframe from reloading (and TikZJax
+  // from re-executing its WASM) every time a parent component re-renders.
+  const htmlContent = useMemo(() => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -62,7 +64,7 @@ export default function TikzRenderer({ code, caption }: TikzRendererProps) {
 <body>
   <script type="text/tikz">${code}</script>
 </body>
-</html>`;
+</html>`, [code]);
 
   // Listen for the height message from the iframe
   useEffect(() => {

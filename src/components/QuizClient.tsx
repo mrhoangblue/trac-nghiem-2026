@@ -164,6 +164,37 @@ export default function QuizClient({
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
 
+  // ── Answer ref — always holds the latest answers without being a dep ──────
+  // This lets calculateScore and handleSubmit be stable callbacks that don't
+  // recreate (and invalidate downstream memos) on every keystroke or click.
+  const answersRef = useRef({ p1: p1Ans, p2: p2Ans, p3: p3Ans });
+  useEffect(() => {
+    answersRef.current = { p1: p1Ans, p2: p2Ans, p3: p3Ans };
+  }, [p1Ans, p2Ans, p3Ans]);
+
+  // ── Restore draft from sessionStorage on first mount ─────────────────────
+  // If Safari OOM-crashed mid-exam and reloaded the page, the student gets
+  // their previously selected answers back after clicking "Bắt đầu lại".
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(`quiz-draft-${examId}`);
+      if (!raw) return;
+      const { p1, p2, p3, idx } = JSON.parse(raw) as {
+        p1?: Record<number, number>;
+        p2?: Record<number, (boolean | null)[]>;
+        p3?: Record<number, string>;
+        idx?: number;
+      };
+      if (p1 && Object.keys(p1).length) setP1Ans(p1);
+      if (p2 && Object.keys(p2).length) setP2Ans(p2);
+      if (p3 && Object.keys(p3).length) setP3Ans(p3);
+      if (typeof idx === "number" && idx >= 0) setCurrentIdx(idx);
+    } catch {
+      // Corrupt data — ignore silently
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only: examId is stable
+
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
 
@@ -251,25 +282,34 @@ export default function QuizClient({
   const p2Qs = useMemo(() => questions.filter((q) => q.type === "true_false"), [questions]);
   const p3Qs = useMemo(() => questions.filter((q) => q.type === "short_answer"), [questions]);
 
-  const p2AnsweredCount = Object.values(p2Ans).filter((arr) =>
-    arr.some((v) => v !== null && v !== undefined)
-  ).length;
-
-  const totalAnswered =
-    Object.keys(p1Ans).length +
-    p2AnsweredCount +
-    Object.keys(p3Ans).filter((k) => (p3Ans[Number(k)] ?? "").trim() !== "").length;
+  // useMemo so these don't recompute on unrelated parent re-renders
+  const p2AnsweredCount = useMemo(
+    () => Object.values(p2Ans).filter((arr) => arr.some((v) => v !== null && v !== undefined)).length,
+    [p2Ans]
+  );
+  const totalAnswered = useMemo(
+    () =>
+      Object.keys(p1Ans).length +
+      p2AnsweredCount +
+      Object.keys(p3Ans).filter((k) => (p3Ans[Number(k)] ?? "").trim() !== "").length,
+    [p1Ans, p2AnsweredCount, p3Ans]
+  );
   const totalQuestions = questions.length;
   const progress = totalQuestions > 0 ? (totalAnswered / totalQuestions) * 100 : 0;
 
   // ── Score calculation ─────────────────────────────────────────────────────
+  // Reads answers from answersRef.current instead of closing over state objects.
+  // This makes calculateScore (and handleSubmit below) stable — they are NOT
+  // recreated on every answer change, so downstream memos/effects stay calm.
   const calculateScore = useCallback((): ScoreResult => {
+    const { p1: p1A, p2: p2A, p3: p3A } = answersRef.current;
+
     let p1 = 0;
     let p1Correct = 0;
     if (p1Qs.length > 0) {
       const perQ = scoringConfig.part1TotalScore / p1Qs.length;
       p1Qs.forEach((q) => {
-        if (p1Ans[q.id] === (q.correctAnswer as number)) { p1 += perQ; p1Correct++; }
+        if (p1A[q.id] === (q.correctAnswer as number)) { p1 += perQ; p1Correct++; }
       });
     }
 
@@ -277,7 +317,7 @@ export default function QuizClient({
     const p2Details: ScoreResult["part2"]["details"] = [];
     p2Qs.forEach((q) => {
       const correct = q.correctAnswer as boolean[];
-      const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
+      const student = p2A[q.id] ?? new Array(correct.length).fill(null);
       const hits = correct.filter((c, i) => c === student[i]).length;
       const qScore = P2_TABLE[hits] ?? 0;
       p2 += qScore;
@@ -290,7 +330,7 @@ export default function QuizClient({
     if (p3Qs.length > 0) {
       const perQ = totalP3 / p3Qs.length;
       p3Qs.forEach((q) => {
-        const ns = normalizeAnswer(p3Ans[q.id] ?? "");
+        const ns = normalizeAnswer(p3A[q.id] ?? "");
         const nc = normalizeAnswer(String(q.correctAnswer ?? ""));
         if (ns !== "" && ns === nc) { p3 += perQ; p3Correct++; }
       });
@@ -304,31 +344,67 @@ export default function QuizClient({
       part2: { details: p2Details, totalScore: r(p2) },
       part3: { correct: p3Correct, total: p3Qs.length, score: r(p3) },
     };
-  }, [p1Ans, p2Ans, p3Ans, p1Qs, p2Qs, p3Qs, scoringConfig]);
+  // answersRef is a stable ref — not listed as dep (intentional)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p1Qs, p2Qs, p3Qs, scoringConfig]);
+
+  // ── sessionStorage draft save (debounced 400 ms) ─────────────────────────
+  // Writes current answers + position to sessionStorage so that if Safari OOM-
+  // crashes and reloads the page, the student's progress is restored on remount.
+  // The debounce prevents blocking the main thread on every P3 keystroke.
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!started || isSubmitted) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      try {
+        sessionStorage.setItem(
+          `quiz-draft-${examId}`,
+          JSON.stringify({ p1: p1Ans, p2: p2Ans, p3: p3Ans, idx: currentIdx })
+        );
+      } catch {
+        // Storage quota exceeded — not critical
+      }
+    }, 400);
+    return () => {
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    };
+  }, [p1Ans, p2Ans, p3Ans, currentIdx, started, isSubmitted, examId]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
+  // Reads all answer state from answersRef.current (always up-to-date) so this
+  // callback is NOT listed as depending on p1Ans/p2Ans/p3Ans — it won't
+  // recreate on every answer change, keeping handleSubmitRef stable too.
   const handleSubmit = useCallback(
     async (force = false) => {
       if (isSubmitted || submitting) return;
 
-      if (!force && totalAnswered < totalQuestions) {
+      const { p1: p1A, p2: p2A, p3: p3A } = answersRef.current;
+
+      // Compute answered count locally (avoids totalAnswered dep)
+      const answered =
+        Object.keys(p1A).length +
+        Object.values(p2A).filter((arr) => arr.some((v) => v !== null && v !== undefined)).length +
+        Object.keys(p3A).filter((k) => (p3A[Number(k)] ?? "").trim() !== "").length;
+
+      if (!force && answered < totalQuestions) {
         const ok = window.confirm(
-          `Bạn chưa hoàn thành tất cả câu hỏi (${totalAnswered}/${totalQuestions}). Vẫn nộp bài?`
+          `Bạn chưa hoàn thành tất cả câu hỏi (${answered}/${totalQuestions}). Vẫn nộp bài?`
         );
         if (!ok) return;
       }
 
       setSubmitting(true);
-      const result = calculateScore();
+      const result = calculateScore(); // reads from answersRef.current
 
-      const part1Results = p1Qs.map((q) => p1Ans[q.id] === (q.correctAnswer as number));
+      const part1Results = p1Qs.map((q) => p1A[q.id] === (q.correctAnswer as number));
       const part2Results = p2Qs.map((q) => {
         const correct = q.correctAnswer as boolean[];
-        const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
+        const student = p2A[q.id] ?? new Array(correct.length).fill(null);
         return correct.filter((c, i) => c === student[i]).length;
       });
       const part3Results = p3Qs.map((q) => {
-        const s = normalizeAnswer(p3Ans[q.id] ?? "");
+        const s = normalizeAnswer(p3A[q.id] ?? "");
         const c = normalizeAnswer(String(q.correctAnswer ?? ""));
         return !!s && s === c;
       });
@@ -346,7 +422,7 @@ export default function QuizClient({
           part2Results,
           part3Results,
           scores: result,
-          answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
+          answersJson: JSON.stringify({ p1Ans: p1A, p2Ans: p2A, p3Ans: p3A }),
           cheatCount: cheatCountRef.current,
         });
         savedSubmissionId = docRef.id;
@@ -360,7 +436,7 @@ export default function QuizClient({
             number: i + 1,
             part: "P1" as const,
             isCorrect: part1Results[i] ?? false,
-            studentAnswer: p1Ans[q.id] !== undefined ? String.fromCharCode(65 + p1Ans[q.id]) : "—",
+            studentAnswer: p1A[q.id] !== undefined ? String.fromCharCode(65 + p1A[q.id]) : "—",
             correctAnswer: String.fromCharCode(65 + (q.correctAnswer as number)),
           })),
           ...p2Qs.map((q, i) => ({
@@ -375,7 +451,7 @@ export default function QuizClient({
             number: p1Qs.length + p2Qs.length + i + 1,
             part: "P3" as const,
             isCorrect: part3Results[i] ?? false,
-            studentAnswer: p3Ans[q.id] || "—",
+            studentAnswer: p3A[q.id] || "—",
             correctAnswer: String(q.correctAnswer ?? ""),
           })),
         ];
@@ -394,15 +470,19 @@ export default function QuizClient({
         }).catch((err) => console.warn("Gửi email thất bại (non-critical):", err));
       }
 
+      // Clear the crash-recovery draft now that the submission is persisted
+      try { sessionStorage.removeItem(`quiz-draft-${examId}`); } catch {}
+
       setScoreResult(result);
       setIsSubmitted(true);
       setSubmitting(false);
     },
     [
-      isSubmitted, submitting, totalAnswered, totalQuestions,
+      isSubmitted, submitting, totalQuestions,
       calculateScore, p1Qs, p2Qs, p3Qs,
-      p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
-      // cheatCount intentionally OMITTED — read via cheatCountRef.current inside
+      examId, title, user, userProfile,
+      // p1Ans/p2Ans/p3Ans intentionally OMITTED — read via answersRef.current
+      // cheatCount intentionally OMITTED — read via cheatCountRef.current
     ]
   );
 
@@ -812,6 +892,23 @@ const QuestionCard = memo(
   function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
     const { id, type, questionText, options, tikzCode } = question;
 
+    // ── Memoised LaTeX rendering ───────────────────────────────────────────
+    // THE CRITICAL OOM FIX: processLatexText calls KaTeX which allocates many
+    // DOM nodes and typed arrays. Previously these ran again on EVERY answer
+    // click because the custom memo comparator only guards the outer component,
+    // not the work inside its body.
+    //
+    // With useMemo keyed on the question's text/options (stable between answer
+    // changes), KaTeX re-renders ONLY when the student navigates to a new
+    // question — never when they merely click an answer on the current one.
+    // For a P2 question with 4 complex statements, this eliminates 4 KaTeX
+    // re-renders per click, and hundreds of wasted renders over a full exam.
+    const renderedText = useMemo(() => processLatexText(questionText), [questionText]);
+    const renderedOptions = useMemo(
+      () => options?.map((opt) => processLatexText(opt)) ?? [],
+      [options]
+    );
+
     const typeBadge =
       type === "multiple_choice"
         ? { label: "Trắc nghiệm",   cls: "bg-purple-100 text-purple-700" }
@@ -833,19 +930,15 @@ const QuestionCard = memo(
         {tikzCode ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
             <div className="text-gray-900 leading-relaxed font-medium">
-              {processLatexText(questionText)}
+              {renderedText}
             </div>
-            {/* TASK 3 — figure for the CURRENT question.
-                TikzRenderer uses <iframe> which already loads eagerly by default.
-                The `key={id}` on the parent card ensures a fresh iframe is mounted
-                (not reused) when navigating — preventing stale SVG content. */}
             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
               <TikzRenderer code={tikzCode} />
             </div>
           </div>
         ) : (
           <div className="text-gray-900 leading-relaxed font-medium mb-6">
-            {processLatexText(questionText)}
+            {renderedText}
           </div>
         )}
 
@@ -867,7 +960,7 @@ const QuestionCard = memo(
                   </div>
                   <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
                   <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
-                    {processLatexText(opt)}
+                    {renderedOptions[i]}
                   </span>
                 </button>
               );
@@ -897,7 +990,7 @@ const QuestionCard = memo(
                       <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
                         {String.fromCharCode(97 + i)}
                       </td>
-                      <td className="px-4 py-3 text-gray-800 leading-relaxed">{processLatexText(stmt)}</td>
+                      <td className="px-4 py-3 text-gray-800 leading-relaxed">{renderedOptions[i]}</td>
                       <td className="px-3 py-2 text-center border-l border-amber-100">
                         <button
                           onClick={() => onP2(id, i, true)}
