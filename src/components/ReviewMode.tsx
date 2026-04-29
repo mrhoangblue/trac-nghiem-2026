@@ -7,7 +7,7 @@ import { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import TikzRenderer from "@/components/TikzRenderer";
-import { ScoreResult, normalizeAnswer } from "@/utils/examTypes";
+import { ScoreResult, normalizeAnswer, formatP2Answers } from "@/utils/examTypes";
 import { SECTION_META } from "@/components/QuizClient";
 
 interface ReviewModeProps {
@@ -70,7 +70,7 @@ export default function ReviewMode({
               <div className="opacity-70 text-xs mt-0.5 flex flex-col gap-0.5">
                 {scoreResult.part2.details.map((d, i) => (
                   <span key={i}>
-                    C{i + 1}: {d.match}/{d.maxMatch} ý ({d.score}đ)
+                    {formatP2Answers(d.match, d.maxMatch)}
                   </span>
                 ))}
               </div>

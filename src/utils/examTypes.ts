@@ -42,6 +42,27 @@ export function formatCountdown(seconds: number): string {
   return h > 0 ? `${String(h).padStart(2, "0")}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+/**
+ * Làm sạch đáp án P3 trước khi hiển thị: xoá ký tự LaTeX.
+ * "$5{,}3$" → "5,3"  |  "$1201$" → "1201"
+ */
+export function cleanP3Answer(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/\$/g, "")
+    .replace(/\{,\}/g, ",")
+    .trim();
+}
+
+/**
+ * Format số ý đúng P2 thành chuỗi dễ đọc cho score banner.
+ * Ví dụ: formatP2Answers(3, 4) → "3/4 ý đúng"
+ */
+export function formatP2Answers(match: unknown, maxMatch: unknown): string {
+  const m   = Number(match   ?? 0);
+  const max = Number(maxMatch ?? 4);
+  return `${m}/${max} ý đúng`;
+}
+
 /** Format Firestore Timestamp hoặc chuỗi ISO thành ngày giờ dễ đọc (vi-VN) */
 export function formatDateTime(value: unknown): string {
   if (!value) return "—";
