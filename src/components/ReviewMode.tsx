@@ -148,10 +148,19 @@ export default function ReviewMode({
                 </div>
               </div>
 
-              {/* Question TikZ */}
-              {q.tikzCode && (
+              {/* Question figure */}
+              {(q.tikzImageUrl || q.tikzCode) && (
                 <div className="mb-4 bg-white rounded-xl border border-gray-200 p-4 flex justify-center">
-                  <TikzRenderer code={q.tikzCode} />
+                  {q.tikzImageUrl ? (
+                    <img
+                      src={q.tikzImageUrl}
+                      alt="Hình vẽ Toán học"
+                      className="max-w-full h-auto"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <TikzRenderer code={q.tikzCode as string} />
+                  )}
                 </div>
               )}
 
@@ -355,14 +364,23 @@ export default function ReviewMode({
               )}
 
               {/* Explanation */}
-              {(q.explanation || q.explanationTikzCode) && (
+              {(q.explanation || q.explanationTikzImageUrl || q.explanationTikzCode) && (
                 <div className="mt-3 p-4 bg-white rounded-xl border border-gray-200">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
                     Lời giải chi tiết
                   </p>
-                  {q.explanationTikzCode && (
+                  {(q.explanationTikzImageUrl || q.explanationTikzCode) && (
                     <div className="mb-3 bg-gray-50 rounded-xl border border-gray-200 p-3 flex justify-center">
-                      <TikzRenderer code={q.explanationTikzCode} />
+                      {q.explanationTikzImageUrl ? (
+                        <img
+                          src={q.explanationTikzImageUrl}
+                          alt="Hình vẽ lời giải"
+                          className="max-w-full h-auto"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <TikzRenderer code={q.explanationTikzCode as string} />
+                      )}
                     </div>
                   )}
                   {q.explanation && (

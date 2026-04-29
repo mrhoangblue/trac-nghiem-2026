@@ -355,6 +355,13 @@ export default function QuizClient({
       }
 
       if (user?.email && user.email !== "—") {
+        const toP2EmailAnswer = (answers: (boolean | null)[]) => ({
+          a: answers[0],
+          b: answers[1],
+          c: answers[2],
+          d: answers[3],
+        });
+
         const detailedResults = [
           ...p1Qs.map((q, i) => ({
             number: i + 1,
@@ -368,8 +375,10 @@ export default function QuizClient({
             part: "P2" as const,
             isCorrect: part2Results[i] === (q.correctAnswer as boolean[]).length,
             partialHits: part2Results[i],
-            studentAnswer: `${part2Results[i]}/${(q.correctAnswer as boolean[]).length} ý đúng`,
-            correctAnswer: `${(q.correctAnswer as boolean[]).length}/${(q.correctAnswer as boolean[]).length} ý đúng`,
+            studentAnswer: toP2EmailAnswer(
+              p2Ans[q.id] ?? new Array((q.correctAnswer as boolean[]).length).fill(null),
+            ),
+            correctAnswer: toP2EmailAnswer(q.correctAnswer as boolean[]),
           })),
           ...p3Qs.map((q, i) => ({
             number: p1Qs.length + p2Qs.length + i + 1,
@@ -798,7 +807,7 @@ interface CardProps {
 
 const QuestionCard = memo(
   function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
-    const { id, type, questionText, options, tikzCode } = question;
+    const { id, type, questionText, options, tikzCode, tikzImageUrl } = question;
 
     // ── Memoize ALL LaTeX rendering — only recompute when the question changes ──
     // Without useMemo, every answer click re-runs the full KaTeX pipeline for
@@ -832,7 +841,7 @@ const QuestionCard = memo(
           </span>
         </div>
 
-        {tikzCode ? (
+        {tikzCode || tikzImageUrl ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
             <div className="text-gray-900 leading-relaxed font-medium">
               {renderedQuestion}
@@ -841,7 +850,16 @@ const QuestionCard = memo(
             {/* key={currentQ.id} on QuestionCard (parent) ensures a fresh iframe  */}
             {/* is mounted when navigating, so TikZJax WebAssembly is fully freed. */}
             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
-              <TikzRenderer code={tikzCode} />
+              {tikzImageUrl ? (
+                <img
+                  src={tikzImageUrl}
+                  alt="Hình vẽ Toán học"
+                  className="max-w-full h-auto"
+                  loading="lazy"
+                />
+              ) : (
+                <TikzRenderer code={tikzCode as string} />
+              )}
             </div>
           </div>
         ) : (

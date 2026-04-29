@@ -24,9 +24,12 @@ export default async function QuizPage({ params }: { params: Promise<{ id: strin
     endTime: data.endTime ?? null,
   };
 
-  // Re-parse from rawLatex khi có — áp dụng mọi fix mới nhất của parser.
+  // Đề đã xử lý TikZ phải dùng questions đã lưu ảnh, nếu re-parse rawLatex
+  // thì mã TikZ gốc sẽ quay lại và mobile Safari vẫn có thể crash.
   let questions: ParsedQuestion[];
-  if (data.rawLatex) {
+  if (data.tikzProcessed && Array.isArray(data.questions)) {
+    questions = data.questions as ParsedQuestion[];
+  } else if (data.rawLatex) {
     const { part1 = "", part2 = "", part3 = "" } = data.rawLatex;
     questions = [
       ...parseLatexExam(part1),

@@ -5,9 +5,7 @@ import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
-import { db } from "@/lib/firebase";
 import TikzRenderer from "@/components/TikzRenderer";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import AdminGuard from "@/components/AdminGuard";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
@@ -15,6 +13,14 @@ import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 interface ScoringConfig {
   part1TotalScore: number;
   part3TotalScore: number;
+}
+
+interface UploadQuizResponse {
+  id?: string;
+  convertedCount: number;
+  failedCount?: number;
+  tikzProcessed: boolean;
+  error?: string;
 }
 
 // ── Smart Parser ──────────────────────────────────────────────────────────────
@@ -125,34 +131,39 @@ export default function CreateExamPage() {
     if (!previewData) return;
     setSaving(true);
     try {
-      const p1Questions = previewData.questions.filter((q) => q.type === "multiple_choice");
-      const p2Questions = previewData.questions.filter((q) => q.type === "true_false");
-      const p3Questions = previewData.questions.filter((q) => q.type === "short_answer");
-
-      await addDoc(collection(db, "exams"), {
-        title: previewData.title,
-        description: "",
-        questions: previewData.questions,
-        questionCount: previewData.questions.length,
-        part1Count: p1Questions.length,
-        part2Count: p2Questions.length,
-        part3Count: p3Questions.length,
-        scoringConfig: {
-          part1TotalScore: Number(scoringConfig.part1TotalScore),
-          part3TotalScore: Number(scoringConfig.part3TotalScore),
-        },
-        duration: Number(duration),
-        startTime: startTime || null,
-        endTime: endTime || null,
-        rawLatex: { part1, part2, part3 },
-        // ── New fields ──────────────────────────────────────────────────────
-        authorEmail: user?.email ?? "",
-        maxRetries: Number(maxRetries),
-        isShared,
-        gradeLevel,
-        examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
-        createdAt: serverTimestamp(),
+      const uploadResponse = await fetch("/api/upload-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: previewData.title,
+          description: "",
+          questions: previewData.questions,
+          scoringConfig: {
+            part1TotalScore: Number(scoringConfig.part1TotalScore),
+            part3TotalScore: Number(scoringConfig.part3TotalScore),
+          },
+          duration: Number(duration),
+          startTime: startTime || null,
+          endTime: endTime || null,
+          rawLatex: { part1, part2, part3 },
+          authorEmail: user?.email ?? "",
+          maxRetries: Number(maxRetries),
+          isShared,
+          gradeLevel,
+          examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
+        }),
       });
+
+      const uploaded = (await uploadResponse.json()) as UploadQuizResponse;
+      if (!uploadResponse.ok) {
+        throw new Error(uploaded.error ?? "Không thể lưu bài thi.");
+      }
+      if ((uploaded.failedCount ?? 0) > 0) {
+        alert(
+          `Đã lưu bài thi, nhưng có ${uploaded.failedCount} hình TikZ không chuyển được. ` +
+          "Các hình lỗi được giữ nguyên bằng cơ chế TikZ cũ."
+        );
+      }
 
       alert("✅ Đã lưu bài thi lên Firestore thành công!");
       setExamTitle(""); setPart1(""); setPart2(""); setPart3("");

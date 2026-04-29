@@ -33,6 +33,14 @@ interface PreviewData {
   questions: ParsedQuestion[];
 }
 
+interface ProcessTikzResponse {
+  questions: ParsedQuestion[];
+  convertedCount: number;
+  failedCount?: number;
+  tikzProcessed: boolean;
+  error?: string;
+}
+
 function Spinner({ label }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -142,35 +150,56 @@ export default function EditExamPage() {
       return;
     }
 
-    const p1Qs = previewData.questions.filter((q) => q.type === "multiple_choice");
-    const p2Qs = previewData.questions.filter((q) => q.type === "true_false");
-    const p3Qs = previewData.questions.filter((q) => q.type === "short_answer");
-
-    const examPayload = {
-      title: previewData.title,
-      questions: previewData.questions,
-      questionCount: previewData.questions.length,
-      part1Count: p1Qs.length,
-      part2Count: p2Qs.length,
-      part3Count: p3Qs.length,
-      scoringConfig: {
-        part1TotalScore: Number(scoringConfig.part1TotalScore),
-        part3TotalScore: Number(scoringConfig.part3TotalScore),
-      },
-      duration: Number(duration),
-      startTime: startTime || null,
-      endTime: endTime || null,
-      rawLatex: { part1, part2, part3 },
-      maxRetries: Number(maxRetries),
-      gradeLevel,
-      examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
-    };
-
     // Determine if this is someone else's exam (clone operation)
     const isOwnExam = !originalAuthorEmail || originalAuthorEmail === user?.email;
 
     setSaving(true);
     try {
+      const processResponse = await fetch("/api/process-tikz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questions: previewData.questions }),
+      });
+
+      const processed = (await processResponse.json()) as ProcessTikzResponse;
+      if (!processResponse.ok) {
+        throw new Error(processed.error ?? "Không thể chuyển TikZ sang ảnh.");
+      }
+      if ((processed.failedCount ?? 0) > 0) {
+        const ok = window.confirm(
+          `Có ${processed.failedCount} hình TikZ không chuyển được sang ảnh. ` +
+          "Các hình này sẽ được lưu bằng cơ chế TikZ cũ và vẫn có thể nặng trên mobile.\n\nVẫn lưu bài thi?"
+        );
+        if (!ok) return;
+      }
+
+      const questionsToSave = processed.questions;
+      const p1Qs = questionsToSave.filter((q) => q.type === "multiple_choice");
+      const p2Qs = questionsToSave.filter((q) => q.type === "true_false");
+      const p3Qs = questionsToSave.filter((q) => q.type === "short_answer");
+
+      const examPayload = {
+        title: previewData.title,
+        questions: questionsToSave,
+        questionCount: questionsToSave.length,
+        part1Count: p1Qs.length,
+        part2Count: p2Qs.length,
+        part3Count: p3Qs.length,
+        scoringConfig: {
+          part1TotalScore: Number(scoringConfig.part1TotalScore),
+          part3TotalScore: Number(scoringConfig.part3TotalScore),
+        },
+        duration: Number(duration),
+        startTime: startTime || null,
+        endTime: endTime || null,
+        rawLatex: { part1, part2, part3 },
+        tikzProcessed: processed.tikzProcessed,
+        tikzImageCount: processed.convertedCount,
+        maxRetries: Number(maxRetries),
+        gradeLevel,
+        examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
+      };
+
       if (!isOwnExam) {
         // ── CLONE: tạo document mới, không ghi đè đề gốc ─────────────────
         if (!window.confirm(
@@ -470,7 +499,7 @@ export default function EditExamPage() {
               </button>
             </div>
             {!previewData && (
-              <p className="text-xs text-center text-amber-600 italic">⚠️ Cần bấm "Biên dịch lại" trước khi lưu.</p>
+              <p className="text-xs text-center text-amber-600 italic">⚠️ Cần bấm &quot;Biên dịch lại&quot; trước khi lưu.</p>
             )}
           </div>
 
@@ -480,7 +509,7 @@ export default function EditExamPage() {
             {!previewData ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-gray-400 gap-4">
                 <div className="text-5xl">👀</div>
-                <p className="text-sm">Bấm "Biên dịch lại" để xem trước nội dung đề thi.</p>
+                <p className="text-sm">Bấm &quot;Biên dịch lại&quot; để xem trước nội dung đề thi.</p>
               </div>
             ) : (
               <div className="space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">

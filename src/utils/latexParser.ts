@@ -7,6 +7,8 @@ export interface ParsedQuestion {
   explanation: string;
   tikzCode?: string;
   explanationTikzCode?: string;
+  tikzImageUrl?: string;
+  explanationTikzImageUrl?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

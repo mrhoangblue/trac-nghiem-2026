@@ -6,7 +6,7 @@ export default function Footer() {
           Hệ thống thi thử tốt nghiệp THPT môn Toán
         </h3>
         <p>
-          Nhà phát triển: <strong>Thầy Hoàng Blue</strong> - Trường TH, THCS - THPT Hoàng Gia (Royal School)
+          Nhà phát triển: <strong>Thầy Hoàng Blue</strong> - Giáo viên Trường TH, THCS - THPT Hoàng Gia (Royal School)
         </p>
         <div style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
           <span>

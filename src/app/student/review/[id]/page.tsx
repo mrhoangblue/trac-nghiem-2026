@@ -141,9 +141,11 @@ export default function ReviewPage() {
 
         setExamTitle(sub.examTitle ?? exam.title ?? "Bài thi");
 
-        // 3. Parse câu hỏi từ rawLatex
+        // 3. Lấy câu hỏi. Đề đã xử lý TikZ phải dùng questions đã lưu ảnh.
         let qs: ParsedQuestion[];
-        if (exam.rawLatex) {
+        if (exam.tikzProcessed && Array.isArray(exam.questions)) {
+          qs = exam.questions as ParsedQuestion[];
+        } else if (exam.rawLatex) {
           const { part1 = "", part2 = "", part3 = "" } = exam.rawLatex;
           qs = [
             ...parseLatexExam(part1),

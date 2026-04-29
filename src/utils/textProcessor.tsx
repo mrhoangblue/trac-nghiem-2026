@@ -58,8 +58,8 @@ function parseTabularToHTML(raw: string): React.ReactNode {
     if (rows.length === 0) return null;
 
     return (
-      <div className="overflow-x-auto my-4">
-        <table className="table-auto border-collapse border border-gray-400 w-full">
+      <div className="overflow-x-auto overflow-y-hidden max-w-full my-4">
+        <table className="table-auto border-collapse border border-gray-400 min-w-max max-w-full">
           <tbody>
             {rows.map((row, ri) => {
               const cells = row.split('&').map(c => c.trim());
@@ -174,7 +174,7 @@ function processTextOnly(text: string): React.ReactNode {
       {segs.map((seg, i) => {
         if (seg.kind === 'center') {
           return (
-            <div key={i} className="flex justify-center w-full overflow-x-auto my-4">
+            <div key={i} className="w-full overflow-x-auto overflow-y-hidden max-w-full my-4">
               {renderMathAndText(seg.text)}
             </div>
           );
@@ -198,7 +198,13 @@ function renderMathAndText(text: string): React.ReactNode {
   return (
     <>
       {parts.map((part, idx) => {
-        if (idx % 2 === 1) return <Latex key={idx}>{part}</Latex>;
+        if (idx % 2 === 1) {
+          return (
+            <span key={idx} className="inline-block max-w-full overflow-x-auto overflow-y-hidden align-middle">
+              <Latex>{part}</Latex>
+            </span>
+          );
+        }
         if (part.trim()) return <TextWithNewlines key={idx}>{part}</TextWithNewlines>;
         return null;
       })}
