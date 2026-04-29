@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import Latex from "react-latex-next";
-import "katex/dist/katex.min.css";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import TikzRenderer from "@/components/TikzRenderer";
-import { ScoreResult, normalizeAnswer } from "@/utils/examTypes";
+import { ScoreResult, normalizeAnswer, P2_TABLE, formatDS, cleanPart3Answer } from "@/utils/examTypes";
 import { SECTION_META } from "@/components/QuizClient";
 
 interface ReviewModeProps {
@@ -104,12 +102,22 @@ export default function ReviewMode({
           const sectionMeta = SECTION_META[q.type];
           let isCorrect = false;
 
+          // ── P2-specific precomputed values ────────────────────────────────
+          let p2Hits = 0;
+          let p2Score = 0;
+          let p2StudentDS = "";
+          let p2CorrectDS = "";
+
           if (q.type === "multiple_choice") {
             isCorrect = p1Ans[q.id] === (q.correctAnswer as number);
           } else if (q.type === "true_false") {
             const correct = q.correctAnswer as boolean[];
             const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
-            isCorrect = correct.every((c, i) => c === student[i]);
+            p2Hits = correct.filter((c, i) => c === student[i]).length;
+            p2Score = P2_TABLE[p2Hits] ?? 0;
+            p2StudentDS = formatDS(student, correct.length);
+            p2CorrectDS = correct.map((b) => (b ? "Đ" : "S")).join("");
+            isCorrect = p2Hits === correct.length;
           } else if (q.type === "short_answer") {
             const student = normalizeAnswer(p3Ans[q.id] ?? "");
             const correct = normalizeAnswer(String(q.correctAnswer ?? ""));
@@ -194,137 +202,99 @@ export default function ReviewMode({
 
               {/* ── P2 review ────────────────────────────────────────────── */}
               {q.type === "true_false" && q.options && (
-                <div className="overflow-x-auto rounded-xl border border-gray-200 mb-4">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="text-center px-3 py-2 font-bold text-gray-500 border-r border-gray-200 w-10">
-                          Ý
-                        </th>
-                        <th className="text-left px-4 py-2 font-semibold text-gray-500">
-                          Phát biểu
-                        </th>
-                        <th className="text-center px-3 py-2 font-bold text-emerald-700 border-l border-gray-200 w-20">
-                          ĐÚNG
-                        </th>
-                        <th className="text-center px-3 py-2 font-bold text-red-600 border-l border-gray-200 w-20">
-                          SAI
-                        </th>
-                        <th className="text-center px-3 py-2 font-semibold text-gray-500 border-l border-gray-200 w-24">
-                          Đáp án
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {q.options.map((stmt, i) => {
-                        const correctBool = (q.correctAnswer as boolean[])[i];
-                        const studentVal = (p2Ans[q.id] ?? [])[i];
-                        const isDungSelected = studentVal === true;
-                        const isSaiSelected = studentVal === false;
-                        const isMatch = studentVal === correctBool;
+                <div className="mb-4">
+                  {/* Bảng phát biểu — chỉ giữ cột ý + nội dung + lựa chọn của HS */}
+                  <div className="overflow-x-auto rounded-xl border border-amber-200 mb-3">
+                    <table className="w-full border-collapse text-sm">
+                      <tbody>
+                        {q.options.map((stmt, i) => {
+                          const studentVal = (p2Ans[q.id] ?? [])[i];
+                          const correctVal = (q.correctAnswer as boolean[])[i];
+                          const answered = studentVal !== null && studentVal !== undefined;
+                          const isMatch = answered && studentVal === correctVal;
 
-                        const rowBg =
-                          studentVal === null || studentVal === undefined
-                            ? i % 2 === 1
-                              ? "bg-gray-50/50"
-                              : "bg-white"
-                            : isMatch
-                            ? i % 2 === 1
-                              ? "bg-green-50/70"
-                              : "bg-green-50/40"
-                            : i % 2 === 1
-                            ? "bg-red-50/70"
-                            : "bg-red-50/40";
-
-                        return (
-                          <tr
-                            key={i}
-                            className={`border-t border-gray-100 ${rowBg}`}
-                          >
-                            <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-gray-100">
-                              {String.fromCharCode(97 + i)}
-                            </td>
-                            <td className="px-4 py-3 text-gray-800 leading-relaxed">
-                              {processLatexText(stmt)}
-                            </td>
-
-                            {/* ĐÚNG cell */}
-                            <td
-                              className={`px-2 py-2 text-center border-l border-gray-100 ${
-                                isDungSelected
-                                  ? correctBool === true
-                                    ? "bg-emerald-100"
-                                    : "bg-red-100"
-                                  : ""
+                          return (
+                            <tr
+                              key={i}
+                              className={`border-t border-amber-100 ${
+                                !answered
+                                  ? i % 2 === 1 ? "bg-amber-50/20" : "bg-white"
+                                  : isMatch
+                                  ? "bg-green-50/50"
+                                  : "bg-red-50/50"
                               }`}
                             >
-                              {isDungSelected ? (
+                              <td className="px-3 py-2.5 text-center font-extrabold text-amber-600 border-r border-amber-100 w-8 shrink-0">
+                                {String.fromCharCode(97 + i)}
+                              </td>
+                              <td className="px-4 py-2.5 text-gray-800 leading-relaxed">
+                                {processLatexText(stmt)}
+                              </td>
+                              {/* Badge EM chọn */}
+                              <td className="px-3 py-2.5 text-center border-l border-amber-100 w-12 shrink-0">
                                 <span
-                                  className={`text-lg font-black ${
-                                    correctBool === true
-                                      ? "text-emerald-600"
-                                      : "text-red-500"
+                                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                    !answered
+                                      ? "bg-gray-100 text-gray-400"
+                                      : studentVal
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-sky-100 text-sky-700"
                                   }`}
                                 >
-                                  {correctBool === true ? "✓" : "✗"}
+                                  {!answered ? "—" : studentVal ? "Đ" : "S"}
                                 </span>
-                              ) : correctBool === true ? (
-                                <span
-                                  className="text-emerald-400 text-base font-bold opacity-60"
-                                  title="Đáp án đúng"
-                                >
-                                  ●
-                                </span>
-                              ) : null}
-                            </td>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                            {/* SAI cell */}
-                            <td
-                              className={`px-2 py-2 text-center border-l border-gray-100 ${
-                                isSaiSelected
-                                  ? correctBool === false
-                                    ? "bg-emerald-100"
-                                    : "bg-red-100"
-                                  : ""
-                              }`}
-                            >
-                              {isSaiSelected ? (
-                                <span
-                                  className={`text-lg font-black ${
-                                    correctBool === false
-                                      ? "text-emerald-600"
-                                      : "text-red-500"
-                                  }`}
-                                >
-                                  {correctBool === false ? "✓" : "✗"}
-                                </span>
-                              ) : correctBool === false ? (
-                                <span
-                                  className="text-emerald-400 text-base font-bold opacity-60"
-                                  title="Đáp án đúng"
-                                >
-                                  ●
-                                </span>
-                              ) : null}
-                            </td>
-
-                            {/* Đáp án chuẩn */}
-                            <td className="px-2 py-2 text-center border-l border-gray-100">
-                              <span
-                                className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${
-                                  correctBool
-                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                    : "bg-red-100 text-red-600 border border-red-200"
-                                }`}
-                              >
-                                {correctBool ? "ĐÚNG" : "SAI"}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  {/* Thanh tóm tắt — 3 dòng theo chuẩn đề 2025 */}
+                  <div
+                    className={`rounded-xl px-4 py-3 text-sm border-2 ${
+                      isCorrect
+                        ? "border-green-200 bg-green-50/70"
+                        : p2Hits > 0
+                        ? "border-amber-200 bg-amber-50/60"
+                        : "border-red-200 bg-red-50/60"
+                    }`}
+                  >
+                    <p className="text-gray-700">
+                      Kết quả:{" "}
+                      <span
+                        className={`font-bold ${
+                          isCorrect
+                            ? "text-green-700"
+                            : p2Hits > 0
+                            ? "text-amber-700"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {p2Hits}/4 ý đúng
+                      </span>
+                      <span className="text-gray-400 ml-2 text-xs">
+                        &rarr; {p2Score} điểm
+                      </span>
+                    </p>
+                    <p className="text-gray-700 mt-1.5">
+                      Bạn trả lời:{" "}
+                      <strong
+                        className={`font-mono tracking-widest ${
+                          isCorrect ? "text-green-700" : "text-red-600"
+                        }`}
+                      >
+                        {p2StudentDS || "—"}
+                      </strong>
+                    </p>
+                    <p className="text-gray-700 mt-1.5">
+                      Đáp án:{" "}
+                      <strong className="font-mono tracking-widest text-green-700">
+                        {p2CorrectDS}
+                      </strong>
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -347,9 +317,8 @@ export default function ReviewMode({
                   </div>
                   <div className="px-3 py-2 rounded-xl border border-green-400 bg-green-100 text-green-900">
                     <span className="opacity-60">Đáp án đúng: </span>
-                    <strong>
-                      <Latex>{String(q.correctAnswer ?? "")}</Latex>
-                    </strong>
+                    {/* cleanPart3Answer loại bỏ $...$, chuyển {,} → , */}
+                    <strong>{cleanPart3Answer(String(q.correctAnswer ?? ""))}</strong>
                   </div>
                 </div>
               )}

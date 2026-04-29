@@ -22,6 +22,31 @@ export interface ScoreResult {
 // Bảng điểm P2 cố định theo số ý đúng
 export const P2_TABLE = [0, 0.1, 0.25, 0.5, 1.0];
 
+/**
+ * Chuyển mảng boolean/null của P2 thành chuỗi Đ/S/-
+ * VD: [true, false, null, true] → "ĐS-Đ"
+ */
+export function formatDS(
+  arr: (boolean | null | undefined)[] | undefined,
+  len: number
+): string {
+  return Array.from({ length: len }, (_, i) => {
+    const v = arr?.[i];
+    return v === true ? "Đ" : v === false ? "S" : "-";
+  }).join("");
+}
+
+/**
+ * Làm sạch đáp án P3 để hiển thị — loại bỏ cú pháp LaTeX thừa.
+ * VD: "$5{,}3$" → "5,3"  |  "$1201$" → "1201"
+ */
+export function cleanPart3Answer(raw: string): string {
+  return raw
+    .replace(/\$/g, "")      // xoá dấu $ bao quanh
+    .replace(/\{,\}/g, ",")  // LaTeX decimal comma → dấu phẩy thường
+    .trim();
+}
+
 export function normalizeAnswer(s: unknown): string {
   return String(s ?? "")
     .toLowerCase()

@@ -26,6 +26,9 @@ interface SendResultPayload {
   detailedResults: QuestionResult[];
 }
 
+// Bảng điểm P2 (mirror của examTypes.ts — dùng phía server, không import client utils)
+const P2_TABLE = [0, 0.1, 0.25, 0.5, 1.0];
+
 // ── SMTP Transporter ──────────────────────────────────────────────────────────
 
 function createTransporter() {
@@ -56,12 +59,31 @@ function buildHtml(payload: SendResultPayload): string {
     rows
       .map((r) => {
         const bg = r.isCorrect ? "#f0fdf4" : "#fff7f7";
-        const icon = r.isCorrect ? "✅" : "❌";
-        const labelColor = r.isCorrect ? "#15803d" : "#dc2626";
-        const p2Extra =
-          r.part === "P2" && r.partialHits !== undefined
-            ? ` <span style="color:#6b7280;font-size:12px;">(${r.partialHits}/4 ý đúng)</span>`
-            : "";
+
+        // ── Cột "Kết quả" ──────────────────────────────────────────────────
+        let ketQuaHtml: string;
+        if (r.part === "P2" && r.partialHits !== undefined) {
+          const score = P2_TABLE[r.partialHits] ?? 0;
+          const kqColor = r.isCorrect ? "#15803d" : r.partialHits > 0 ? "#b45309" : "#dc2626";
+          ketQuaHtml = `<span style="color:${kqColor};font-weight:700;">${r.partialHits}/4 ý đúng</span>
+            <span style="color:#9ca3af;font-size:11px;margin-left:4px;">(${score}đ)</span>`;
+        } else {
+          const icon = r.isCorrect ? "✅" : "❌";
+          const labelColor = r.isCorrect ? "#15803d" : "#dc2626";
+          ketQuaHtml = `${icon} <span style="color:${labelColor};font-weight:600;">${r.isCorrect ? "Đúng" : "Sai"}</span>`;
+        }
+
+        // ── Cột "Bạn trả lời" & "Đáp án đúng" ────────────────────────────
+        // P2: hiển thị chuỗi Đ/S/- in đậm mono để dễ đối chiếu
+        const studentHtml =
+          r.part === "P2"
+            ? `<strong style="font-family:monospace;letter-spacing:3px;font-size:14px;color:#374151;">${escapeHtml(r.studentAnswer)}</strong>`
+            : escapeHtml(r.studentAnswer);
+        const correctHtml =
+          r.part === "P2"
+            ? `<strong style="font-family:monospace;letter-spacing:3px;font-size:14px;color:#15803d;">${escapeHtml(r.correctAnswer)}</strong>`
+            : `<span style="color:#15803d;font-weight:600;">${escapeHtml(r.correctAnswer)}</span>`;
+
         return `
           <tr style="background:${bg};">
             <td style="padding:10px 14px;font-weight:700;color:#374151;border-bottom:1px solid #f3f4f6;text-align:center;">
@@ -73,13 +95,13 @@ function buildHtml(payload: SendResultPayload): string {
               </span>
             </td>
             <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;text-align:center;">
-              ${icon} <span style="color:${labelColor};font-weight:600;">${r.isCorrect ? "Đúng" : "Sai"}${p2Extra}</span>
+              ${ketQuaHtml}
             </td>
             <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;color:#374151;">
-              ${escapeHtml(r.studentAnswer)}
+              ${studentHtml}
             </td>
-            <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;color:#16a34a;font-weight:600;">
-              ${escapeHtml(r.correctAnswer)}
+            <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;">
+              ${correctHtml}
             </td>
           </tr>`;
       })

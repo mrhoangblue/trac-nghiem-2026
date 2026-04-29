@@ -23,6 +23,8 @@ import {
   normalizeAnswer,
   formatCountdown,
   formatDateTime,
+  formatDS,
+  cleanPart3Answer,
 } from "@/utils/examTypes";
 
 // ── WakeLock type (may not be present in all TS lib configurations) ────────────
@@ -439,20 +441,25 @@ export default function QuizClient({
             studentAnswer: p1A[q.id] !== undefined ? String.fromCharCode(65 + p1A[q.id]) : "—",
             correctAnswer: String.fromCharCode(65 + (q.correctAnswer as number)),
           })),
-          ...p2Qs.map((q, i) => ({
-            number: p1Qs.length + i + 1,
-            part: "P2" as const,
-            isCorrect: part2Results[i] === (q.correctAnswer as boolean[]).length,
-            partialHits: part2Results[i],
-            studentAnswer: `${part2Results[i]}/${(q.correctAnswer as boolean[]).length} ý đúng`,
-            correctAnswer: `${(q.correctAnswer as boolean[]).length}/${(q.correctAnswer as boolean[]).length} ý đúng`,
-          })),
+          ...p2Qs.map((q, i) => {
+            const correct = q.correctAnswer as boolean[];
+            return {
+              number: p1Qs.length + i + 1,
+              part: "P2" as const,
+              isCorrect: part2Results[i] === correct.length,
+              partialHits: part2Results[i],
+              // DS strings để email hiển thị chi tiết từng ý Đ/S/-
+              studentAnswer: formatDS(p2A[q.id], correct.length),
+              correctAnswer: correct.map((b) => (b ? "Đ" : "S")).join(""),
+            };
+          }),
           ...p3Qs.map((q, i) => ({
             number: p1Qs.length + p2Qs.length + i + 1,
             part: "P3" as const,
             isCorrect: part3Results[i] ?? false,
             studentAnswer: p3A[q.id] || "—",
-            correctAnswer: String(q.correctAnswer ?? ""),
+            // cleanPart3Answer: xoá $, chuyển {,} → , trước khi gửi email
+            correctAnswer: cleanPart3Answer(String(q.correctAnswer ?? "")),
           })),
         ];
 
@@ -1034,55 +1041,41 @@ const QuestionCard = memo(
 );
 
 // ── ShortAnswerInput ──────────────────────────────────────────────────────────
-
-const NUM_CELLS = 4;
+//
+// Ô nhập liệu duy nhất cho Phần III, tối ưu cho mobile (iPhone/Android):
+//   • type="text" + inputMode="decimal" → bàn phím số có dấu phẩy/trừ
+//   • Tự động đổi dấu chấm "." → dấu phẩy "," (chuẩn Việt Nam)
+//   • Chỉ cho phép ký tự số 0-9, dấu trừ "-", dấu phẩy ","
+//   • Lọc ngay lập tức ký tự chữ cái hoặc ký tự lạ khi paste
 
 function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [cells, setCells] = useState<string[]>(() => {
-    const chars = value.split("").slice(0, NUM_CELLS);
-    return Array.from({ length: NUM_CELLS }, (_, i) => chars[i] ?? "");
-  });
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-
-  const commit = (next: string[]) => { setCells(next); onChange(next.filter(Boolean).join("")); };
-
-  const handleChange = (idx: number, raw: string) => {
-    const char = raw.replace(/[^\w\-+.,]/g, "").slice(-1);
-    const next = [...cells]; next[idx] = char; commit(next);
-    if (char && idx < NUM_CELLS - 1) refs.current[idx + 1]?.focus();
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\./g, ",");      // . → ,  (iPhone decimal key)
+    val = val.replace(/[^0-9\-,]/g, "");               // lọc ký tự không hợp lệ
+    onChange(val);
   };
-
-  const handleKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      if (cells[idx] !== "") { const next = [...cells]; next[idx] = ""; commit(next); }
-      else if (idx > 0) refs.current[idx - 1]?.focus();
-    }
-  };
-
-  const joined = cells.filter(Boolean).join("");
 
   return (
     <div className="mt-2">
       <p className="text-sm font-semibold text-gray-600 mb-3">Nhập đáp án của bạn:</p>
-      <div className="flex items-center gap-2 flex-wrap">
-        {cells.map((cell, i) => (
-          <input
-            key={i}
-            ref={(el) => { refs.current[i] = el; }}
-            type="text" inputMode="text" maxLength={1} value={cell}
-            onChange={(e) => handleChange(i, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(i, e)}
-            className={`w-12 h-12 text-center text-xl font-bold border-2 rounded-md outline-none transition-all
-              ${cell ? "border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-200"
-                     : "border-gray-300 hover:border-gray-400 bg-white text-gray-800"}
-              focus:border-blue-500 focus:ring-2 focus:ring-blue-200`}
-          />
-        ))}
-        {joined && (
-          <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
+      <div className="flex items-center gap-3 flex-wrap">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={handleChange}
+          placeholder="_ _ _"
+          maxLength={12}
+          className={`w-36 h-12 px-3 text-xl font-bold text-center border-2 rounded-xl outline-none transition-all
+            ${value
+              ? "border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-200"
+              : "border-gray-300 hover:border-gray-400 bg-white text-gray-800"}
+            focus:border-blue-500 focus:ring-2 focus:ring-blue-200`}
+        />
+        {value && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
             <span className="text-xs text-emerald-600 font-medium">Đáp án:</span>
-            <span className="font-extrabold text-emerald-800 text-lg leading-none">{joined}</span>
+            <span className="font-extrabold text-emerald-800 text-lg leading-none">{value}</span>
           </div>
         )}
       </div>
