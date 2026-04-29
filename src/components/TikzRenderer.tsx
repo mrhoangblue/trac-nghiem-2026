@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 
 interface TikzRendererProps {
   code: string;
@@ -14,14 +14,22 @@ interface TikzRendererProps {
  * own DOM with its own DOMContentLoaded event, completely isolated from React.
  * No MutationObserver conflicts, no React lifecycle interference.
  *
+ * Wrapped in React.memo so it NEVER re-renders when a parent re-renders due to
+ * an answer state change — only re-renders if the TikZ `code` itself changes.
+ * This prevents TikZJax (WebAssembly, ~50–100 MB heap) from being torn down
+ * and re-allocated on every answer click, which was the primary OOM cause on
+ * mobile Safari / Chrome.
+ *
  * Auto-resize: after the iframe loads, a postMessage from inside fires once
  * TikZJax has replaced the <script> with an <svg>, then we read the true height.
  */
-export default function TikzRenderer({ code, caption }: TikzRendererProps) {
+const TikzRenderer = memo(function TikzRenderer({ code, caption }: TikzRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Build a full self-contained HTML document
-  const htmlContent = `<!DOCTYPE html>
+  // useMemo ensures the string is only rebuilt when `code` actually changes.
+  // Without this, every parent render produces a new string reference, causing
+  // React to re-set srcDoc on the iframe, triggering a full reload of TikZJax.
+  const htmlContent = useMemo(() => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -62,7 +70,7 @@ export default function TikzRenderer({ code, caption }: TikzRendererProps) {
 <body>
   <script type="text/tikz">${code}</script>
 </body>
-</html>`;
+</html>`, [code]);
 
   // Listen for the height message from the iframe
   useEffect(() => {
@@ -96,4 +104,6 @@ export default function TikzRenderer({ code, caption }: TikzRendererProps) {
       )}
     </div>
   );
-}
+});
+
+export default TikzRenderer;

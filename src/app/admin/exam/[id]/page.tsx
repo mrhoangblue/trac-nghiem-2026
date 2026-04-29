@@ -173,27 +173,29 @@ export default function ExamDetailPage() {
       const scores = calcScores(sub, exam.scoringConfig);
       const P2_TABLE = [0, 0.1, 0.25, 0.5, 1.0];
 
+      // Admin chỉ lưu kết quả (đúng/sai, số ý đúng) — không lưu chuỗi đáp án
+      // thực tế. Dùng "—" để email template hiển thị đúng định dạng.
       const detailedResults = [
         ...sub.part1Results.map((isCorrect, i) => ({
           number: i + 1,
           part: "P1" as const,
           isCorrect,
-          studentAnswer: isCorrect ? "Đúng" : "Sai",
+          studentAnswer: "—",   // không có dữ liệu chữ cái A/B/C/D khi resend
           correctAnswer: "—",
         })),
         ...sub.part2Results.map((hits, i) => ({
           number: sub.part1Results.length + i + 1,
           part: "P2" as const,
           isCorrect: hits === 4,
-          partialHits: hits,
-          studentAnswer: `${hits}/4 ý đúng`,
-          correctAnswer: "4/4 ý đúng",
+          partialHits: hits,    // email template dùng partialHits để tính điểm
+          studentAnswer: "—",   // không có chuỗi Đ/S/- khi resend
+          correctAnswer: "—",
         })),
         ...sub.part3Results.map((isCorrect, i) => ({
           number: sub.part1Results.length + sub.part2Results.length + i + 1,
           part: "P3" as const,
-          isCorrect,
-          studentAnswer: isCorrect ? "Đúng" : "Sai",
+          isCorrect,            // đã là boolean, dùng trực tiếp
+          studentAnswer: "—",   // không có đáp án học sinh khi resend
           correctAnswer: "—",
         })),
       ];

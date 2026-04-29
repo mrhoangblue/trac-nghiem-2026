@@ -437,6 +437,9 @@ export default function QuizClient({
     []
   );
 
+  // Stable navigate callback for QuestionPalette — empty deps, uses functional updater
+  const onNavigate = useCallback((i: number) => setCurrentIdx(i), []);
+
   // ── Auth guard ────────────────────────────────────────────────────────────
   if (!user) {
     return (
@@ -571,9 +574,12 @@ export default function QuizClient({
         </div>
       </div>
 
-      {/* ── Question card — memoized, only re-renders on navigation or answer change ── */}
+      {/* ── Question card — key forces full unmount/remount on navigation ── */}
+      {/* key={currentQ.id} ensures old KaTeX DOM + TikZJax WebAssembly are   */}
+      {/* fully released BEFORE the new question's DOM is allocated.           */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8 flex-1">
         <QuestionCard
+          key={currentQ.id}
           question={currentQ}
           questionNumber={currentIdx + 1}
           p1Ans={p1Ans}
@@ -599,33 +605,15 @@ export default function QuizClient({
           ← Trước
         </button>
 
-        {/* Question palette */}
-        <div className="flex gap-1 flex-wrap justify-center max-w-xs">
-          {questions.map((q, i) => {
-            const answered =
-              q.type === "multiple_choice"
-                ? p1Ans[q.id] !== undefined
-                : q.type === "true_false"
-                ? (p2Ans[q.id]?.some((v) => v !== null && v !== undefined) ?? false)
-                : (p3Ans[q.id] ?? "").trim() !== "";
-            return (
-              <button
-                key={q.id}
-                onClick={() => setCurrentIdx(i)}
-                title={`Câu ${i + 1}`}
-                className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                  i === currentIdx
-                    ? "bg-blue-600 text-white shadow"
-                    : answered
-                    ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                }`}
-              >
-                {i + 1}
-              </button>
-            );
-          })}
-        </div>
+        {/* Question palette — memoized component, skips render when nothing changed */}
+        <QuestionPalette
+          questions={questions}
+          currentIdx={currentIdx}
+          p1Ans={p1Ans}
+          p2Ans={p2Ans}
+          p3Ans={p3Ans}
+          onNavigate={onNavigate}
+        />
 
         {currentIdx < questions.length - 1 ? (
           <button
@@ -812,6 +800,20 @@ const QuestionCard = memo(
   function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
     const { id, type, questionText, options, tikzCode } = question;
 
+    // ── Memoize ALL LaTeX rendering — only recompute when the question changes ──
+    // Without useMemo, every answer click re-runs the full KaTeX pipeline for
+    // the question stem AND all options/statements (5 KaTeX calls per click).
+    // With useMemo, KaTeX runs exactly ONCE per question, never on answer clicks.
+    const renderedQuestion = useMemo(
+      () => processLatexText(questionText),
+      [questionText]   // question text is stable for the same question
+    );
+    const renderedOptions = useMemo(
+      () => options?.map((opt) => processLatexText(opt)) ?? [],
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [id]             // options are immutably tied to the question id
+    );
+
     const typeBadge =
       type === "multiple_choice"
         ? { label: "Trắc nghiệm",   cls: "bg-purple-100 text-purple-700" }
@@ -833,19 +835,18 @@ const QuestionCard = memo(
         {tikzCode ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
             <div className="text-gray-900 leading-relaxed font-medium">
-              {processLatexText(questionText)}
+              {renderedQuestion}
             </div>
-            {/* TASK 3 — figure for the CURRENT question.
-                TikzRenderer uses <iframe> which already loads eagerly by default.
-                The `key={id}` on the parent card ensures a fresh iframe is mounted
-                (not reused) when navigating — preventing stale SVG content. */}
+            {/* TikzRenderer is React.memo — never re-renders on answer clicks.    */}
+            {/* key={currentQ.id} on QuestionCard (parent) ensures a fresh iframe  */}
+            {/* is mounted when navigating, so TikZJax WebAssembly is fully freed. */}
             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
               <TikzRenderer code={tikzCode} />
             </div>
           </div>
         ) : (
           <div className="text-gray-900 leading-relaxed font-medium mb-6">
-            {processLatexText(questionText)}
+            {renderedQuestion}
           </div>
         )}
 
@@ -867,7 +868,7 @@ const QuestionCard = memo(
                   </div>
                   <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
                   <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
-                    {processLatexText(opt)}
+                    {renderedOptions[i]}
                   </span>
                 </button>
               );
@@ -897,7 +898,7 @@ const QuestionCard = memo(
                       <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
                         {String.fromCharCode(97 + i)}
                       </td>
-                      <td className="px-4 py-3 text-gray-800 leading-relaxed">{processLatexText(stmt)}</td>
+                      <td className="px-4 py-3 text-gray-800 leading-relaxed">{renderedOptions[i]}</td>
                       <td className="px-3 py-2 text-center border-l border-amber-100">
                         <button
                           onClick={() => onP2(id, i, true)}
@@ -937,6 +938,69 @@ const QuestionCard = memo(
       prev.p3Ans[id]        === next.p3Ans[id]
       // onP1/onP2/onP3 are stable useCallback refs — always equal, no need to check
     );
+  }
+);
+
+// ── QuestionPalette ───────────────────────────────────────────────────────────
+//
+// Memoized palette of numbered buttons. Custom comparator ensures it only
+// re-renders when:
+//   • The current active question changes (currentIdx)
+//   • An answer for any question changes (affects button colour)
+// This prevents 28 buttons from re-rendering on every keystroke / click when
+// none of the palette-relevant state actually changed.
+
+interface PaletteProps {
+  questions: ParsedQuestion[];
+  currentIdx: number;
+  p1Ans: Record<number, number>;
+  p2Ans: Record<number, (boolean | null)[]>;
+  p3Ans: Record<number, string>;
+  onNavigate: (i: number) => void;
+}
+
+const QuestionPalette = memo(
+  function QuestionPalette({ questions, currentIdx, p1Ans, p2Ans, p3Ans, onNavigate }: PaletteProps) {
+    return (
+      <div className="flex gap-1 flex-wrap justify-center max-w-xs">
+        {questions.map((q, i) => {
+          const answered =
+            q.type === "multiple_choice"
+              ? p1Ans[q.id] !== undefined
+              : q.type === "true_false"
+              ? (p2Ans[q.id]?.some((v) => v !== null && v !== undefined) ?? false)
+              : (p3Ans[q.id] ?? "").trim() !== "";
+          return (
+            <button
+              key={q.id}
+              onClick={() => onNavigate(i)}
+              title={`Câu ${i + 1}`}
+              className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                i === currentIdx
+                  ? "bg-blue-600 text-white shadow"
+                  : answered
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              {i + 1}
+            </button>
+          );
+        })}
+      </div>
+    );
+  },
+  (prev, next) => {
+    // Re-render if active question changed
+    if (prev.currentIdx !== next.currentIdx) return false;
+    // Re-render if any answer state changed (affects button colour)
+    for (const q of prev.questions) {
+      const id = q.id;
+      if (prev.p1Ans[id] !== next.p1Ans[id]) return false;
+      if (JSON.stringify(prev.p2Ans[id]) !== JSON.stringify(next.p2Ans[id])) return false;
+      if (prev.p3Ans[id] !== next.p3Ans[id]) return false;
+    }
+    return true; // nothing changed — skip render
   }
 );
 
