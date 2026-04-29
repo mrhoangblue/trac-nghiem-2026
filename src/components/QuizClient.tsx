@@ -1025,6 +1025,7 @@ const QuestionPalette = memo(
 // ── ShortAnswerInput ──────────────────────────────────────────────────────────
 
 const NUM_CELLS = 4;
+const ALLOWED_RE = /^[0-9,\-]$/;
 
 function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [cells, setCells] = useState<string[]>(() => {
@@ -1035,18 +1036,34 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
 
   const commit = (next: string[]) => { setCells(next); onChange(next.filter(Boolean).join("")); };
 
-  const handleChange = (idx: number, raw: string) => {
-    const char = raw.replace(/[^\w\-+.,]/g, "").slice(-1);
-    const next = [...cells]; next[idx] = char; commit(next);
-    if (char && idx < NUM_CELLS - 1) refs.current[idx + 1]?.focus();
+  // Tầng 1: chặn tại nguồn trước khi ký tự vào DOM (iOS Safari)
+  const handleBeforeInput = (idx: number, e: React.FormEvent<HTMLInputElement> & { data?: string }) => {
+    const raw = e.data ?? "";
+    // Dấu chấm → cho qua để xử lý thành phẩy ở bước tiếp theo
+    if (raw === ".") return;
+    // Mọi ký tự không hợp lệ → chặn hoàn toàn
+    if (!ALLOWED_RE.test(raw)) e.preventDefault();
   };
 
+  // Tầng 2: chặn phím vật lý trên desktop + Backspace
   const handleKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Backspace") {
       e.preventDefault();
       if (cells[idx] !== "") { const next = [...cells]; next[idx] = ""; commit(next); }
       else if (idx > 0) refs.current[idx - 1]?.focus();
+      return;
     }
+    // Cho phép phím điều hướng và phím hệ thống đi qua
+    if (e.key.length > 1) return;
+    const mapped = e.key === "." ? "," : e.key;
+    if (!ALLOWED_RE.test(mapped)) e.preventDefault();
+  };
+
+  // Tầng 3: safety net — đổi dấu chấm thành phẩy, lọc ký tự lạ còn sót
+  const handleChange = (idx: number, raw: string) => {
+    const char = raw.replace(/\./g, ",").replace(/[^0-9,\-]/g, "").slice(-1);
+    const next = [...cells]; next[idx] = char; commit(next);
+    if (char && idx < NUM_CELLS - 1) refs.current[idx + 1]?.focus();
   };
 
   const joined = cells.filter(Boolean).join("");
@@ -1059,7 +1076,16 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
           <input
             key={i}
             ref={(el) => { refs.current[i] = el; }}
-            type="text" inputMode="text" maxLength={1} value={cell}
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9,\-]*"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            maxLength={1}
+            value={cell}
+            onBeforeInput={(e) => handleBeforeInput(i, e as React.FormEvent<HTMLInputElement> & { data?: string })}
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             className={`w-12 h-12 text-center text-xl font-bold border-2 rounded-md outline-none transition-all
