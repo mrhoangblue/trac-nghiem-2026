@@ -1068,10 +1068,34 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
 
   const joined = cells.filter(Boolean).join("");
 
+  const toggleMinus = () => {
+    const next = [...cells];
+    if (next[0] === "-") {
+      next[0] = "";
+    } else {
+      // Đẩy các ô sang phải để chèn "-" vào đầu
+      for (let i = NUM_CELLS - 1; i > 0; i--) next[i] = next[i - 1];
+      next[0] = "-";
+    }
+    commit(next);
+    refs.current[next[0] === "-" ? 1 : 0]?.focus();
+  };
+
   return (
     <div className="mt-2">
       <p className="text-sm font-semibold text-gray-600 mb-3">Nhập đáp án của bạn:</p>
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Nút dấu trừ riêng biệt — giải pháp cho iOS không có "-" trên bàn phím decimal */}
+        <button
+          type="button"
+          onClick={toggleMinus}
+          className={`w-10 h-12 text-xl font-bold border-2 rounded-md transition-all select-none
+            ${cells[0] === "-"
+              ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
+              : "border-gray-300 hover:border-gray-400 bg-white text-gray-500 hover:text-gray-800"}`}
+        >
+          −
+        </button>
         {cells.map((cell, i) => (
           <input
             key={i}
