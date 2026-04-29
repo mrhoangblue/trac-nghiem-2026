@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import Sidebar from "@/components/Sidebar";
 import BrowserWarning from "@/components/BrowserWarning";
 import { AuthProvider } from "@/lib/AuthContext";
+import HydrationGuard from "@/components/HydrationGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,9 +33,11 @@ export default function RootLayout({
     <html
       lang="vi"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning={true}
     >
-      <head></head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+      {/* Strip __gcrremoteframetoken before React hydration sees the mismatch */}
+      <HydrationGuard />
+      <body className="min-h-full flex flex-col" suppressHydrationWarning={true}>
         <BrowserWarning>
         <AuthProvider>
           <Header />

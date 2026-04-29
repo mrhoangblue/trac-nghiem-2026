@@ -173,12 +173,16 @@ export default function ExamDetailPage() {
       const scores = calcScores(sub, exam.scoringConfig);
       const P2_TABLE = [0, 0.1, 0.25, 0.5, 1.0];
 
+      // Admin resend: chỉ có boolean/hit-count, không có đáp án thực của học sinh.
+      // Dùng "—" cho studentAnswer/correctAnswer — email template sẽ hiển thị "—"
+      // thay vì chuỗi sai/lặp. Cột "Kết quả" vẫn hiện ✅/❌ (P1, P3) hoặc
+      // "X/4 ý đúng" (P2) từ trường isCorrect/partialHits.
       const detailedResults = [
         ...sub.part1Results.map((isCorrect, i) => ({
           number: i + 1,
           part: "P1" as const,
           isCorrect,
-          studentAnswer: isCorrect ? "Đúng" : "Sai",
+          studentAnswer: "—",
           correctAnswer: "—",
         })),
         ...sub.part2Results.map((hits, i) => ({
@@ -186,14 +190,15 @@ export default function ExamDetailPage() {
           part: "P2" as const,
           isCorrect: hits === 4,
           partialHits: hits,
-          studentAnswer: `${hits}/4 ý đúng`,
-          correctAnswer: "4/4 ý đúng",
+          // Chuỗi DS không có trong admin view — email sẽ hiển thị "—" cho 2 cột này
+          studentAnswer: "—",
+          correctAnswer: "—",
         })),
         ...sub.part3Results.map((isCorrect, i) => ({
           number: sub.part1Results.length + sub.part2Results.length + i + 1,
           part: "P3" as const,
           isCorrect,
-          studentAnswer: isCorrect ? "Đúng" : "Sai",
+          studentAnswer: "—",
           correctAnswer: "—",
         })),
       ];

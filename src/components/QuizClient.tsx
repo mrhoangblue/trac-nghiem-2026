@@ -81,6 +81,10 @@ const CountdownTimer = memo(function CountdownTimer({
   totalSeconds,
   onExpire,
 }: CountdownTimerProps) {
+  // isMounted prevents hydration mismatch: server renders "--:--", client shows real time
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   const [timeLeft, setTimeLeft] = useState(totalSeconds);
   // Always call the latest version of onExpire even if it was re-created
   const onExpireRef = useRef(onExpire);
@@ -126,7 +130,7 @@ const CountdownTimer = memo(function CountdownTimer({
           <circle cx="12" cy="12" r="10" strokeWidth={2} />
           <path strokeLinecap="round" d="M12 6v6l4 2" strokeWidth={2} />
         </svg>
-        {formatCountdown(timeLeft)}
+        {isMounted ? formatCountdown(timeLeft) : "--:--"}
       </div>
     </div>
   );
@@ -658,9 +662,12 @@ export default function QuizClient({
         </div>
       </div>
 
-      {/* ── Question card — memoized, only re-renders on navigation or answer change ── */}
+      {/* ── Question card — key=question.id forces full unmount/remount on navigation,  ──
+           releasing all old KaTeX DOM nodes to GC instead of keeping them alive.
+           Inside, QuestionBody memo prevents LaTeX from re-rendering on answer clicks. */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8 flex-1">
         <QuestionCard
+          key={currentQ.id}
           question={currentQ}
           questionNumber={currentIdx + 1}
           p1Ans={p1Ans}
@@ -870,6 +877,167 @@ function IntroScreen({
   );
 }
 
+// ── QuestionBody ──────────────────────────────────────────────────────────────
+//
+// Renders ONLY the question stem (header badges + text + optional TikZ figure).
+// areEqual checks ONLY question.id → this component NEVER re-renders when the
+// student selects or changes an answer. KaTeX and TikZJax are completely isolated
+// from the answer-selection cycle, eliminating the primary source of iOS OOM.
+
+interface BodyProps {
+  question: ParsedQuestion;
+  questionNumber: number;
+}
+
+const QuestionBody = memo(
+  function QuestionBody({ question, questionNumber }: BodyProps) {
+    const { type, questionText, tikzCode } = question;
+    const renderedText = useMemo(() => processLatexText(questionText), [questionText]);
+
+    const typeBadge =
+      type === "multiple_choice"
+        ? { label: "Trắc nghiệm",   cls: "bg-purple-100 text-purple-700" }
+        : type === "true_false"
+        ? { label: "Đúng / Sai",    cls: "bg-amber-100 text-amber-700" }
+        : { label: "Trả lời ngắn", cls: "bg-emerald-100 text-emerald-700" };
+
+    return (
+      <>
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+            Câu {questionNumber}
+          </span>
+          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${typeBadge.cls}`}>
+            {typeBadge.label}
+          </span>
+        </div>
+
+        {tikzCode ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
+            <div className="text-gray-900 leading-relaxed font-medium">{renderedText}</div>
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
+              <TikzRenderer code={tikzCode} />
+            </div>
+          </div>
+        ) : (
+          <div className="text-gray-900 leading-relaxed font-medium mb-6">{renderedText}</div>
+        )}
+      </>
+    );
+  },
+  (prev, next) =>
+    prev.question.id === next.question.id &&
+    prev.questionNumber === next.questionNumber
+);
+
+// ── P1Choices ─────────────────────────────────────────────────────────────────
+//
+// Renders the multiple-choice option buttons. Re-renders only when the selected
+// answer changes or the question changes — never for P2/P3 state updates.
+// renderedOptions is a stable reference from the parent useMemo.
+
+interface P1ChoicesProps {
+  id: number;
+  renderedOptions: React.ReactNode[];
+  selectedIdx: number | undefined;
+  onP1: (qId: number, optIdx: number) => void;
+}
+
+const P1Choices = memo(
+  function P1Choices({ id, renderedOptions, selectedIdx, onP1 }: P1ChoicesProps) {
+    return (
+      <div className="grid gap-3">
+        {renderedOptions.map((opt, i) => {
+          const selected = selectedIdx === i;
+          return (
+            <button
+              key={i}
+              onClick={() => onP1(id, i)}
+              className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${
+                selected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-300 hover:bg-gray-50"
+              }`}
+            >
+              <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-500" : "border-gray-300"}`}>
+                {selected && <div className="w-3 h-3 bg-blue-500 rounded-full" />}
+              </div>
+              <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
+              <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
+                {opt}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.selectedIdx === next.selectedIdx &&
+    prev.renderedOptions === next.renderedOptions // stable ref from parent useMemo
+);
+
+// ── P2Choices ─────────────────────────────────────────────────────────────────
+//
+// Renders the true/false table for P2. Re-renders only when the student's P2
+// answers for this specific question change — never for P1/P3 state updates.
+
+interface P2ChoicesProps {
+  id: number;
+  renderedOptions: React.ReactNode[];
+  answers: (boolean | null)[];
+  onP2: (qId: number, stmtIdx: number, value: boolean) => void;
+}
+
+const P2Choices = memo(
+  function P2Choices({ id, renderedOptions, answers, onP2 }: P2ChoicesProps) {
+    return (
+      <div className="overflow-x-auto rounded-2xl border border-amber-200">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-amber-50 border-b border-amber-200">
+              <th className="text-center px-3 py-2.5 font-bold text-amber-700 border-r border-amber-200 w-10">Ý</th>
+              <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Phát biểu</th>
+              <th className="text-center px-4 py-2.5 font-bold text-emerald-700 border-l border-amber-200 w-20">ĐÚNG</th>
+              <th className="text-center px-4 py-2.5 font-bold text-red-600 border-l border-amber-200 w-20">SAI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {renderedOptions.map((stmt, i) => {
+              const selected = answers[i];
+              const isDung = selected === true;
+              const isSai  = selected === false;
+              return (
+                <tr key={i} className={`border-t border-amber-100 ${i % 2 === 1 ? "bg-amber-50/30" : "bg-white"}`}>
+                  <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
+                    {String.fromCharCode(97 + i)}
+                  </td>
+                  <td className="px-4 py-3 text-gray-800 leading-relaxed">{stmt}</td>
+                  <td className="px-3 py-2 text-center border-l border-amber-100">
+                    <button
+                      onClick={() => onP2(id, i, true)}
+                      className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300" : "bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-700"}`}
+                    >Đúng</button>
+                  </td>
+                  <td className="px-3 py-2 text-center border-l border-amber-100">
+                    <button
+                      onClick={() => onP2(id, i, false)}
+                      className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-red-500 text-white shadow-sm ring-2 ring-red-300" : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-700"}`}
+                    >Sai</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.answers === next.answers && // onP2 creates a new array ref on update → triggers re-render
+    prev.renderedOptions === next.renderedOptions
+);
+
 // ── QuestionCard ──────────────────────────────────────────────────────────────
 //
 // TASK 2 — Wrapped with React.memo + custom comparator.
@@ -897,125 +1065,38 @@ interface CardProps {
 
 const QuestionCard = memo(
   function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
-    const { id, type, questionText, options, tikzCode } = question;
+    const { id, type, options } = question;
 
-    // ── Memoised LaTeX rendering ───────────────────────────────────────────
-    // THE CRITICAL OOM FIX: processLatexText calls KaTeX which allocates many
-    // DOM nodes and typed arrays. Previously these ran again on EVERY answer
-    // click because the custom memo comparator only guards the outer component,
-    // not the work inside its body.
-    //
-    // With useMemo keyed on the question's text/options (stable between answer
-    // changes), KaTeX re-renders ONLY when the student navigates to a new
-    // question — never when they merely click an answer on the current one.
-    // For a P2 question with 4 complex statements, this eliminates 4 KaTeX
-    // re-renders per click, and hundreds of wasted renders over a full exam.
-    const renderedText = useMemo(() => processLatexText(questionText), [questionText]);
+    // Stable reference as long as options array doesn't change (i.e., same question).
+    // Passed to P1Choices / P2Choices so they can compare by reference in their areEqual.
     const renderedOptions = useMemo(
       () => options?.map((opt) => processLatexText(opt)) ?? [],
       [options]
     );
 
-    const typeBadge =
-      type === "multiple_choice"
-        ? { label: "Trắc nghiệm",   cls: "bg-purple-100 text-purple-700" }
-        : type === "true_false"
-        ? { label: "Đúng / Sai",    cls: "bg-amber-100 text-amber-700" }
-        : { label: "Trả lời ngắn", cls: "bg-emerald-100 text-emerald-700" };
-
     return (
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-            Câu {questionNumber}
-          </span>
-          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${typeBadge.cls}`}>
-            {typeBadge.label}
-          </span>
-        </div>
-
-        {tikzCode ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
-            <div className="text-gray-900 leading-relaxed font-medium">
-              {renderedText}
-            </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
-              <TikzRenderer code={tikzCode} />
-            </div>
-          </div>
-        ) : (
-          <div className="text-gray-900 leading-relaxed font-medium mb-6">
-            {renderedText}
-          </div>
-        )}
+        {/* QuestionBody is isolated: NEVER re-renders on answer selection */}
+        <QuestionBody question={question} questionNumber={questionNumber} />
 
         {/* P1 — Multiple choice */}
         {type === "multiple_choice" && options && (
-          <div className="grid gap-3">
-            {options.map((opt, i) => {
-              const selected = p1Ans[id] === i;
-              return (
-                <button
-                  key={i}
-                  onClick={() => onP1(id, i)}
-                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${
-                    selected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-300 hover:bg-gray-50"
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-500" : "border-gray-300"}`}>
-                    {selected && <div className="w-3 h-3 bg-blue-500 rounded-full" />}
-                  </div>
-                  <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
-                  <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
-                    {renderedOptions[i]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <P1Choices
+            id={id}
+            renderedOptions={renderedOptions}
+            selectedIdx={p1Ans[id]}
+            onP1={onP1}
+          />
         )}
 
         {/* P2 — True / False table */}
         {type === "true_false" && options && (
-          <div className="overflow-x-auto rounded-2xl border border-amber-200">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-amber-50 border-b border-amber-200">
-                  <th className="text-center px-3 py-2.5 font-bold text-amber-700 border-r border-amber-200 w-10">Ý</th>
-                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Phát biểu</th>
-                  <th className="text-center px-4 py-2.5 font-bold text-emerald-700 border-l border-amber-200 w-20">ĐÚNG</th>
-                  <th className="text-center px-4 py-2.5 font-bold text-red-600 border-l border-amber-200 w-20">SAI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {options.map((stmt, i) => {
-                  const selected = (p2Ans[id] ?? [])[i];
-                  const isDung = selected === true;
-                  const isSai  = selected === false;
-                  return (
-                    <tr key={i} className={`border-t border-amber-100 ${i % 2 === 1 ? "bg-amber-50/30" : "bg-white"}`}>
-                      <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
-                        {String.fromCharCode(97 + i)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-800 leading-relaxed">{renderedOptions[i]}</td>
-                      <td className="px-3 py-2 text-center border-l border-amber-100">
-                        <button
-                          onClick={() => onP2(id, i, true)}
-                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300" : "bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-700"}`}
-                        >Đúng</button>
-                      </td>
-                      <td className="px-3 py-2 text-center border-l border-amber-100">
-                        <button
-                          onClick={() => onP2(id, i, false)}
-                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-red-500 text-white shadow-sm ring-2 ring-red-300" : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-700"}`}
-                        >Sai</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <P2Choices
+            id={id}
+            renderedOptions={renderedOptions}
+            answers={p2Ans[id] ?? []}
+            onP2={onP2}
+          />
         )}
 
         {/* P3 — Short answer */}
