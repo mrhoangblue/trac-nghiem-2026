@@ -1084,18 +1084,21 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
   return (
     <div className="mt-2">
       <p className="text-sm font-semibold text-gray-600 mb-3">Nhập đáp án của bạn:</p>
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Nút dấu trừ riêng biệt — giải pháp cho iOS không có "-" trên bàn phím decimal */}
-        <button
-          type="button"
-          onClick={toggleMinus}
-          className={`w-10 h-12 text-xl font-bold border-2 rounded-md transition-all select-none
-            ${cells[0] === "-"
-              ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
-              : "border-gray-300 hover:border-gray-400 bg-white text-gray-500 hover:text-gray-800"}`}
-        >
-          −
-        </button>
+      <div className="flex items-end gap-2 flex-wrap">
+        {/* Nút dấu trừ nằm phía trên ô đầu tiên, thẳng hàng dọc */}
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[10px] text-gray-400 leading-tight text-center">Cần dấu<br/>"-" bấm đây</span>
+          <button
+            type="button"
+            onClick={toggleMinus}
+            className={`w-12 h-10 text-xl font-bold border-2 rounded-md transition-all select-none
+              ${cells[0] === "-"
+                ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
+                : "border-gray-300 hover:border-gray-400 bg-white text-gray-500 hover:text-gray-800"}`}
+          >
+            −
+          </button>
+        </div>
         {cells.map((cell, i) => (
           <input
             key={i}
