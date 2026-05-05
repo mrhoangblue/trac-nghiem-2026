@@ -204,7 +204,25 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 </>
               )}
 
+              <SectionLabel>Lớp học</SectionLabel>
+              <DrawerLink
+                href="/teacher/classes"
+                icon="🏫"
+                active={pathname.startsWith("/teacher/classes")}
+                onClose={onClose}
+              >
+                Quản lý lớp học
+              </DrawerLink>
+
               <SectionLabel>Cá nhân</SectionLabel>
+              <DrawerLink
+                href="/teacher/profile"
+                icon="👤"
+                active={pathname === "/teacher/profile"}
+                onClose={onClose}
+              >
+                Hồ sơ giáo viên
+              </DrawerLink>
               <DrawerLink
                 href="/student/history"
                 icon="📜"
@@ -284,7 +302,15 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 );
               })}
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-0.5">
+                <DrawerLink
+                  href="/student/classes"
+                  icon="🏫"
+                  active={pathname.startsWith("/student/classes")}
+                  onClose={onClose}
+                >
+                  Lớp học của tôi
+                </DrawerLink>
                 <DrawerLink
                   href="/student/history"
                   icon="📜"

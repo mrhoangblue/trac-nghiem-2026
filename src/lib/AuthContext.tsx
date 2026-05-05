@@ -39,6 +39,9 @@ export interface UserProfile {
   fullName: string;
   school: string;
   role: "admin" | "mod" | "student" | "pending_teacher";
+  /** Bắt buộc với luồng đăng ký giáo viên — dùng tìm kiếm */
+  phoneNumber?: string;
+  searchKeywords?: string[];
   class?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -69,7 +72,14 @@ export function useAuth(): AuthContextValue {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isProfileComplete(data: Partial<UserProfile> | null | undefined): boolean {
-  return !!(data?.role && data?.fullName && data?.school);
+  if (!data?.role || !data.fullName?.trim() || !data.school?.trim()) return false;
+  if (
+    data.role === "pending_teacher" &&
+    !(typeof data.phoneNumber === "string" && data.phoneNumber.trim())
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function LoadingScreen() {

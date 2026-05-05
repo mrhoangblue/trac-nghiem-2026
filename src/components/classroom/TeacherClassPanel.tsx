@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import CreateClassModal from "./CreateClassModal";
 import type { ClassDoc } from "@/utils/classroomTypes";
 
@@ -37,7 +38,10 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!teacherId) { setLoading(false); return; }
+    if (!teacherId) {
+      queueMicrotask(() => setLoading(false));
+      return;
+    }
     const fetchClasses = async () => {
       try {
         const snap = await getDocs(
@@ -154,20 +158,29 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
               </div>
 
               {/* Footer: student count + copy button */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-sm text-gray-500">
                   👨‍🎓 <span className="font-semibold text-gray-700">{cls.studentCount}</span> học sinh
                 </span>
-                <button
-                  onClick={() => copyCode(cls.id, cls.classCode)}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    copiedId === cls.id
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700"
-                  }`}
-                >
-                  {copiedId === cls.id ? "✓ Đã sao chép" : "📋 Sao chép"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/teacher/classes/${cls.id}`}
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-all"
+                  >
+                    Danh sách →
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => copyCode(cls.id, cls.classCode)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                      copiedId === cls.id
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700"
+                    }`}
+                  >
+                    {copiedId === cls.id ? "✓ Đã sao chép" : "📋 Sao chép"}
+                  </button>
+                </div>
               </div>
 
               {cls.description && (

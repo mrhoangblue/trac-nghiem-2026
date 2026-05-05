@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { searchTeachers } from "@/lib/classroomService";
+import { collection, query, where, getDocs, limit } from "firebase/firestore";
 import type { UserProfile } from "@/lib/AuthContext";
+import { normalizeTeacherSearchInput } from "@/utils/searchKeywords";
 import type { ClassDoc } from "@/utils/classroomTypes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -59,9 +59,11 @@ export default function FindTeacherSection() {
   // Run search whenever debounced input changes
   useEffect(() => {
     if (debouncedInput.trim().length < 2) {
-      setTeachers([]);
-      setHasSearched(false);
-      setError("");
+      queueMicrotask(() => {
+        setTeachers([]);
+        setHasSearched(false);
+        setError("");
+      });
       return;
     }
 
@@ -69,7 +71,25 @@ export default function FindTeacherSection() {
       setSearching(true);
       setError("");
       try {
-        const results = await searchTeachers(debouncedInput);
+        const searchToken = normalizeTeacherSearchInput(debouncedInput);
+        if (searchToken.length < 2) {
+          queueMicrotask(() => {
+            setTeachers([]);
+            setHasSearched(false);
+          });
+          return;
+        }
+
+        const snap = await getDocs(
+          query(
+            collection(db, "users"),
+            where("role", "in", ["mod", "admin"]),
+            where("searchKeywords", "array-contains", searchToken),
+            limit(20)
+          )
+        );
+        const results = snap.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
+
         setTeachers(
           results.map((t) => ({ ...t, expanded: false, classes: null, classesLoading: false }))
         );

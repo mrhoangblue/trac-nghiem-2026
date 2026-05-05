@@ -18,6 +18,7 @@ import {
 import { db } from "@/lib/firebase";
 import type { ClassDoc, ClassGroupDoc } from "@/utils/classroomTypes";
 import type { UserProfile } from "@/lib/AuthContext";
+import { generateSearchKeywords, normalizeTeacherSearchInput } from "@/utils/searchKeywords";
 
 // ── Class code generation ─────────────────────────────────────────────────────
 // Charset excludes O (looks like 0) and I (looks like 1) for readability.
@@ -143,10 +144,10 @@ export async function joinClass(
  *   Collection: users | Fields: role (ASC), searchKeywords (ARRAY)
  *
  * Teachers must have the `searchKeywords` field populated in their user doc
- * (via buildSearchKeywords()) for them to appear in results.
+ * (via generateSearchKeywords()) for them to appear in results.
  */
 export async function searchTeachers(rawQuery: string): Promise<UserProfile[]> {
-  const keyword = removeDiacritics(rawQuery.trim().toLowerCase());
+  const keyword = normalizeTeacherSearchInput(rawQuery);
   if (keyword.length < 2) return [];
 
   const snap = await getDocs(
@@ -160,31 +161,13 @@ export async function searchTeachers(rawQuery: string): Promise<UserProfile[]> {
   return snap.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
 }
 
-// ── buildSearchKeywords ───────────────────────────────────────────────────────
-
-/**
- * Generates the `searchKeywords` array for a MOD user's Firestore doc.
- * Merge this into their user document whenever they update their profile.
- */
+/** @deprecated Use generateSearchKeywords from @/utils/searchKeywords */
 export function buildSearchKeywords(
   fullName: string,
   email: string,
   phoneNumber?: string
 ): string[] {
-  const keywords = new Set<string>();
-  const addTokens = (text: string) => {
-    const norm = removeDiacritics(text.toLowerCase().trim());
-    if (norm) keywords.add(norm);
-    norm.split(/\s+/).forEach((t) => t.length >= 2 && keywords.add(t));
-  };
-  addTokens(fullName);
-  if (email) keywords.add(email.toLowerCase().trim());
-  if (phoneNumber) {
-    keywords.add(phoneNumber.trim());
-    const digitsOnly = phoneNumber.replace(/\D/g, "");
-    if (digitsOnly) keywords.add(digitsOnly);
-  }
-  return Array.from(keywords);
+  return generateSearchKeywords(fullName, email, phoneNumber);
 }
 
 // ── removeDiacritics ──────────────────────────────────────────────────────────

@@ -9,6 +9,8 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   addDoc,
+  doc,
+  updateDoc,
   serverTimestamp,
   query,
   where,
@@ -24,6 +26,8 @@ import {
   formatCountdown,
   formatDateTime,
 } from "@/utils/examTypes";
+import { saveDraft, loadDraft, clearDraft } from "@/utils/examDraft";
+import { useExamSession } from "@/hooks/useExamSession";
 
 // ── WakeLock type (may not be present in all TS lib configurations) ────────────
 
@@ -152,17 +156,151 @@ export default function QuizClient({
   const { user, userProfile, login } = useAuth();
 
   // ── Screen state ──────────────────────────────────────────────────────────
-  const [started, setStarted] = useState(false);
+  const [manuallyStarted, setManuallyStarted] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Blocks ALL UI until the Firestore IN_PROGRESS check resolves on mount.
+  // Prevents the Start screen from flashing before we know a session exists.
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  // Remaining seconds derived from server-side examStartTime on page reload.
+  // null on a fresh start → timer uses the full exam duration.
+  const [remainingSecondsOverride, setRemainingSecondsOverride] = useState<number | null>(null);
+  // Tracks the IN_PROGRESS submission doc ID so handleSubmit can UPDATE it
+  // (rather than creating a duplicate completed record).
+  const inProgressDocIdRef = useRef<string | null>(null);
 
   // NOTE: `timeLeft` state has been REMOVED from this component.
   // It now lives inside <CountdownTimer> to isolate per-second re-renders.
+
+  // ── Exam session persistence ───────────────────────────────────────────────
+  // startSession/clearSession write a backup timestamp to sessionStorage.
+  // Primary session detection is done via Firestore in the mount useEffect.
+  const { startSession, clearSession } =
+    useExamSession(examId, user?.uid ?? null, timing.duration);
+
+  // `started` is true once the student clicks "Bắt đầu" OR when a Firestore
+  // IN_PROGRESS session is found on reload (both paths set manuallyStarted=true).
+  const started = manuallyStarted;
 
   // ── Student answers ───────────────────────────────────────────────────────
   const [p1Ans, setP1Ans] = useState<Record<number, number>>({});
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
+
+  // ── Mount effect: check Firestore for an existing IN_PROGRESS session ────
+  //
+  // STATE MACHINE:
+  //   isCheckingSession=true (initial) → query Firestore → isCheckingSession=false
+  //
+  // While isCheckingSession is true the component returns a loading spinner
+  // (see guard below), so the Start screen never flashes on reload.
+  //
+  // IF an IN_PROGRESS doc is found:
+  //   1. Store its ID so handleSubmit can UPDATE instead of creating a duplicate.
+  //   2. Hydrate answers from localStorage.
+  //   3. Calculate remaining seconds from the server-issued examStartTime.
+  //   4. Set manuallyStarted=true → bypass the Start screen entirely.
+  //
+  // IF no IN_PROGRESS doc is found → reveal the Start screen normally.
+  useEffect(() => {
+    if (!user?.uid || !user?.email) {
+      setIsCheckingSession(false);
+      return;
+    }
+
+    const checkAndRestoreSession = async () => {
+      try {
+        const sessionQuery = query(
+          collection(db, "submissions"),
+          where("examId", "==", examId),
+          where("studentEmail", "==", user.email),
+          where("status", "==", "IN_PROGRESS")
+        );
+        const snap = await getDocs(sessionQuery);
+
+        if (!snap.empty) {
+          const sessionDoc = snap.docs[0];
+          inProgressDocIdRef.current = sessionDoc.id;
+
+          // Hydrate saved answers from localStorage draft
+          const draft = loadDraft(examId, user.uid);
+          if (draft) {
+            if (Object.keys(draft.p1Ans).length) setP1Ans(draft.p1Ans);
+            if (Object.keys(draft.p2Ans).length) setP2Ans(draft.p2Ans);
+            if (Object.keys(draft.p3Ans).length) setP3Ans(draft.p3Ans);
+          }
+
+          // Calculate remaining seconds from the authoritative server timestamp
+          const data = sessionDoc.data();
+          const startTs = data.examStartTime as { toDate?: () => Date } | null;
+          const startDate = startTs?.toDate?.();
+          if (startDate) {
+            const elapsed = (Date.now() - startDate.getTime()) / 1000;
+            const remaining = Math.max(0, timing.duration * 60 - Math.floor(elapsed));
+            setRemainingSecondsOverride(remaining);
+          }
+
+          // Skip the Start screen — student is already mid-exam
+          setManuallyStarted(true);
+        }
+      } catch (err) {
+        console.error("Session restore failed:", err);
+        // Non-fatal: fall through to reveal the Start screen
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkAndRestoreSession();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // user, examId, timing.duration are stable for the lifetime of this mount.
+
+  // ── Stable refs so answer callbacks can write drafts without re-creation ──
+  // Each ref always holds the latest answer map; read inside the functional updater.
+  const p1AnsRef = useRef(p1Ans);
+  const p2AnsRef = useRef(p2Ans);
+  const p3AnsRef = useRef(p3Ans);
+  useEffect(() => { p1AnsRef.current = p1Ans; }, [p1Ans]);
+  useEffect(() => { p2AnsRef.current = p2Ans; }, [p2Ans]);
+  useEffect(() => { p3AnsRef.current = p3Ans; }, [p3Ans]);
+
+  // saveDraftRef stays stable (empty-dep callbacks read it via ref).
+  const saveDraftRef = useRef<(
+    p1: Record<number, number>,
+    p2: Record<number, (boolean | null)[]>,
+    p3: Record<number, string>
+  ) => void>(() => {});
+  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    saveDraftRef.current = (p1, p2, p3) =>
+      saveDraft(examId, uid, { p1Ans: p1, p2Ans: p2, p3Ans: p3 });
+  }, [user?.uid, examId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── handleStartExam: called when student clicks "Bắt đầu" ─────────────────
+  // 1. Creates an IN_PROGRESS record in Firestore so a reload can find it.
+  // 2. Writes a backup timestamp to sessionStorage via startSession().
+  // 3. Transitions to the active quiz UI.
+  const handleStartExam = useCallback(async () => {
+    if (!user?.email || !user?.uid) return;
+    try {
+      const docRef = await addDoc(collection(db, "submissions"), {
+        examId,
+        examTitle: title,
+        studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
+        studentEmail: user.email,
+        studentAvatar: user.photoURL ?? "",
+        status: "IN_PROGRESS",
+        examStartTime: serverTimestamp(),
+      });
+      inProgressDocIdRef.current = docRef.id;
+    } catch (err) {
+      console.error("Failed to write IN_PROGRESS record:", err);
+      // Non-fatal — exam still runs; reload won't restore (Firestore unavailable)
+    }
+    startSession(); // sessionStorage fallback for timer reference
+    setManuallyStarted(true);
+  }, [examId, title, user, userProfile, startSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -211,7 +349,8 @@ export default function QuizClient({
         const q = query(
           collection(db, "submissions"),
           where("examId", "==", examId),
-          where("studentEmail", "==", userEmail)
+          where("studentEmail", "==", userEmail),
+          where("status", "==", "COMPLETED")
         );
         const snap = await getDocs(q);
         if (!cancelled) setSubmissionCount(snap.size);
@@ -335,12 +474,13 @@ export default function QuizClient({
 
       let savedSubmissionId: string | undefined;
       try {
-        const docRef = await addDoc(collection(db, "submissions"), {
+        const submissionPayload = {
           examId,
           examTitle: title,
           studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
           studentEmail: user?.email ?? "—",
           studentAvatar: user?.photoURL ?? "",
+          status: "COMPLETED",
           submittedAt: serverTimestamp(),
           part1Results,
           part2Results,
@@ -348,8 +488,21 @@ export default function QuizClient({
           scores: result,
           answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
           cheatCount: cheatCountRef.current,
-        });
-        savedSubmissionId = docRef.id;
+        };
+
+        if (inProgressDocIdRef.current) {
+          // UPDATE the existing IN_PROGRESS doc → avoids creating a duplicate
+          await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
+          savedSubmissionId = inProgressDocIdRef.current;
+        } else {
+          // Fallback: no IN_PROGRESS doc (Firestore was unavailable at start)
+          const docRef = await addDoc(collection(db, "submissions"), submissionPayload);
+          savedSubmissionId = docRef.id;
+        }
+
+        // Clear persistence artifacts — draft and sessionStorage backup
+        if (user?.uid) clearDraft(examId, user.uid);
+        clearSession();
       } catch (err) {
         console.error("Lỗi lưu bài nộp:", err);
       }
@@ -411,6 +564,7 @@ export default function QuizClient({
       isSubmitted, submitting, totalAnswered, totalQuestions,
       calculateScore, p1Qs, p2Qs, p3Qs,
       p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
+      clearSession,
       // cheatCount intentionally OMITTED — read via cheatCountRef.current inside
     ]
   );
@@ -428,21 +582,33 @@ export default function QuizClient({
   // Stable refs ensure React.memo on QuestionCard is not bypassed by handler
   // identity changes on every parent render.
   const onP1 = useCallback(
-    (qId: number, optIdx: number) => setP1Ans((prev) => ({ ...prev, [qId]: optIdx })),
+    (qId: number, optIdx: number) =>
+      setP1Ans((prev) => {
+        const next = { ...prev, [qId]: optIdx };
+        saveDraftRef.current(next, p2AnsRef.current, p3AnsRef.current);
+        return next;
+      }),
     []
   );
   const onP2 = useCallback(
     (qId: number, stmtIdx: number, value: boolean) =>
       setP2Ans((prev) => {
         const cur = prev[qId] ?? new Array(4).fill(null);
-        const next = [...cur];
-        next[stmtIdx] = value;
-        return { ...prev, [qId]: next };
+        const row = [...cur];
+        row[stmtIdx] = value;
+        const next = { ...prev, [qId]: row };
+        saveDraftRef.current(p1AnsRef.current, next, p3AnsRef.current);
+        return next;
       }),
     []
   );
   const onP3 = useCallback(
-    (qId: number, val: string) => setP3Ans((prev) => ({ ...prev, [qId]: val })),
+    (qId: number, val: string) =>
+      setP3Ans((prev) => {
+        const next = { ...prev, [qId]: val };
+        saveDraftRef.current(p1AnsRef.current, p2AnsRef.current, next);
+        return next;
+      }),
     []
   );
 
@@ -496,6 +662,22 @@ export default function QuizClient({
     );
   }
 
+  // ── Session check guard ───────────────────────────────────────────────────
+  // Blocks ALL rendering until the Firestore IN_PROGRESS query resolves.
+  // Without this, the Start screen renders first (manuallyStarted=false),
+  // then the effect fires and the component jumps to quiz mode — the student
+  // would see a flash of the Start screen and could accidentally reset their exam.
+  if (isCheckingSession) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-gray-400">
+          <div className="w-8 h-8 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
+          <p className="text-sm">Đang khôi phục bài làm…</p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Intro screen ──────────────────────────────────────────────────────────
   if (!started) {
     const retryLimitReached =
@@ -511,7 +693,7 @@ export default function QuizClient({
         maxRetries={maxRetries}
         submissionCount={submissionCount}
         retryLimitReached={retryLimitReached}
-        onStart={() => setStarted(true)} // CountdownTimer initialises its own state
+        onStart={handleStartExam}
       />
     );
   }
@@ -550,8 +732,10 @@ export default function QuizClient({
     <div className="max-w-3xl mx-auto px-4 py-10 w-full flex-1 flex flex-col">
       {CheatWarningModal}
 
-      {/* ── TASK 2: Isolated countdown — only this tiny component re-renders per second ── */}
-      <CountdownTimer totalSeconds={timing.duration * 60} onExpire={onExpire} />
+      {/* ── Isolated countdown — server-authoritative start position on reload ── */}
+      {/* remainingSecondsOverride is set from the Firestore examStartTime on reload. */}
+      {/* null on a fresh start → timer uses the full exam duration as default.      */}
+      <CountdownTimer totalSeconds={remainingSecondsOverride ?? timing.duration * 60} onExpire={onExpire} />
 
       {/* ── Section banner ─────────────────────────────────────────────────── */}
       {isFirstOfSection && sectionMeta && (

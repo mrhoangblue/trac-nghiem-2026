@@ -6,12 +6,14 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   getDocs,
+  getDoc,
   doc,
   updateDoc,
   deleteDoc,
   query,
   Timestamp,
 } from "firebase/firestore";
+import { generateSearchKeywords } from "@/utils/searchKeywords";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,7 +119,16 @@ export default function AdminUsersPage() {
   const approveTeacher = async (uid: string) => {
     setActionId(uid);
     try {
-      await updateDoc(doc(db, "users", uid), { role: "mod" });
+      const ref = doc(db, "users", uid);
+      const snap = await getDoc(ref);
+      const d = snap.data() ?? {};
+      const fullName = String(d.fullName ?? "");
+      const email = String(d.email ?? "");
+      const phoneNumber = typeof d.phoneNumber === "string" ? d.phoneNumber : "";
+      await updateDoc(ref, {
+        role: "mod",
+        searchKeywords: generateSearchKeywords(fullName, email, phoneNumber),
+      });
       setUsers((prev) => prev.map((u) => u.uid === uid ? { ...u, role: "mod" } : u));
     } catch (err) {
       console.error(err);

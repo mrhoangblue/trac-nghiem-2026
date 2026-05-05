@@ -123,7 +123,23 @@ export default function Sidebar() {
             </>
           )}
 
+          <SectionLabel>Lớp học</SectionLabel>
+          <SideLink
+            href="/teacher/classes"
+            icon="🏫"
+            active={pathname.startsWith("/teacher/classes")}
+          >
+            Quản lý lớp học
+          </SideLink>
+
           <SectionLabel>Cá nhân</SectionLabel>
+          <SideLink
+            href="/teacher/profile"
+            icon="👤"
+            active={pathname === "/teacher/profile"}
+          >
+            Hồ sơ giáo viên
+          </SideLink>
           <SideLink
             href="/student/history"
             icon="📜"
@@ -206,7 +222,14 @@ export default function Sidebar() {
           );
         })}
 
-        <div className="pt-2">
+        <div className="pt-2 space-y-0.5">
+          <SideLink
+            href="/student/classes"
+            icon="🏫"
+            active={pathname.startsWith("/student/classes")}
+          >
+            Lớp học của tôi
+          </SideLink>
           <SideLink
             href="/student/history"
             icon="📜"

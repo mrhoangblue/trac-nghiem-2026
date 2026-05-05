@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { generateSearchKeywords } from "@/utils/searchKeywords";
 
 type Tab = "student" | "teacher";
 
@@ -14,6 +15,7 @@ export default function OnboardingPage() {
   const [fullName, setFullName] = useState("");
   const [school, setSchool] = useState("Royal School");
   const [classValue, setClassValue] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,6 +26,7 @@ export default function OnboardingPage() {
     if (!fullName.trim()) { setError("Vui lòng nhập họ và tên."); return; }
     if (!school.trim()) { setError("Vui lòng nhập tên trường."); return; }
     if (tab === "student" && !classValue.trim()) { setError("Vui lòng nhập lớp."); return; }
+    if (tab === "teacher" && !phoneNumber.trim()) { setError("Vui lòng nhập số điện thoại."); return; }
 
     setSaving(true);
     try {
@@ -38,6 +41,16 @@ export default function OnboardingPage() {
         updatedAt: serverTimestamp(),
       };
       if (tab === "student") data.class = classValue.trim();
+
+      if (tab === "teacher") {
+        const phone = phoneNumber.trim();
+        data.phoneNumber = phone;
+        data.searchKeywords = generateSearchKeywords(
+          fullName.trim(),
+          user.email ?? "",
+          phone
+        );
+      }
 
       await setDoc(doc(db, "users", user.uid), data, { merge: true });
       await refreshProfile();
@@ -112,6 +125,26 @@ export default function OnboardingPage() {
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
               />
             </div>
+
+            {tab === "teacher" && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  Số điện thoại <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="VD: 0901234567"
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Dùng để học sinh tìm bạn và liên lạc khi tham gia lớp.
+                </p>
+              </div>
+            )}
 
             {tab === "student" && (
               <div>

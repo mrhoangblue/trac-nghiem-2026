@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -15,6 +15,8 @@ import {
   doc,
   where,
   Timestamp,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from "firebase/firestore";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -62,7 +64,7 @@ function formatDate(ts: Timestamp | null): string {
 // ── Main content (reads ?tab= search param) ───────────────────────────────────
 
 function ExamListContent() {
-  const { user, isMod, isAdmin } = useAuth();
+  const { user, isMod, isAdmin, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab"); // "mine" | "shared" | null
 
@@ -73,14 +75,48 @@ function ExamListContent() {
 
   const userEmail = user?.email ?? "";
 
-  const fetchExams = async () => {
+  // Sort helper (avoids composite Firestore indexes)
+  const sortByCreatedAt = (docs: QueryDocumentSnapshot<DocumentData>[]) =>
+    [...docs].sort(
+      (a, b) =>
+        ((b.data().createdAt as Timestamp)?.toMillis() ?? 0) -
+        ((a.data().createdAt as Timestamp)?.toMillis() ?? 0)
+    );
+
+  const fetchExams = useCallback(async () => {
+    if (authLoading) return;
     setLoading(true);
     try {
-      const snap = await getDocs(
-        query(collection(db, "exams"), orderBy("createdAt", "desc"))
-      );
+      let examDocs: QueryDocumentSnapshot<DocumentData>[] = [];
+
+      if (isAdmin) {
+        // Admin sees every exam
+        const snap = await getDocs(
+          query(collection(db, "exams"), orderBy("createdAt", "desc"))
+        );
+        examDocs = snap.docs;
+      } else if (isMod && userEmail) {
+        if (!tab || tab === "mine") {
+          // Only own exams — single-field where, no composite index needed
+          const snap = await getDocs(
+            query(collection(db, "exams"), where("authorEmail", "==", userEmail))
+          );
+          examDocs = sortByCreatedAt(snap.docs);
+        } else if (tab === "shared") {
+          // Others' shared exams + own clones (two single-field queries, merged)
+          const [sharedSnap, ownSnap] = await Promise.all([
+            getDocs(query(collection(db, "exams"), where("isShared", "==", true))),
+            getDocs(query(collection(db, "exams"), where("authorEmail", "==", userEmail))),
+          ]);
+          const seen = new Set(sharedSnap.docs.map((d) => d.id));
+          const merged = [...sharedSnap.docs];
+          ownSnap.docs.forEach((d) => { if (!seen.has(d.id)) merged.push(d); });
+          examDocs = sortByCreatedAt(merged);
+        }
+      }
+
       const rows: ExamRow[] = await Promise.all(
-        snap.docs.map(async (d) => {
+        examDocs.map(async (d) => {
           const data = d.data();
           const subSnap = await getDocs(
             query(collection(db, "submissions"), where("examId", "==", d.id))
@@ -110,9 +146,10 @@ function ExamListContent() {
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, isAdmin, isMod, userEmail, authLoading]);
 
-  useEffect(() => { fetchExams(); }, []);
+  useEffect(() => { fetchExams(); }, [fetchExams]);
 
   const handleDelete = async (examId: string, title: string) => {
     if (!window.confirm(`Bạn có chắc muốn XÓA vĩnh viễn bài thi:\n"${title}"?\n\nHành động này KHÔNG thể hoàn tác.`)) return;
