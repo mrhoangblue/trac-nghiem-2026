@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // 1. Mở cửa cho địa chỉ IP của máy tính (Chữa bệnh quay vòng vòng)
   allowedDevOrigins: ['172.20.10.5'],
 
+  // 2. Tắt built-in Next.js dev tools panel — thay bằng custom DevPanel (role-aware)
+  devIndicators: false,
+
   // 2. Cấp phép hiển thị ảnh từ Firebase và Google (Chữa bệnh mất hình lúc nãy)
   images: {
     remotePatterns: [

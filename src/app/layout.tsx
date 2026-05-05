@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Roboto, Montserrat, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Sidebar from "@/components/Sidebar";
 import BrowserWarning from "@/components/BrowserWarning";
+import DevPanel from "@/components/DevPanel";
 import { AuthProvider } from "@/lib/AuthContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const roboto = Roboto({
+  variable: "--font-roboto",
+  subsets: ["latin"],
+});
+
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
   subsets: ["latin"],
 });
 
@@ -32,7 +38,7 @@ export default function RootLayout({
     <html
       lang="vi"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${roboto.variable} ${montserrat.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head></head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
@@ -46,6 +52,7 @@ export default function RootLayout({
             </main>
           </div>
           <Footer />
+          <DevPanel />
         </AuthProvider>
         </BrowserWarning>
       </body>

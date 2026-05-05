@@ -11,6 +11,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   Timestamp,
 } from "firebase/firestore";
 import { generateSearchKeywords } from "@/utils/searchKeywords";
@@ -77,6 +78,8 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -149,6 +152,36 @@ export default function AdminUsersPage() {
       alert("Lỗi khi từ chối. Vui lòng thử lại.");
     } finally {
       setActionId(null);
+    }
+  };
+
+  const backfillSearchKeywords = async () => {
+    if (!confirm("Tái tạo searchKeywords cho toàn bộ giáo viên/admin?\nThao tác này sẽ ghi đè dữ liệu cũ.")) return;
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "users"), where("role", "in", ["mod", "admin"]))
+      );
+      let updated = 0;
+      await Promise.all(
+        snap.docs.map(async (d) => {
+          const data = d.data();
+          const fullName = String(data.fullName ?? "");
+          const email = String(data.email ?? "");
+          const phoneNumber = typeof data.phoneNumber === "string" ? data.phoneNumber : "";
+          await updateDoc(doc(db, "users", d.id), {
+            searchKeywords: generateSearchKeywords(fullName, email, phoneNumber),
+          });
+          updated++;
+        })
+      );
+      setBackfillResult(`✅ Đã cập nhật ${updated} tài khoản giáo viên/admin.`);
+    } catch (err) {
+      console.error(err);
+      setBackfillResult("❌ Có lỗi xảy ra. Kiểm tra console.");
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -266,12 +299,31 @@ export default function AdminUsersPage() {
             <h1 className="text-3xl font-extrabold text-gray-900">Quản lý Người dùng</h1>
             <p className="text-gray-500 mt-1">Duyệt giáo viên và quản lý tài khoản.</p>
           </div>
-          <button
-            onClick={fetchData}
-            className="inline-flex items-center gap-2 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 font-semibold py-2 px-4 rounded-xl transition-all text-sm"
-          >
-            ↻ Làm mới
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={fetchData}
+                className="inline-flex items-center gap-2 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 font-semibold py-2 px-4 rounded-xl transition-all text-sm"
+              >
+                ↻ Làm mới
+              </button>
+              <button
+                onClick={backfillSearchKeywords}
+                disabled={backfilling}
+                className="inline-flex items-center gap-2 border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold py-2 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
+              >
+                {backfilling ? (
+                  <span className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "🔄"
+                )}
+                Tái tạo từ khóa tìm kiếm
+              </button>
+            </div>
+            {backfillResult && (
+              <p className="text-xs font-semibold text-gray-600">{backfillResult}</p>
+            )}
+          </div>
         </div>
 
         {/* Tab nav */}

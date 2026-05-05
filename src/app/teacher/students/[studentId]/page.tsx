@@ -9,11 +9,13 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   query,
   where,
   Timestamp,
+  DocumentData,
 } from "firebase/firestore";
 import { formatDateTime } from "@/utils/examTypes";
 
@@ -41,11 +43,19 @@ function tsMillis(ts: Timestamp | null): number {
   return ts?.toMillis() ?? 0;
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 export default function TeacherStudentDetailPage() {
   const { studentId: studentIdParam } = useParams<{ studentId: string }>();
   const searchParams = useSearchParams();
   const fromClass = searchParams.get("fromClass");
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const studentId = decodeURIComponent(studentIdParam ?? "");
 
@@ -63,7 +73,7 @@ export default function TeacherStudentDetailPage() {
   }, [fromClass]);
 
   useEffect(() => {
-    if (!studentId || !teacherEmail) return;
+    if (authLoading || !studentId || !teacherEmail) return;
 
     let cancelled = false;
     (async () => {
@@ -84,42 +94,35 @@ export default function TeacherStudentDetailPage() {
         const email = String(u.email ?? "").trim().toLowerCase();
         const name = String(u.fullName ?? "");
 
-        // Exams teacher manages = own authored exams OR globally shared exams.
-        // Current schema uses `authorEmail` + `isShared` (no per-teacher sharedWith list).
-        const [authoredExamSnap, sharedExamSnap] = await Promise.all([
-          getDocs(query(collection(db, "exams"), where("authorEmail", "==", teacherEmail))),
-          getDocs(query(collection(db, "exams"), where("isShared", "==", true))),
-        ]);
-        const teacherExamIds = new Set<string>();
-        const examTitles = new Map<string, string>();
-        authoredExamSnap.docs.forEach((d) => {
-          teacherExamIds.add(d.id);
-          examTitles.set(d.id, String(d.data().title ?? ""));
-        });
-        sharedExamSnap.docs.forEach((d) => {
-          teacherExamIds.add(d.id);
-          if (!examTitles.has(d.id)) {
-            examTitles.set(d.id, String(d.data().title ?? ""));
-          }
-        });
+        // ── Schema note ────────────────────────────────────────────────────────
+        // Submissions are stored with `studentEmail` (the student's Google email).
+        // There is NO `studentId` field on submission docs.  The exam schema uses
+        // `authorEmail: string` for ownership and `isShared: boolean` for global
+        // sharing.  There are no `sharedWith`, `collaborators`, or `createdBy`
+        // fields in any exam document.
+        // ──────────────────────────────────────────────────────────────────────
 
-        const subDocs = email
-          ? (await getDocs(query(collection(db, "submissions"), where("studentEmail", "==", email))))
-              .docs
-          : [];
+        // Step 1: fetch ALL submissions for this student by email.
+        // (Submissions have no studentId field — email is the only identifier.)
+        if (!email) {
+          if (!cancelled) setError("Học sinh không có địa chỉ email.");
+          return;
+        }
+        const subSnap = await getDocs(
+          query(collection(db, "submissions"), where("studentEmail", "==", email))
+        );
+        const subDocs = subSnap.docs;
 
-        const filtered = subDocs
+        const allSubmissions = subDocs
           .map((d) => {
             const sd = d.data();
-            const status = String(sd.status ?? "");
-            if (status !== "COMPLETED") return null;
-            const examId = String(sd.examId ?? "");
-            if (!teacherExamIds.has(examId)) return null;
             return {
               id: d.id,
-              examId,
-              examTitle:
-                String(sd.examTitle ?? "") || examTitles.get(examId) || "—",
+              examId: String(sd.examId ?? ""),
+              examTitle: String(sd.examTitle ?? ""),
+              // status field only exists on submissions created after session-
+              // restoration was added.  Old docs have no status field at all.
+              status: String(sd.status ?? ""),
               submittedAt: (sd.submittedAt ?? null) as Timestamp | null,
               scores:
                 sd.scores && typeof sd.scores === "object"
@@ -127,7 +130,69 @@ export default function TeacherStudentDetailPage() {
                   : { total: 0, p1: 0, p2: 0, p3: 0 },
             };
           })
-          .filter(Boolean) as Omit<SubmissionDisplay, "attemptForExam">[];
+          .filter((s) => s.examId.length > 0);
+
+        // Step 2: fetch the actual exam docs for every examId found.
+        // Then filter access rights in JS — no composite Firestore index needed.
+        const relatedExamIds = Array.from(new Set(allSubmissions.map((s) => s.examId)));
+        // Store {id, data} pairs so we can access both doc ID and fields together.
+        const relatedExams: { id: string; data: DocumentData }[] = [];
+        for (const batch of chunkArray(relatedExamIds, 30)) {
+          if (batch.length === 0) continue;
+          const snap = await getDocs(
+            query(collection(db, "exams"), where(documentId(), "in", batch))
+          );
+          snap.docs.forEach((d) => relatedExams.push({ id: d.id, data: d.data() }));
+        }
+
+        // Step 3 (schema-aware): an exam is accessible to this teacher when:
+        //   a) They created it       → authorEmail === teacherEmail
+        //   b) It is globally shared → isShared === true
+        // (No per-teacher sharing arrays exist in this codebase's schema.)
+        const accessibleExamIds = new Set<string>();
+        const examTitles = new Map<string, string>();
+
+        relatedExams.forEach(({ id: docId, data: examData }) => {
+          const isOwnerByEmail = String(examData.authorEmail ?? "") === teacherEmail;
+          const isGloballyShared = Boolean(examData.isShared);
+
+          if (isOwnerByEmail || isGloballyShared) {
+            accessibleExamIds.add(docId);
+            examTitles.set(docId, String(examData.title ?? ""));
+          }
+        });
+
+        // Step 4: filter submissions.
+        // Exclude only active IN_PROGRESS sessions (not yet submitted).
+        // Old submissions with no status field must be included — do NOT filter
+        // by status === "COMPLETED" because that would exclude all legacy docs.
+        const filteredSubmissions = allSubmissions
+          .filter(
+            (s) =>
+              s.status !== "IN_PROGRESS" && // exclude active sessions
+              accessibleExamIds.has(s.examId)
+          )
+          .map((s) => ({
+            id: s.id,
+            examId: s.examId,
+            examTitle: s.examTitle || examTitles.get(s.examId) || "—",
+            submittedAt: s.submittedAt,
+            scores: s.scores,
+          }));
+
+        // ── Debug logs (check browser console to trace failures) ───────────────
+        console.log("1. All Student Submissions:", allSubmissions);
+        console.log("2. Fetched Exams:", relatedExams.map(({ id, data }) => ({
+          id,
+          title: data.title,
+          authorEmail: data.authorEmail,
+          isShared: data.isShared,
+        })));
+        console.log("3. Current Teacher Email:", teacherEmail, "| UID:", user?.uid);
+        console.log("4. Accessible Exam IDs:", Array.from(accessibleExamIds));
+        console.log("5. Final Filtered Submissions to Render:", filteredSubmissions);
+
+        const filtered = filteredSubmissions as Omit<SubmissionDisplay, "attemptForExam">[];
 
         const byExam = new Map<string, typeof filtered>();
         for (const sub of filtered) {
@@ -167,7 +232,7 @@ export default function TeacherStudentDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [studentId, teacherEmail]);
+  }, [studentId, teacherEmail, authLoading, user?.uid]);
 
   const returnQuery =
     `/teacher/students/${encodeURIComponent(studentId)}${fromClass ? `?fromClass=${encodeURIComponent(fromClass)}` : ""}`;
@@ -195,9 +260,6 @@ export default function TeacherStudentDetailPage() {
               </p>
               <h1 className="text-2xl font-extrabold text-gray-900">{studentName || "—"}</h1>
               <p className="text-sm text-gray-500 mt-1">{studentEmail}</p>
-              <p className="text-sm text-gray-400 mt-3">
-                Hiển thị bài làm của các đề do bạn tạo hoặc được chia sẻ với bạn.
-              </p>
             </header>
 
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
@@ -207,7 +269,8 @@ export default function TeacherStudentDetailPage() {
 
               {rows.length === 0 ? (
                 <div className="text-center py-16 text-gray-400 text-sm font-medium px-6">
-                  Chưa có dữ liệu bài làm cho các đề do bạn quản lý.
+                  Không có dữ liệu. Hãy đảm bảo học sinh đã nộp bài và bạn có quyền truy cập vào
+                  đề thi tương ứng (tự tạo hoặc được chia sẻ).
                 </div>
               ) : (
                 <div className="overflow-x-auto">

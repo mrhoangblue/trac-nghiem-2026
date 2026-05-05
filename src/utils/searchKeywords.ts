@@ -6,6 +6,7 @@ export function normalizeTeacherSearchInput(raw: string): string {
   return raw
     .trim()
     .toLowerCase()
+    .replace(/[\u0111\u0110]/g, "d") // \u0111 is not decomposed by NFD \u2014 must replace explicitly
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 }
