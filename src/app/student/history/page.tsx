@@ -13,6 +13,8 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { formatDateTime } from "@/utils/examTypes";
+import JoinClassSection from "@/components/classroom/JoinClassSection";
+import FindTeacherSection from "@/components/classroom/FindTeacherSection";
 
 interface Submission {
   id: string;
@@ -134,9 +136,9 @@ export default function StudentHistoryPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12 w-full">
+    <div className="max-w-4xl mx-auto px-4 py-12 w-full space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-4">
         {user.photoURL && (
           <img
             src={user.photoURL}
@@ -149,10 +151,28 @@ export default function StudentHistoryPage() {
         )}
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">
-            Lịch sử làm bài
+            Trang học sinh
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">{user.displayName} · {user.email}</p>
         </div>
+      </div>
+
+      {/* ── Classroom section ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <JoinClassSection
+          user={user}
+          fullName={user.displayName ?? user.email ?? "Học sinh"}
+        />
+        <FindTeacherSection />
+      </div>
+
+      {/* ── Divider ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 border-t border-gray-200" />
+        <span className="text-sm font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+          Lịch sử làm bài
+        </span>
+        <div className="flex-1 border-t border-gray-200" />
       </div>
 
       {loading ? (

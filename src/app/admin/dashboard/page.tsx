@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
+import { useAuth } from "@/lib/AuthContext";
+import TeacherClassPanel from "@/components/classroom/TeacherClassPanel";
 import {
   collection,
   getDocs,
@@ -54,6 +56,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const router = useRouter();
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -211,6 +214,13 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </div>
+      {/* ── Classroom section (visible to all mod/admin users) ──────────── */}
+      {user && userProfile && (
+        <TeacherClassPanel
+          teacherId={user.uid}
+          teacherName={userProfile.fullName}
+        />
+      )}
     </div>
     </AdminGuard>
   );
