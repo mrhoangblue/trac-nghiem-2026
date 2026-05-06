@@ -39,9 +39,7 @@ export default function Header() {
 
             {/* Branding */}
             <Link href="/" className="flex items-center gap-3 shrink-0 min-w-0">
-              <span className="bg-blue-600 text-white w-9 h-9 rounded-xl items-center justify-center text-xl font-extrabold shadow-sm shrink-0 hidden md:flex">
-                ∑
-              </span>
+             <img src="/chan-dung.png" alt="Your Face" className="w-9 h-9 rounded-xl" />
               <div className="leading-none min-w-0">
                 <p className="text-[10px] sm:text-xs font-extrabold text-blue-600 uppercase tracking-widest whitespace-nowrap">
                   HỆ THỐNG THI TRẮC NGHIỆM
