@@ -84,7 +84,9 @@ function stripItemchoice(text: string): string {
  */
 function parseTabularToHTML(raw: string): React.ReactNode {
   try {
-    const m = /\\begin\{tabular\}\{([^}]*)\}([\s\S]*?)\\end\{tabular\}/.exec(raw);
+    // Column spec may contain nested braces, e.g. {|p{3cm}|l|}.
+    // Use a 1-level nested-brace pattern so {p{3cm}} is captured correctly.
+    const m = /\\begin\{tabular\}\{((?:[^{}]|\{[^{}]*\})*)\}([\s\S]*?)\\end\{tabular\}/.exec(raw);
     if (!m) return <span className="text-xs text-red-400 font-mono">[tabular parse error]</span>;
 
     const colSpec = m[1];
@@ -167,7 +169,9 @@ export function processLatexText(text: string): React.ReactNode {
   // Step 0 — split out \begin{tabular}...\end{tabular} blocks.
   // Optionally consume a surrounding \begin{center}...\end{center} wrapper so
   // those tags don't leak into the text segments as raw LaTeX.
-  const TABULAR_RE = /(?:\\begin\{center\}\s*)?\\begin\{tabular\}\{[^}]*\}[\s\S]*?\\end\{tabular\}(?:\s*\\end\{center\})?/g;
+  // Column spec uses (?:[^{}]|\{[^{}]*\})* to handle 1-level nested braces
+  // such as {|p{3cm}|c|r|}. Matches the same pattern as tikzToImage.ts.
+  const TABULAR_RE = /(?:\\begin\{center\}\s*)?\\begin\{tabular\}\{(?:[^{}]|\{[^{}]*\})*\}[\s\S]*?\\end\{tabular\}(?:\s*\\end\{center\})?/g;
   type TopSeg = { kind: 'text' | 'tabular'; content: string };
   const topSegs: TopSeg[] = [];
   let lastPos = 0;
