@@ -3,13 +3,6 @@ const TIKZ_RENDER_ENDPOINT =
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-// Custom Vietnamese math commands injected before every tikz block.
-// \providecommand is used instead of \newcommand so this is idempotent —
-// if the HuggingFace preamble already defines these commands, LaTeX silently
-// skips re-definition instead of throwing "Command already defined".
-const LATEX_CUSTOM_COMMANDS = `\\providecommand{\\hoac}[1]{\\left[\\begin{aligned}#1\\end{aligned}\\right.}
-\\providecommand{\\heva}[1]{\\left\\{\\begin{aligned}#1\\end{aligned}\\right.}`;
-
 export interface ConvertTikzOptions {
   timeoutMs?: number;
 }
@@ -63,14 +56,12 @@ export async function convertTikzToImage(
   const { signal, clear } = createTimeoutSignal(timeoutMs);
 
   try {
-    const enrichedCode = `${LATEX_CUSTOM_COMMANDS}\n${tikzCode}`;
-
     const response = await fetch(TIKZ_RENDER_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ tikz_code: enrichedCode }),
+      body: JSON.stringify({ tikz_code: tikzCode }),
       signal,
       cache: "no-store",
     });
