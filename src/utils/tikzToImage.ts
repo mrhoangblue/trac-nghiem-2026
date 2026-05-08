@@ -41,22 +41,27 @@ function createTimeoutSignal(timeoutMs: number): {
   return { signal: controller.signal, clear: () => clearTimeout(timeout) };
 }
 
-function toPngDataUrl(imageBase64: string): string {
+function toSvgDataUri(imageBase64: string): string {
   const trimmed = imageBase64.trim();
+  // Already a fully-formed data URI — return as-is.
   if (trimmed.startsWith("data:image/")) return trimmed;
-  return `data:image/png;base64,${trimmed}`;
+  return `data:image/svg+xml;base64,${trimmed}`;
 }
 
 function buildTikzImageTag(imageSrc: string): string {
-  return `<img src="${imageSrc}" alt="TikZ Diagram" class="tikz-image mx-auto my-2 max-w-full" />`;
+  // Stored as an inline SVG data URI → no external request, no Storage dependency.
+  return `<img src="${imageSrc}" alt="Math Diagram" class="math-rendered-svg mx-auto my-2 max-w-full" />`;
 }
 
 // ── Core fetch ────────────────────────────────────────────────────────────────
 
 /**
- * Calls the Hugging Face renderer and returns a browser-ready PNG data URL.
- * The payload must be a raw LaTeX fragment (tikzpicture, tabular, …) that the
- * server wraps in its own preamble + \begin{document}…\end{document}.
+ * Calls the Hugging Face renderer and returns a browser-ready SVG data URI.
+ *
+ * The HF server compiles the LaTeX fragment and returns the result as a
+ * base64-encoded SVG via the `image_base64` field.  The returned string is a
+ * fully-formed `data:image/svg+xml;base64,…` URI that can be stored directly
+ * in Firestore as part of the question document (no Firebase Storage needed).
  *
  * Server-side only — call from Route Handlers or Server Actions.
  */
@@ -86,7 +91,7 @@ export async function convertTikzToImage(
       throw new Error(payload.error ?? "TikZ render API returned an invalid response.");
     }
 
-    return toPngDataUrl(payload.image_base64);
+    return toSvgDataUri(payload.image_base64);
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`TikZ render timeout after ${timeoutMs}ms`);
@@ -102,9 +107,10 @@ export async function convertTikzToImage(
 /**
  * Generic block converter.
  *
- * Finds every match of `regex` in `content`, converts each unique block to a
- * PNG via the HF API (using `extractCode` to obtain the LaTeX sent to the
- * server), and replaces successful matches with <img> tags.
+ * Finds every match of `regex` in `content`, converts each unique block to an
+ * SVG via the HF API (using `extractCode` to obtain the LaTeX sent to the
+ * server), and replaces successful matches with <img> tags whose src is an
+ * inline `data:image/svg+xml;base64,…` URI stored directly in Firestore.
  *
  * Failed blocks are left unchanged so one bad diagram does not break the whole
  * upload.
@@ -165,15 +171,16 @@ async function convertBlocksToImages(
 
 /**
  * Converts all \begin{tikzpicture}...\end{tikzpicture} blocks in a content
- * string to PNG images via the HuggingFace renderer and replaces them with
- * <img> tags.
+ * string to SVG images via the HuggingFace renderer and replaces them with
+ * <img> tags whose src is an inline `data:image/svg+xml;base64,…` URI.
+ * The result is stored directly in the Firestore question document — no
+ * Firebase Storage upload, no external URL, no cleanup needed.
  *
  * \begin{tabular}...\end{tabular} blocks are intentionally NOT sent to HF:
  * pdflatex's T1 font encoding cannot handle Vietnamese double-diacritic
- * characters (ầ, ố, ề …), so tabular conversion would always fail for
- * Vietnamese content.  The frontend renders tabulars natively via
+ * characters (ầ, ố, ề …).  The frontend renders tabulars natively via
  * parseTabularToHTML (textProcessor.tsx) which supports full Unicode and
- * KaTeX math in every cell — a better outcome than a PNG anyway.
+ * KaTeX math in every cell.
  */
 export async function processTikzToImagesWithStats(
   content: string,
