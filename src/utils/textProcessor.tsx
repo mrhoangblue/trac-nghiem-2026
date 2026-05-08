@@ -20,24 +20,45 @@ const MATH_BLOCK_REGEX = /(\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*\$)/g;
 const NEWLINE_REGEX = /\s*\\\\\s*/g;
 
 // ── KaTeX custom macros ───────────────────────────────────────────────────────
-// Applied to every <Latex> render so \hoac / \heva resolve inside math mode.
+// \begin{aligned} is display-mode only in KaTeX — it throws a parse error when
+// used inside inline $...$, which is how options are typically marked up.
+// \begin{array}{rl} is equivalent visually AND works in both inline and display
+// mode, so it is used here instead.
 
 export const KATEX_MACROS: Record<string, string> = {
-  "\\hoac": "\\left[\\begin{aligned}#1\\end{aligned}\\right.",
-  "\\heva": "\\left\\{\\begin{aligned}#1\\end{aligned}\\right.",
+  "\\hoac": "\\left[\\begin{array}{rl}#1\\end{array}\\right.",
+  "\\heva": "\\left\\{\\begin{array}{rl}#1\\end{array}\\right.",
 };
 
-// ── Pre-processor: wrap \hoac / \heva that appear OUTSIDE math delimiters ────
-// Matches one level of nested braces — enough for standard equation systems.
-const VIET_CMD_OUTSIDE_MATH_RE = /\\(hoac|heva)\{((?:[^{}]|\{[^{}]*\})*)\}/g;
+// ── Pre-processor: wrap \hoac / \heva outside math delimiters ────────────────
+// Handles up to TWO levels of nested braces, e.g. \sqrt{\dfrac{1}{2}} inside
+// a \hoac argument.  One-level: \{[^{}]*\}  Two-level: \{(?:[^{}]|\{[^{}]*\})*\}
+const VIET_CMD_OUTSIDE_MATH_RE =
+  /\\(hoac|heva)\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}/g;
 
 function wrapVietSystemCommands(text: string): string {
-  // Count unescaped $ before each match to determine if we're in math mode.
+  // Count unescaped $ before each match to decide if we're already in math mode.
   return text.replace(VIET_CMD_OUTSIDE_MATH_RE, (match, _cmd, _inner, offset) => {
     const dollarCount = (text.slice(0, offset).match(/(?<!\\)\$/g) ?? []).length;
-    // Odd count ⇒ already inside $...$; leave intact for KaTeX macros to handle.
-    return dollarCount % 2 === 1 ? match : `$$${match}$$`;
+    if (dollarCount % 2 === 1) {
+      // Odd → inside $...$. Upgrade to display $$ so array renders correctly.
+      // (We cannot re-wrap here since we only see the command, not the delimiters.)
+      return match;
+    }
+    // Even → outside math entirely. Wrap in display math.
+    return `$$${match}$$`;
   });
+}
+
+// ── Pre-processor: upgrade $\hoac..$ / $\heva..$ to display $$...$$ ──────────
+// When a teacher writes $\hoac{...}$ (inline), the \begin{array} environment
+// still renders fine, but this ensures the equation system gets its own line,
+// which matches the expected display for a solution set.
+const INLINE_VIET_CMD_RE =
+  /(?<!\$)\$(\s*\\(?:hoac|heva)\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}[^$]*)\$(?!\$)/g;
+
+function upgradeVietCmdToDisplay(text: string): string {
+  return text.replace(INLINE_VIET_CMD_RE, (_match, inner) => `$$${inner}$$`);
 }
 
 // ── Pre-processor: strip \begin{itemchoice} environment ──────────────────────
@@ -187,6 +208,7 @@ function processTextOnly(text: string): React.ReactNode {
   // Custom Vietnamese commands & environments
   text = stripItemchoice(text);
   text = wrapVietSystemCommands(text);
+  text = upgradeVietCmdToDisplay(text);
 
   // Wrap bare \begin{array} with $$
   text = wrapBareArrays(text);
