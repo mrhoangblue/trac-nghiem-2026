@@ -129,7 +129,11 @@ export async function processTikzToImagesWithStats(
         conversions.set(tikzBlock, buildTikzImageTag(imageSrc));
       } catch (error) {
         failedCount += tikzBlocks.filter((block) => block === tikzBlock).length;
-        console.error("Failed to convert TikZ block:", error);
+        console.error("HF Render API Failed for TikZ block:", tikzBlock);
+        console.error("Error details:", error);
+        if (error instanceof Object && "response" in error && error.response instanceof Response) {
+          console.error("Response data:", await error.response.text());
+        }
       }
     }),
   );
