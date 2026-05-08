@@ -18,6 +18,7 @@ import {
 import AdminGuard from "@/components/AdminGuard";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import TikzRenderer from "@/components/TikzRenderer";
+import ExplanationRenderer from "@/components/ExplanationRenderer";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 
@@ -539,7 +540,8 @@ export default function EditExamPage() {
                     )}
                     {q.explanation && (
                       <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
-                        <span className="font-bold">Lời giải: </span>{processLatexText(q.explanation)}
+                        <span className="font-bold text-gray-500 block mb-1">Lời giải:</span>
+                        <ExplanationRenderer explanation={q.explanation} />
                       </div>
                     )}
                   </div>
