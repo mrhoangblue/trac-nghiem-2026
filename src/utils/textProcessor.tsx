@@ -4,8 +4,13 @@
  * Pipeline:
  *  1. \begin{tabular}...  → HTML <table> (parseTabularToHTML)
  *  2. \begin{center}...   → centered flex div
- *  3. $$...$$  /  $...$   → <Latex> (KaTeX)
+ *  3. $$...$$  /  $...$   → <Latex> (KaTeX via react-latex-next)
  *  4. plain text \\       → <br/>
+ *
+ * Custom Vietnamese math commands supported:
+ *  \hoac{...}  — square-bracket system of equations
+ *  \heva{...}  — curly-brace system of equations
+ *  \begin{itemchoice}...\end{itemchoice} — inline choice list
  */
 
 import React from "react";
@@ -13,6 +18,38 @@ import Latex from "react-latex-next";
 
 const MATH_BLOCK_REGEX = /(\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*\$)/g;
 const NEWLINE_REGEX = /\s*\\\\\s*/g;
+
+// ── KaTeX custom macros ───────────────────────────────────────────────────────
+// Applied to every <Latex> render so \hoac / \heva resolve inside math mode.
+
+export const KATEX_MACROS: Record<string, string> = {
+  "\\hoac": "\\left[\\begin{aligned}#1\\end{aligned}\\right.",
+  "\\heva": "\\left\\{\\begin{aligned}#1\\end{aligned}\\right.",
+};
+
+// ── Pre-processor: wrap \hoac / \heva that appear OUTSIDE math delimiters ────
+// Matches one level of nested braces — enough for standard equation systems.
+const VIET_CMD_OUTSIDE_MATH_RE = /\\(hoac|heva)\{((?:[^{}]|\{[^{}]*\})*)\}/g;
+
+function wrapVietSystemCommands(text: string): string {
+  // Count unescaped $ before each match to determine if we're in math mode.
+  return text.replace(VIET_CMD_OUTSIDE_MATH_RE, (match, _cmd, _inner, offset) => {
+    const dollarCount = (text.slice(0, offset).match(/(?<!\\)\$/g) ?? []).length;
+    // Odd count ⇒ already inside $...$; leave intact for KaTeX macros to handle.
+    return dollarCount % 2 === 1 ? match : `$$${match}$$`;
+  });
+}
+
+// ── Pre-processor: strip \begin{itemchoice} environment ──────────────────────
+// Converts \itemch markers to bullet separators for plain-text rendering.
+// (ExplanationRenderer handles the ||ITEMCH|| path for parsed explanations.)
+
+function stripItemchoice(text: string): string {
+  return text
+    .replace(/\\begin\{itemchoice\}/g, "")
+    .replace(/\\end\{itemchoice\}/g, "")
+    .replace(/\\itemch\b\s*/g, "\n• ");
+}
 
 // ── Tabular → HTML table ──────────────────────────────────────────────────────
 
@@ -147,6 +184,10 @@ export function processLatexText(text: string): React.ReactNode {
 function processTextOnly(text: string): React.ReactNode {
   if (!text.trim()) return null;
 
+  // Custom Vietnamese commands & environments
+  text = stripItemchoice(text);
+  text = wrapVietSystemCommands(text);
+
   // Wrap bare \begin{array} with $$
   text = wrapBareArrays(text);
 
@@ -201,7 +242,7 @@ function renderMathAndText(text: string): React.ReactNode {
         if (idx % 2 === 1) {
           return (
             <span key={idx} className="inline-block max-w-full overflow-x-auto overflow-y-hidden align-middle">
-              <Latex>{part}</Latex>
+              <Latex macros={KATEX_MACROS}>{part}</Latex>
             </span>
           );
         }
