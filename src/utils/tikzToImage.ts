@@ -12,16 +12,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const TIKZPICTURE_RE =
   /\\begin\{tikzpicture\}(?:\s*\[[^\]]*\])?[\s\S]*?\\end\{tikzpicture\}/g;
 
-/**
- * Matches \begin{tabular}{spec}...\end{tabular}, optionally wrapped in
- * \begin{center}...\end{center}.
- *
- * Column-spec group  (?:[^{}]|\{[^{}]*\})*  handles one level of nesting,
- * which covers common cases like  {|c|p{3cm}|r|}  correctly.
- */
-const TABULAR_RE =
-  /(?:\\begin\{center\}\s*)?\\begin\{tabular\}\{(?:[^{}]|\{[^{}]*\})*\}[\s\S]*?\\end\{tabular\}(?:\s*\\end\{center\})?/g;
-
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface ConvertTikzOptions {
@@ -174,53 +164,27 @@ async function convertBlocksToImages(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Two-pass renderer for a content string:
+ * Converts all \begin{tikzpicture}...\end{tikzpicture} blocks in a content
+ * string to PNG images via the HuggingFace renderer and replaces them with
+ * <img> tags.
  *
- *   Pass 1 — tikzpicture blocks  → PNG (sent as-is to HF)
- *   Pass 2 — tabular blocks      → PNG (center wrapper stripped before sending)
- *
- * Running passes sequentially guarantees that a tabular inside a tikzpicture
- * is never double-processed: once the tikzpicture is replaced by an <img> tag
- * in Pass 1, Pass 2 finds no tabular left inside it.
+ * \begin{tabular}...\end{tabular} blocks are intentionally NOT sent to HF:
+ * pdflatex's T1 font encoding cannot handle Vietnamese double-diacritic
+ * characters (ầ, ố, ề …), so tabular conversion would always fail for
+ * Vietnamese content.  The frontend renders tabulars natively via
+ * parseTabularToHTML (textProcessor.tsx) which supports full Unicode and
+ * KaTeX math in every cell — a better outcome than a PNG anyway.
  */
 export async function processTikzToImagesWithStats(
   content: string,
   options: ConvertTikzOptions = {},
 ): Promise<ProcessMathContentResult> {
-  let processedContent = content;
-  let totalConverted = 0;
-  let totalFailed = 0;
-
-  // ── Pass 1: tikzpicture ───────────────────────────────────────────────────
-  const tikzResult = await convertBlocksToImages(
-    processedContent,
+  return convertBlocksToImages(
+    content,
     TIKZPICTURE_RE,
-    (block) => block, // send the tikzpicture block as-is
+    (block) => block,
     options,
   );
-  processedContent = tikzResult.content;
-  totalConverted += tikzResult.convertedCount;
-  totalFailed += tikzResult.failedCount;
-
-  // ── Pass 2: tabular (only what remains after Pass 1) ─────────────────────
-  const tabularResult = await convertBlocksToImages(
-    processedContent,
-    TABULAR_RE,
-    // Strip optional \begin{center}…\end{center} wrapper — the HF standalone
-    // class crops to content, so the wrapper adds nothing useful.
-    (block) =>
-      block.match(/\\begin\{tabular\}[\s\S]*?\\end\{tabular\}/)?.[0] ?? block,
-    options,
-  );
-  processedContent = tabularResult.content;
-  totalConverted += tabularResult.convertedCount;
-  totalFailed += tabularResult.failedCount;
-
-  return {
-    content: processedContent,
-    convertedCount: totalConverted,
-    failedCount: totalFailed,
-  };
 }
 
 export async function processTikzToImages(
