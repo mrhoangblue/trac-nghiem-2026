@@ -27,6 +27,10 @@ export interface ProcessMathContentResult {
 interface TikzRenderResponse {
   status?: string;
   image_base64?: string;
+  /** Optional MIME type hint from HF (e.g. "image/svg+xml" or "image/png").
+   *  When the HF Space is updated to return SVG it can set this field and the
+   *  client will automatically use the correct data URI without further changes. */
+  mime_type?: string;
   error?: string;
 }
 
@@ -41,15 +45,25 @@ function createTimeoutSignal(timeoutMs: number): {
   return { signal: controller.signal, clear: () => clearTimeout(timeout) };
 }
 
-function toSvgDataUri(imageBase64: string): string {
+/**
+ * Wraps the raw base64 string returned by HF into a browser-ready data URI.
+ * Auto-detects the format from the HF response:
+ *   - If HF returns SVG  → data:image/svg+xml;base64,…
+ *   - If HF returns PNG  → data:image/png;base64,…  (current HF behaviour)
+ * Once the HF Space is updated to output SVG, this function automatically
+ * produces the correct SVG data URI with no further code changes needed.
+ */
+function toImageDataUri(imageBase64: string, mimeHint?: string): string {
   const trimmed = imageBase64.trim();
   // Already a fully-formed data URI — return as-is.
   if (trimmed.startsWith("data:image/")) return trimmed;
-  return `data:image/svg+xml;base64,${trimmed}`;
+  // Use the hint supplied by the caller (set by the HF response field), or
+  // fall back to PNG so existing behaviour is preserved until HF outputs SVG.
+  const mime = mimeHint ?? "image/png";
+  return `data:${mime};base64,${trimmed}`;
 }
 
 function buildTikzImageTag(imageSrc: string): string {
-  // Stored as an inline SVG data URI → no external request, no Storage dependency.
   return `<img src="${imageSrc}" alt="Math Diagram" class="math-rendered-svg mx-auto my-2 max-w-full" />`;
 }
 
@@ -91,7 +105,7 @@ export async function convertTikzToImage(
       throw new Error(payload.error ?? "TikZ render API returned an invalid response.");
     }
 
-    return toSvgDataUri(payload.image_base64);
+    return toImageDataUri(payload.image_base64, payload.mime_type);
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`TikZ render timeout after ${timeoutMs}ms`);
