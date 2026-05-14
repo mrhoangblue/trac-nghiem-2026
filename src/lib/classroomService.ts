@@ -7,6 +7,7 @@ import {
   doc,
   addDoc,
   setDoc,
+  getDoc,
   updateDoc,
   getDocs,
   query,
@@ -133,6 +134,58 @@ export async function joinClass(
   );
 
   return { success: true, classId: classDocSnap.id, className: data.name };
+}
+
+// ── getClassById ──────────────────────────────────────────────────────────────
+
+/** Fetches a class document by its Firestore document ID. Returns null if not found. */
+export async function getClassById(classId: string): Promise<(ClassDoc & { id: string }) | null> {
+  const snap = await getDoc(doc(db, "classes", classId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as ClassDoc) };
+}
+
+// ── joinClassById ─────────────────────────────────────────────────────────────
+
+/**
+ * Enrolls a student via the class-specific link flow.
+ * Verifies that the supplied code matches the class at classId.
+ */
+export async function joinClassById(
+  classId: string,
+  classCode: string,
+  student: Pick<UserProfile, "uid" | "fullName" | "email">
+): Promise<JoinClassResult> {
+  const snap = await getDoc(doc(db, "classes", classId));
+  if (!snap.exists()) return { success: false, error: "NOT_FOUND" };
+
+  const data = snap.data() as ClassDoc;
+  if (data.classCode !== classCode.toUpperCase().trim()) return { success: false, error: "NOT_FOUND" };
+  if (!data.isActive) return { success: false, error: "INACTIVE" };
+  if (data.studentIds.includes(student.uid)) return { success: false, error: "ALREADY_JOINED" };
+  if (data.maxStudents !== undefined && data.studentIds.length >= data.maxStudents) {
+    return { success: false, error: "FULL" };
+  }
+
+  await updateDoc(snap.ref, {
+    studentIds: arrayUnion(student.uid),
+    updatedAt: serverTimestamp(),
+  });
+
+  await setDoc(
+    doc(db, "class_members", `${classId}_${student.uid}`),
+    {
+      classId,
+      studentId: student.uid,
+      studentName: student.fullName,
+      studentEmail: student.email,
+      joinedAt: serverTimestamp(),
+      status: "active",
+    },
+    { merge: true }
+  );
+
+  return { success: true, classId, className: data.name };
 }
 
 // ── searchTeachers ────────────────────────────────────────────────────────────

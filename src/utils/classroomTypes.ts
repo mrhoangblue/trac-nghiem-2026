@@ -53,8 +53,13 @@ export interface ModUserExtension {
 
 export type ReviewPolicy = "immediate" | "after_end" | "never";
 
+export type ExamTargetType = "all" | "classes";
+
 export interface ExamDocExtension {
   classIds: string[];
+  /** "all" = mọi học sinh; "classes" = chỉ HS thuộc targetClassIds */
+  targetType: ExamTargetType;
+  targetClassIds: string[];
   isShuffleQuestions: boolean;
   isShuffleOptions: boolean;
   reviewPolicy: ReviewPolicy;

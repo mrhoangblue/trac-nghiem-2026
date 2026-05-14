@@ -31,6 +31,8 @@ interface UploadQuizRequest {
   gradeLevel?: string;
   examType?: string | null;
   timeoutMs?: number;
+  targetType?: "all" | "classes";
+  targetClassIds?: string[];
 }
 
 interface ProcessedQuestion extends ParsedQuestion {
@@ -163,6 +165,8 @@ export async function POST(request: Request) {
       isShared: Boolean(body.isShared),
       gradeLevel: body.gradeLevel ?? "",
       examType: body.examType ?? null,
+      targetType: body.targetType ?? "all",
+      targetClassIds: body.targetClassIds ?? [],
       createdAt: serverTimestamp(),
     });
 

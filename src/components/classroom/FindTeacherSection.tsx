@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, limit } from "firebase/firestore";
 import type { UserProfile } from "@/lib/AuthContext";
@@ -12,7 +13,6 @@ import type { ClassDoc } from "@/utils/classroomTypes";
 interface ClassSummary {
   id: string;
   name: string;
-  classCode: string;
   studentCount: number;
 }
 
@@ -140,7 +140,6 @@ export default function FindTeacherSection() {
         return {
           id: d.id,
           name: data.name,
-          classCode: data.classCode,
           studentCount: data.studentIds.length,
         };
       });
@@ -275,23 +274,23 @@ export default function FindTeacherSection() {
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {teacher.classes.map((cls) => (
-                          <div
+                          <Link
                             key={cls.id}
-                            className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 gap-3"
+                            href={`/join/${cls.id}`}
+                            className="flex items-center justify-between bg-white border border-gray-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl px-4 py-3 gap-3 transition-colors group"
                           >
                             <div className="min-w-0">
-                              <p className="font-semibold text-gray-800 text-sm truncate">{cls.name}</p>
+                              <p className="font-semibold text-gray-800 text-sm truncate group-hover:text-blue-700 transition-colors">
+                                {cls.name}
+                              </p>
                               <p className="text-xs text-gray-400 mt-0.5">
                                 👨‍🎓 {cls.studentCount} học sinh
                               </p>
                             </div>
-                            <div className="shrink-0 text-right">
-                              <p className="font-black text-indigo-700 text-xl font-mono tracking-widest leading-none">
-                                {cls.classCode}
-                              </p>
-                              <p className="text-[10px] text-gray-400 mt-0.5">mã lớp</p>
-                            </div>
-                          </div>
+                            <span className="shrink-0 text-xs text-blue-600 font-semibold whitespace-nowrap">
+                              Tham gia →
+                            </span>
+                          </Link>
                         ))}
                       </div>
                     </>

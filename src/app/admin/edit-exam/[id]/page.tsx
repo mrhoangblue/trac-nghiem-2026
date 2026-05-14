@@ -13,6 +13,9 @@ import {
   updateDoc,
   addDoc,
   collection,
+  getDocs,
+  query,
+  where,
   serverTimestamp,
 } from "firebase/firestore";
 import AdminGuard from "@/components/AdminGuard";
@@ -21,6 +24,9 @@ import TikzRenderer from "@/components/TikzRenderer";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
+import type { ClassDoc } from "@/utils/classroomTypes";
+
+interface ClassOption { id: string; name: string; }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -87,6 +93,12 @@ export default function EditExamPage() {
   const [examType, setExamType] = useState<string>(EXAM_TYPES[0]);
   const [originalAuthorEmail, setOriginalAuthorEmail] = useState<string>("");
 
+  // ── Target audience ─────────────────────────────────────────────────────────
+  const [targetType, setTargetType] = useState<"all" | "classes">("all");
+  const [targetClassIds, setTargetClassIds] = useState<string[]>([]);
+  const [myClasses, setMyClasses] = useState<ClassOption[]>([]);
+  const [classesLoading, setClassesLoading] = useState(false);
+
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
 
   // ── Load from Firestore ───────────────────────────────────────────────────
@@ -108,6 +120,8 @@ export default function EditExamPage() {
         setGradeLevel(data.gradeLevel ?? GRADE_LEVELS[0]);
         setExamType(data.examType ?? EXAM_TYPES[0]);
         setOriginalAuthorEmail(data.authorEmail ?? "");
+        setTargetType(data.targetType ?? "all");
+        setTargetClassIds(data.targetClassIds ?? []);
 
         if (data.rawLatex) {
           setPart1(data.rawLatex.part1 ?? "");
@@ -127,6 +141,19 @@ export default function EditExamPage() {
     };
     load();
   }, [id]);
+
+  // Load teacher's classes when switching to "classes" mode
+  useEffect(() => {
+    if (targetType !== "classes" || !user?.uid || myClasses.length > 0) return;
+    setClassesLoading(true);
+    getDocs(
+      query(collection(db, "classes"), where("teacherId", "==", user.uid), where("isActive", "==", true))
+    )
+      .then((snap) => {
+        setMyClasses(snap.docs.map((d) => ({ id: d.id, name: (d.data() as ClassDoc).name })));
+      })
+      .finally(() => setClassesLoading(false));
+  }, [targetType, user?.uid, myClasses.length]);
 
   // ── Compile preview ───────────────────────────────────────────────────────
   const handlePreview = () => {
@@ -199,6 +226,8 @@ export default function EditExamPage() {
         maxRetries: Number(maxRetries),
         gradeLevel,
         examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
+        targetType,
+        targetClassIds: targetType === "classes" ? targetClassIds : [],
       };
 
       if (!isOwnExam) {
@@ -381,6 +410,76 @@ export default function EditExamPage() {
                       </p>
                     </div>
                   </label>
+                </div>
+              )}
+            </div>
+
+            {/* ── Đối tượng làm bài ────────────────────────────────────── */}
+            <div className="bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-100 rounded-2xl p-5 space-y-4">
+              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
+                <span className="text-teal-500">🎯</span> Đối tượng làm bài
+              </h3>
+              <div className="flex gap-3">
+                {([
+                  { value: "all", label: "Tất cả học sinh", desc: "Ai có link đề đều làm được" },
+                  { value: "classes", label: "Lớp cụ thể", desc: "Chỉ HS trong lớp được chọn" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setTargetType(opt.value)}
+                    className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${
+                      targetType === opt.value
+                        ? "border-teal-500 bg-teal-50 text-teal-800"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    <p className="font-bold text-sm">{opt.label}</p>
+                    <p className="text-xs opacity-70 mt-0.5">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+              {targetType === "classes" && (
+                <div className="bg-white rounded-xl border border-teal-100 p-4">
+                  {classesLoading ? (
+                    <div className="flex justify-center py-3">
+                      <div className="w-5 h-5 border-2 border-teal-200 border-t-teal-500 rounded-full animate-spin" />
+                    </div>
+                  ) : myClasses.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-2">
+                      Bạn chưa có lớp nào. Tạo lớp tại{" "}
+                      <a href="/teacher/classes" className="text-teal-600 underline">Quản lý lớp học</a>.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                        Chọn lớp được phép làm bài
+                      </p>
+                      <div className="space-y-2">
+                        {myClasses.map((cls) => (
+                          <label key={cls.id} className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={targetClassIds.includes(cls.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) setTargetClassIds((prev) => [...prev, cls.id]);
+                                else setTargetClassIds((prev) => prev.filter((x) => x !== cls.id));
+                              }}
+                              className="w-4 h-4 accent-teal-600"
+                            />
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-teal-700 transition-colors">
+                              {cls.name}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {targetClassIds.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-3 font-medium">
+                          ⚠️ Chưa chọn lớp nào — vui lòng chọn ít nhất một lớp.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
