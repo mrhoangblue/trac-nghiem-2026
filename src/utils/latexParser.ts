@@ -160,8 +160,17 @@ function extractStandaloneTikz(text: string): { textContent: string; tikzCode: s
   const tikzMatch = tikzRe.exec(text);
   if (!tikzMatch) return null;
 
-  const tikzCode = tikzMatch[0].trim();
-  let removeStart = tikzMatch.index;
+  // Capture any tikz-3dplot setup commands immediately before \begin{tikzpicture}.
+  // \tdplotsetmaincoords and \tdplotsetrotatedcoords must live outside the
+  // tikzpicture environment and would otherwise be silently dropped by the parser.
+  const PRE_CMDS_RE =
+    /((?:\\tdplotsetmaincoords\{[^}]*\}\{[^}]*\}|\\tdplotsetrotatedcoords\{[^}]*\}\{[^}]*\}\{[^}]*\})\s*)+$/;
+  const textBefore = text.slice(0, tikzMatch.index);
+  const preMatch = PRE_CMDS_RE.exec(textBefore);
+  const preCmds = preMatch ? preMatch[0] : '';
+
+  const tikzCode = (preCmds + tikzMatch[0]).trim();
+  let removeStart = preMatch ? preMatch.index : tikzMatch.index;
   let removeEnd = tikzMatch.index + tikzMatch[0].length;
 
   // If the tikzpicture is wrapped in \begin{center}…\end{center}, remove the wrapper too

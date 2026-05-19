@@ -4,10 +4,62 @@ import Link from "next/link";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { useStudentMode } from "@/lib/StudentModeContext";
 import MobileDrawer from "@/components/MobileDrawer";
 
+// ── StudentModeToggle ─────────────────────────────────────────────────────────
+// Rendered only for mod / admin roles.
+// A pill-shaped toggle with an animated thumb, matching the existing header style.
+
+function StudentModeToggle() {
+  const { isStudentMode, toggleStudentMode } = useStudentMode();
+
+  return (
+    <button
+      onClick={toggleStudentMode}
+      aria-pressed={isStudentMode}
+      aria-label={isStudentMode ? "Tắt chế độ học sinh" : "Bật chế độ học sinh"}
+      title={isStudentMode ? "Đang xem trước như học sinh — nhấn để tắt" : "Xem đề thi như học sinh"}
+      className={`
+        group relative hidden sm:flex items-center gap-2 px-3 py-1.5
+        rounded-full border text-xs font-bold transition-all duration-200
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1
+        ${isStudentMode
+          ? "bg-emerald-500 border-emerald-400 text-white focus-visible:ring-emerald-400 shadow-md shadow-emerald-200"
+          : "bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 focus-visible:ring-indigo-400"
+        }
+      `}
+    >
+      {/* Toggle track + thumb */}
+      <span
+        className={`
+          relative inline-flex w-8 h-4 rounded-full transition-colors duration-200 shrink-0
+          ${isStudentMode ? "bg-white/30" : "bg-gray-200 group-hover:bg-indigo-200"}
+        `}
+      >
+        <span
+          className={`
+            absolute top-0.5 w-3 h-3 rounded-full shadow transition-all duration-200
+            ${isStudentMode
+              ? "translate-x-4 bg-white"
+              : "translate-x-0.5 bg-white group-hover:bg-indigo-400"
+            }
+          `}
+        />
+      </span>
+
+      {/* Label */}
+      <span className="whitespace-nowrap leading-none">
+        {isStudentMode ? "🎓 Chế độ học sinh" : "Chế độ học sinh"}
+      </span>
+    </button>
+  );
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+
 export default function Header() {
-  const { user, userProfile, loading, login, logout } = useAuth();
+  const { user, userProfile, loading, login, logout, isMod } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const roleBadge =
@@ -19,6 +71,9 @@ export default function Header() {
       ? { label: "Admin", cls: "bg-blue-100 text-blue-700" }
       : null;
 
+  // Toggle is only available to teachers (mod) and admins
+  const showStudentModeToggle = isMod && !loading;
+
   return (
     <>
       <header className="bg-white shadow-sm border-b border-blue-100 sticky top-0 z-30 h-16 flex items-center shrink-0">
@@ -26,7 +81,6 @@ export default function Header() {
 
           {/* Left: Hamburger (mobile) + Branding */}
           <div className="flex items-center gap-2 min-w-0">
-            {/* Hamburger — mobile only */}
             {user && (
               <button
                 onClick={() => setDrawerOpen(true)}
@@ -37,9 +91,8 @@ export default function Header() {
               </button>
             )}
 
-            {/* Branding */}
             <Link href="/" className="flex items-center gap-3 shrink-0 min-w-0">
-             <img src="/chan-dung.png" alt="Your Face" className="w-9 h-9 rounded-xl" />
+              <img src="/chan-dung.png" alt="Your Face" className="w-9 h-9 rounded-xl" />
               <div className="leading-none min-w-0">
                 <p className="text-[10px] sm:text-xs font-extrabold text-blue-600 uppercase tracking-widest whitespace-nowrap">
                   HỆ THỐNG THI TRẮC NGHIỆM
@@ -51,8 +104,11 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* Right: Auth section */}
+          {/* Right: Student-mode toggle (teachers only) + Auth section */}
           <div className="flex items-center gap-3 shrink-0">
+            {/* ── Student-mode pill toggle — only for mod / admin ── */}
+            {showStudentModeToggle && <StudentModeToggle />}
+
             {loading ? (
               <div className="w-28 h-9 bg-gray-100 rounded-full animate-pulse" />
             ) : user ? (
@@ -77,7 +133,6 @@ export default function Header() {
                 <span className="text-sm font-medium text-gray-700 hidden sm:block max-w-[120px] truncate">
                   {userProfile?.fullName ?? user.displayName}
                 </span>
-                {/* Logout — desktop only (mobile uses drawer footer) */}
                 <button
                   onClick={logout}
                   className="hidden md:block text-sm font-medium text-gray-500 hover:text-red-500 border border-gray-200 hover:border-red-300 py-1.5 px-3 rounded-full transition-all"
@@ -105,7 +160,7 @@ export default function Header() {
         </div>
       </header>
 
-      {/* Mobile slide-in drawer — rendered outside header so it can overlay everything */}
+      {/* Mobile slide-in drawer */}
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
   );

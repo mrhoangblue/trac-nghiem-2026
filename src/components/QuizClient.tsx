@@ -17,6 +17,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
+import { useStudentMode } from "@/lib/StudentModeContext";
 import {
   ScoringConfig,
   TimingConfig,
@@ -154,6 +155,7 @@ export default function QuizClient({
   maxRetries = 1,
 }: QuizClientProps) {
   const { user, userProfile, login } = useAuth();
+  const { isStudentMode } = useStudentMode();
 
   // ── Screen state ──────────────────────────────────────────────────────────
   const [manuallyStarted, setManuallyStarted] = useState(false);
@@ -283,24 +285,28 @@ export default function QuizClient({
   // 3. Transitions to the active quiz UI.
   const handleStartExam = useCallback(async () => {
     if (!user?.email || !user?.uid) return;
-    try {
-      const docRef = await addDoc(collection(db, "submissions"), {
-        examId,
-        examTitle: title,
-        studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
-        studentEmail: user.email,
-        studentAvatar: user.photoURL ?? "",
-        status: "IN_PROGRESS",
-        examStartTime: serverTimestamp(),
-      });
-      inProgressDocIdRef.current = docRef.id;
-    } catch (err) {
-      console.error("Failed to write IN_PROGRESS record:", err);
-      // Non-fatal — exam still runs; reload won't restore (Firestore unavailable)
+    // In student-preview mode skip the Firestore IN_PROGRESS record entirely —
+    // the teacher is just previewing; we must not pollute the submissions collection.
+    if (!isStudentMode) {
+      try {
+        const docRef = await addDoc(collection(db, "submissions"), {
+          examId,
+          examTitle: title,
+          studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
+          studentEmail: user.email,
+          studentAvatar: user.photoURL ?? "",
+          status: "IN_PROGRESS",
+          examStartTime: serverTimestamp(),
+        });
+        inProgressDocIdRef.current = docRef.id;
+      } catch (err) {
+        console.error("Failed to write IN_PROGRESS record:", err);
+        // Non-fatal — exam still runs; reload won't restore (Firestore unavailable)
+      }
     }
     startSession(); // sessionStorage fallback for timer reference
     setManuallyStarted(true);
-  }, [examId, title, user, userProfile, startSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isStudentMode, examId, title, user, userProfile, startSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -338,11 +344,13 @@ export default function QuizClient({
   }, [started, isSubmitted, requestWakeLock]);
 
   // ── Retry limit ───────────────────────────────────────────────────────────
+  // In student-preview mode the teacher is not a real student — bypass the
+  // retry limit entirely so the toggle never blocks the teacher from previewing.
   const [submissionCount, setSubmissionCount] = useState<number | null>(null);
   const userEmail = user?.email ?? null; // stable string dep (not object ref)
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail || isStudentMode) return; // skip when previewing
     let cancelled = false;
     const countPrev = async () => {
       try {
@@ -360,9 +368,11 @@ export default function QuizClient({
     };
     countPrev();
     return () => { cancelled = true; };
-  }, [userEmail, examId]);
+  }, [userEmail, examId, isStudentMode]);
 
   // ── Anti-cheat + Wake Lock re-acquire (merged visibility handler) ─────────
+  // Anti-cheat is disabled in student-preview mode — the teacher is deliberately
+  // navigating away to test the experience and should not be penalised.
   const [cheatCount, setCheatCount] = useState(0);
   const [showCheatWarning, setShowCheatWarning] = useState(false);
   const cheatCountRef = useRef(0);
@@ -371,10 +381,12 @@ export default function QuizClient({
     if (!started || isSubmitted) return;
     const handleVisibility = () => {
       if (document.hidden) {
-        // Student left the exam tab
-        cheatCountRef.current += 1;
-        setCheatCount(cheatCountRef.current);
-        setShowCheatWarning(true);
+        // Student left the exam tab — only count when NOT in preview mode
+        if (!isStudentMode) {
+          cheatCountRef.current += 1;
+          setCheatCount(cheatCountRef.current);
+          setShowCheatWarning(true);
+        }
       } else {
         // TASK 1 edge case: tab became visible again.
         // The OS always releases wake lock when the page is hidden — re-request it.
@@ -473,41 +485,49 @@ export default function QuizClient({
       });
 
       let savedSubmissionId: string | undefined;
-      try {
-        const submissionPayload = {
-          examId,
-          examTitle: title,
-          studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
-          studentEmail: user?.email ?? "—",
-          studentAvatar: user?.photoURL ?? "",
-          status: "COMPLETED",
-          submittedAt: serverTimestamp(),
-          part1Results,
-          part2Results,
-          part3Results,
-          scores: result,
-          answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
-          cheatCount: cheatCountRef.current,
-        };
 
-        if (inProgressDocIdRef.current) {
-          // UPDATE the existing IN_PROGRESS doc → avoids creating a duplicate
-          await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
-          savedSubmissionId = inProgressDocIdRef.current;
-        } else {
-          // Fallback: no IN_PROGRESS doc (Firestore was unavailable at start)
-          const docRef = await addDoc(collection(db, "submissions"), submissionPayload);
-          savedSubmissionId = docRef.id;
-        }
-
-        // Clear persistence artifacts — draft and sessionStorage backup
-        if (user?.uid) clearDraft(examId, user.uid);
+      if (isStudentMode) {
+        // ── Student-preview mode: skip ALL Firestore writes and email ──────────
+        // The teacher is simulating the student experience; no data should be saved.
         clearSession();
-      } catch (err) {
-        console.error("Lỗi lưu bài nộp:", err);
+      } else {
+        // ── Normal student submission ──────────────────────────────────────────
+        try {
+          const submissionPayload = {
+            examId,
+            examTitle: title,
+            studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
+            studentEmail: user?.email ?? "—",
+            studentAvatar: user?.photoURL ?? "",
+            status: "COMPLETED",
+            submittedAt: serverTimestamp(),
+            part1Results,
+            part2Results,
+            part3Results,
+            scores: result,
+            answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
+            cheatCount: cheatCountRef.current,
+          };
+
+          if (inProgressDocIdRef.current) {
+            // UPDATE the existing IN_PROGRESS doc → avoids creating a duplicate
+            await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
+            savedSubmissionId = inProgressDocIdRef.current;
+          } else {
+            // Fallback: no IN_PROGRESS doc (Firestore was unavailable at start)
+            const docRef = await addDoc(collection(db, "submissions"), submissionPayload);
+            savedSubmissionId = docRef.id;
+          }
+
+          // Clear persistence artifacts — draft and sessionStorage backup
+          if (user?.uid) clearDraft(examId, user.uid);
+          clearSession();
+        } catch (err) {
+          console.error("Lỗi lưu bài nộp:", err);
+        }
       }
 
-      if (user?.email && user.email !== "—") {
+      if (!isStudentMode && user?.email && user.email !== "—") {
         const toP2EmailAnswer = (answers: (boolean | null)[]) => ({
           a: answers[0],
           b: answers[1],
@@ -561,7 +581,7 @@ export default function QuizClient({
       setSubmitting(false);
     },
     [
-      isSubmitted, submitting, totalAnswered, totalQuestions,
+      isStudentMode, isSubmitted, submitting, totalAnswered, totalQuestions,
       calculateScore, p1Qs, p2Qs, p3Qs,
       p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
       clearSession,
@@ -680,7 +700,9 @@ export default function QuizClient({
 
   // ── Intro screen ──────────────────────────────────────────────────────────
   if (!started) {
+    // In student-preview mode the teacher is never blocked by the retry limit
     const retryLimitReached =
+      !isStudentMode &&
       maxRetries > 0 &&
       submissionCount !== null &&
       submissionCount >= maxRetries;
@@ -693,6 +715,7 @@ export default function QuizClient({
         maxRetries={maxRetries}
         submissionCount={submissionCount}
         retryLimitReached={retryLimitReached}
+        isPreviewMode={isStudentMode}
         onStart={handleStartExam}
       />
     );
@@ -731,6 +754,19 @@ export default function QuizClient({
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 w-full flex-1 flex flex-col">
       {CheatWarningModal}
+
+      {/* ── Student-preview mode banner ─────────────────────────────────────── */}
+      {isStudentMode && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+          <span className="text-lg shrink-0">🎓</span>
+          <span>
+            Bạn đang trong{" "}
+            <strong className="font-extrabold">Chế độ xem trước của học sinh</strong>.
+            Bài nộp và điểm số sẽ{" "}
+            <strong className="font-extrabold">không được lưu</strong>.
+          </span>
+        </div>
+      )}
 
       {/* ── Isolated countdown — server-authoritative start position on reload ── */}
       {/* remainingSecondsOverride is set from the Firestore examStartTime on reload. */}
@@ -841,6 +877,7 @@ function IntroScreen({
   maxRetries,
   submissionCount,
   retryLimitReached,
+  isPreviewMode,
   onStart,
 }: {
   title: string;
@@ -849,6 +886,7 @@ function IntroScreen({
   maxRetries: number;
   submissionCount: number | null;
   retryLimitReached: boolean;
+  isPreviewMode: boolean;
   onStart: () => void;
 }) {
   const now = new Date();
@@ -862,6 +900,17 @@ function IntroScreen({
 
   return (
     <div className="max-w-xl mx-auto px-4 py-16 w-full">
+      {/* Preview mode notice — shown above the card */}
+      {isPreviewMode && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+          <span className="text-lg shrink-0">🎓</span>
+          <span>
+            <strong className="font-extrabold">Chế độ xem trước</strong> — Điểm và bài nộp{" "}
+            sẽ không được lưu vào hệ thống.
+          </span>
+        </div>
+      )}
+
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-10 text-white">
           <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mb-4">📝</div>

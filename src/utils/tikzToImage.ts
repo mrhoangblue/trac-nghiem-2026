@@ -12,6 +12,48 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const TIKZPICTURE_RE =
   /\\begin\{tikzpicture\}(?:\s*\[[^\]]*\])?[\s\S]*?\\end\{tikzpicture\}/g;
 
+// ── Library auto-detection ────────────────────────────────────────────────────
+
+/**
+ * Maps a detection pattern (regex against tikzCode) to the LaTeX preamble lines
+ * that must be present for that code to compile.
+ *
+ * The HF Space accepts an optional `extra_preamble` string that is injected
+ * verbatim before \begin{document}.  We only emit entries that aren't already
+ * guaranteed by the Space's base template.
+ */
+const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
+  {
+    // tikz-3dplot: \tdplotsetmaincoords or tdplot_main_coords key
+    pattern: /\\tdplotset|tdplot_main_coords|tdplot_rotated_coords/,
+    preamble: "\\usepackage{tikz-3dplot}",
+  },
+  {
+    // patterns.meta: pattern={Lines[...]}, pattern={Dots[...]}, etc.
+    pattern: /pattern=\{(?:Lines|Dots|Crosshatch|Hatch)\[/,
+    preamble: "\\usetikzlibrary{patterns.meta}",
+  },
+  {
+    // Classic patterns library (used without .meta)
+    pattern: /pattern\s*=\s*(?:north\s+east\s+lines|north\s+west\s+lines|horizontal\s+lines|vertical\s+lines|crosshatch|dots|bricks|checkerboard)/,
+    preamble: "\\usetikzlibrary{patterns}",
+  },
+];
+
+/**
+ * Inspects tikzCode and returns any extra preamble lines that the HF Space
+ * needs to compile the diagram successfully.
+ */
+function detectExtraPreamble(tikzCode: string): string {
+  const lines: string[] = [];
+  for (const rule of LIBRARY_RULES) {
+    if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
+      lines.push(rule.preamble);
+    }
+  }
+  return lines.join("\n");
+}
+
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface ConvertTikzOptions {
@@ -87,10 +129,14 @@ export async function convertTikzToImage(
   const { signal, clear } = createTimeoutSignal(timeoutMs);
 
   try {
+    const extraPreamble = detectExtraPreamble(tikzCode);
+    const body: Record<string, string> = { tikz_code: tikzCode };
+    if (extraPreamble) body.extra_preamble = extraPreamble;
+
     const response = await fetch(TIKZ_RENDER_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tikz_code: tikzCode }),
+      body: JSON.stringify(body),
       signal,
       cache: "no-store",
     });

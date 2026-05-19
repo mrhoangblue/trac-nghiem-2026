@@ -8,6 +8,7 @@ import Sidebar from "@/components/Sidebar";
 import BrowserWarning from "@/components/BrowserWarning";
 import DevPanel from "@/components/DevPanel";
 import { AuthProvider } from "@/lib/AuthContext";
+import { StudentModeProvider } from "@/lib/StudentModeContext";
 
 const roboto = Roboto({
   variable: "--font-roboto",
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <BrowserWarning>
         <AuthProvider>
+          <StudentModeProvider>
           <Header />
           <div className="flex flex-1 min-h-0">
             <Sidebar />
@@ -53,6 +55,7 @@ export default function RootLayout({
           </div>
           <Footer />
           <DevPanel />
+          </StudentModeProvider>
         </AuthProvider>
         </BrowserWarning>
       </body>
