@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { X, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { useStudentMode } from "@/lib/StudentModeContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ interface MobileDrawerProps {
 
 export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
   const { user, userProfile, isMod, isAdmin, logout } = useAuth();
+  const { isStudentMode, toggleStudentMode } = useStudentMode();
   const pathname = usePathname();
   const [expandedGrade, setExpandedGrade] = useState<string | null>(null);
 
@@ -154,7 +156,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
         {/* Nav links — scrollable */}
         <nav className="flex-1 overflow-y-auto p-2">
-          {isMod ? (
+          {isMod && !isStudentMode ? (
             <>
               <SectionLabel>Quản lý</SectionLabel>
               <DrawerLink
@@ -324,9 +326,22 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
           )}
         </nav>
 
-        {/* Footer: logout */}
+        {/* Footer: student-mode exit OR logout */}
         {user && (
-          <div className="shrink-0 p-3 border-t border-gray-100">
+          <div className="shrink-0 p-3 border-t border-gray-100 space-y-1">
+            {/* Return-to-teacher button — only when mod/admin is in student mode */}
+            {isMod && isStudentMode && (
+              <button
+                onClick={() => {
+                  toggleStudentMode();
+                  onClose();
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
+              >
+                <span className="text-base shrink-0">🏫</span>
+                Quay lại chế độ Giáo viên
+              </button>
+            )}
             <button
               onClick={() => {
                 onClose();

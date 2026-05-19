@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
+import { useStudentMode } from "@/lib/StudentModeContext";
 import { useState } from "react";
 
 // ── Shared constants (used in create/edit forms and home page filtering) ──────
@@ -65,6 +66,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function Sidebar() {
   const { user, userProfile, isMod, isAdmin, loading } = useAuth();
+  const { isStudentMode } = useStudentMode();
   const pathname = usePathname();
   const [expandedGrade, setExpandedGrade] = useState<string | null>(null);
 
@@ -74,8 +76,8 @@ export default function Sidebar() {
   // No sidebar while auth is resolving or not logged in
   if (loading || !user || !userProfile) return null;
 
-  // ── Admin / Mod sidebar ──────────────────────────────────────────────────────
-  if (isMod) {
+  // ── Admin / Mod sidebar — hidden when teacher has switched to student mode ───
+  if (isMod && !isStudentMode) {
     return (
       <aside className="hidden md:block w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
         <nav className="p-3">

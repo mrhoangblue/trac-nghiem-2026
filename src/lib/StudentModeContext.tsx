@@ -43,15 +43,15 @@ const SESSION_KEY = "studentModeActive";
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function StudentModeProvider({ children }: { children: React.ReactNode }) {
-  // Initialise from sessionStorage so the toggle survives SPA navigation
+  // Initialise from localStorage so the toggle survives page reloads and tab restores
   const [isStudentMode, setIsStudentMode] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    return sessionStorage.getItem(SESSION_KEY) === "true";
+    return localStorage.getItem(SESSION_KEY) === "true";
   });
 
-  // Keep sessionStorage in sync whenever state changes
+  // Keep localStorage in sync whenever state changes
   useEffect(() => {
-    sessionStorage.setItem(SESSION_KEY, String(isStudentMode));
+    localStorage.setItem(SESSION_KEY, String(isStudentMode));
   }, [isStudentMode]);
 
   const toggleStudentMode = useCallback(() => {

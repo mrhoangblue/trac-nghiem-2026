@@ -14,44 +14,49 @@ import MobileDrawer from "@/components/MobileDrawer";
 function StudentModeToggle() {
   const { isStudentMode, toggleStudentMode } = useStudentMode();
 
+  // ── Active: student mode ON → prominent amber exit button ─────────────────
+  if (isStudentMode) {
+    return (
+      <button
+        onClick={toggleStudentMode}
+        title="Nhấn để quay lại chế độ Giáo viên"
+        className="
+          hidden sm:flex items-center gap-2 px-3 py-1.5
+          rounded-full border text-xs font-bold transition-all duration-200
+          bg-amber-500 border-amber-400 text-white
+          hover:bg-amber-600 hover:border-amber-500
+          shadow-md shadow-amber-200
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1
+          animate-pulse-once
+        "
+      >
+        <span className="text-sm leading-none">🎓</span>
+        <span className="whitespace-nowrap leading-none">Chế độ học sinh</span>
+        <span className="opacity-80 leading-none">· Thoát →</span>
+      </button>
+    );
+  }
+
+  // ── Inactive: teacher mode → subtle pill to enter student mode ─────────────
   return (
     <button
       onClick={toggleStudentMode}
-      aria-pressed={isStudentMode}
-      aria-label={isStudentMode ? "Tắt chế độ học sinh" : "Bật chế độ học sinh"}
-      title={isStudentMode ? "Đang xem trước như học sinh — nhấn để tắt" : "Xem đề thi như học sinh"}
-      className={`
+      aria-pressed={false}
+      aria-label="Bật chế độ học sinh"
+      title="Xem đề thi như học sinh"
+      className="
         group relative hidden sm:flex items-center gap-2 px-3 py-1.5
         rounded-full border text-xs font-bold transition-all duration-200
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1
-        ${isStudentMode
-          ? "bg-emerald-500 border-emerald-400 text-white focus-visible:ring-emerald-400 shadow-md shadow-emerald-200"
-          : "bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 focus-visible:ring-indigo-400"
-        }
-      `}
+        bg-white border-gray-200 text-gray-500
+        hover:border-indigo-300 hover:text-indigo-600
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1
+      "
     >
       {/* Toggle track + thumb */}
-      <span
-        className={`
-          relative inline-flex w-8 h-4 rounded-full transition-colors duration-200 shrink-0
-          ${isStudentMode ? "bg-white/30" : "bg-gray-200 group-hover:bg-indigo-200"}
-        `}
-      >
-        <span
-          className={`
-            absolute top-0.5 w-3 h-3 rounded-full shadow transition-all duration-200
-            ${isStudentMode
-              ? "translate-x-4 bg-white"
-              : "translate-x-0.5 bg-white group-hover:bg-indigo-400"
-            }
-          `}
-        />
+      <span className="relative inline-flex w-8 h-4 rounded-full transition-colors duration-200 shrink-0 bg-gray-200 group-hover:bg-indigo-200">
+        <span className="absolute top-0.5 w-3 h-3 rounded-full shadow transition-all duration-200 translate-x-0.5 bg-white group-hover:bg-indigo-400" />
       </span>
-
-      {/* Label */}
-      <span className="whitespace-nowrap leading-none">
-        {isStudentMode ? "🎓 Chế độ học sinh" : "Chế độ học sinh"}
-      </span>
+      <span className="whitespace-nowrap leading-none">Chế độ học sinh</span>
     </button>
   );
 }
@@ -60,16 +65,19 @@ function StudentModeToggle() {
 
 export default function Header() {
   const { user, userProfile, loading, login, logout, isMod } = useAuth();
+  const { isStudentMode } = useStudentMode();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const roleBadge =
-    userProfile?.role === "pending_teacher"
-      ? { label: "Chờ duyệt", cls: "bg-amber-100 text-amber-700" }
-      : userProfile?.role === "mod"
-      ? { label: "Giáo viên", cls: "bg-emerald-100 text-emerald-700" }
-      : userProfile?.role === "admin"
-      ? { label: "Admin", cls: "bg-blue-100 text-blue-700" }
-      : null;
+  // When a teacher is in student mode, show a "Học sinh" badge instead of their real role
+  const roleBadge = isStudentMode && isMod
+    ? { label: "Học sinh", cls: "bg-amber-100 text-amber-700" }
+    : userProfile?.role === "pending_teacher"
+    ? { label: "Chờ duyệt", cls: "bg-amber-100 text-amber-700" }
+    : userProfile?.role === "mod"
+    ? { label: "Giáo viên", cls: "bg-emerald-100 text-emerald-700" }
+    : userProfile?.role === "admin"
+    ? { label: "Admin", cls: "bg-blue-100 text-blue-700" }
+    : null;
 
   // Toggle is only available to teachers (mod) and admins
   const showStudentModeToggle = isMod && !loading;

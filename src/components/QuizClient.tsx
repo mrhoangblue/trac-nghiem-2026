@@ -285,24 +285,24 @@ export default function QuizClient({
   // 3. Transitions to the active quiz UI.
   const handleStartExam = useCallback(async () => {
     if (!user?.email || !user?.uid) return;
-    // In student-preview mode skip the Firestore IN_PROGRESS record entirely —
-    // the teacher is just previewing; we must not pollute the submissions collection.
-    if (!isStudentMode) {
-      try {
-        const docRef = await addDoc(collection(db, "submissions"), {
-          examId,
-          examTitle: title,
-          studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
-          studentEmail: user.email,
-          studentAvatar: user.photoURL ?? "",
-          status: "IN_PROGRESS",
-          examStartTime: serverTimestamp(),
-        });
-        inProgressDocIdRef.current = docRef.id;
-      } catch (err) {
-        console.error("Failed to write IN_PROGRESS record:", err);
-        // Non-fatal — exam still runs; reload won't restore (Firestore unavailable)
-      }
+    // Always create an IN_PROGRESS record in Firestore.
+    // If the teacher is in student-preview mode, tag the doc with isTeacherPreview: true
+    // so it can be identified and filtered out of real statistics later.
+    try {
+      const docRef = await addDoc(collection(db, "submissions"), {
+        examId,
+        examTitle: title,
+        studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
+        studentEmail: user.email,
+        studentAvatar: user.photoURL ?? "",
+        status: "IN_PROGRESS",
+        examStartTime: serverTimestamp(),
+        ...(isStudentMode ? { isTeacherPreview: true } : {}),
+      });
+      inProgressDocIdRef.current = docRef.id;
+    } catch (err) {
+      console.error("Failed to write IN_PROGRESS record:", err);
+      // Non-fatal — exam still runs; reload won't restore (Firestore unavailable)
     }
     startSession(); // sessionStorage fallback for timer reference
     setManuallyStarted(true);
@@ -486,47 +486,45 @@ export default function QuizClient({
 
       let savedSubmissionId: string | undefined;
 
-      if (isStudentMode) {
-        // ── Student-preview mode: skip ALL Firestore writes and email ──────────
-        // The teacher is simulating the student experience; no data should be saved.
-        clearSession();
-      } else {
-        // ── Normal student submission ──────────────────────────────────────────
-        try {
-          const submissionPayload = {
-            examId,
-            examTitle: title,
-            studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
-            studentEmail: user?.email ?? "—",
-            studentAvatar: user?.photoURL ?? "",
-            status: "COMPLETED",
-            submittedAt: serverTimestamp(),
-            part1Results,
-            part2Results,
-            part3Results,
-            scores: result,
-            answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
-            cheatCount: cheatCountRef.current,
-          };
+      // ── Always write to Firestore ─────────────────────────────────────────────
+      // In student-preview mode (teacher testing), tag the doc with isTeacherPreview: true.
+      // This lets gradebook queries filter it out while still recording the teacher's work.
+      try {
+        const submissionPayload = {
+          examId,
+          examTitle: title,
+          studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
+          studentEmail: user?.email ?? "—",
+          studentAvatar: user?.photoURL ?? "",
+          status: "COMPLETED",
+          submittedAt: serverTimestamp(),
+          part1Results,
+          part2Results,
+          part3Results,
+          scores: result,
+          answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
+          cheatCount: cheatCountRef.current,
+          ...(isStudentMode ? { isTeacherPreview: true } : {}),
+        };
 
-          if (inProgressDocIdRef.current) {
-            // UPDATE the existing IN_PROGRESS doc → avoids creating a duplicate
-            await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
-            savedSubmissionId = inProgressDocIdRef.current;
-          } else {
-            // Fallback: no IN_PROGRESS doc (Firestore was unavailable at start)
-            const docRef = await addDoc(collection(db, "submissions"), submissionPayload);
-            savedSubmissionId = docRef.id;
-          }
-
-          // Clear persistence artifacts — draft and sessionStorage backup
-          if (user?.uid) clearDraft(examId, user.uid);
-          clearSession();
-        } catch (err) {
-          console.error("Lỗi lưu bài nộp:", err);
+        if (inProgressDocIdRef.current) {
+          // UPDATE the existing IN_PROGRESS doc → avoids creating a duplicate
+          await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
+          savedSubmissionId = inProgressDocIdRef.current;
+        } else {
+          // Fallback: no IN_PROGRESS doc (Firestore was unavailable at start)
+          const docRef = await addDoc(collection(db, "submissions"), submissionPayload);
+          savedSubmissionId = docRef.id;
         }
+
+        // Clear persistence artifacts — draft and sessionStorage backup
+        if (user?.uid) clearDraft(examId, user.uid);
+        clearSession();
+      } catch (err) {
+        console.error("Lỗi lưu bài nộp:", err);
       }
 
+      // Send result email — skip for teacher preview mode
       if (!isStudentMode && user?.email && user.email !== "—") {
         const toP2EmailAnswer = (answers: (boolean | null)[]) => ({
           a: answers[0],
@@ -757,13 +755,13 @@ export default function QuizClient({
 
       {/* ── Student-preview mode banner ─────────────────────────────────────── */}
       {isStudentMode && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
           <span className="text-lg shrink-0">🎓</span>
           <span>
-            Bạn đang trong{" "}
-            <strong className="font-extrabold">Chế độ xem trước của học sinh</strong>.
-            Bài nộp và điểm số sẽ{" "}
-            <strong className="font-extrabold">không được lưu</strong>.
+            Đang ở{" "}
+            <strong className="font-extrabold">Chế độ học sinh</strong>.
+            Bài làm được lưu và chỉ hiển thị cho{" "}
+            <strong className="font-extrabold">giáo viên và admin</strong>.
           </span>
         </div>
       )}
@@ -902,11 +900,11 @@ function IntroScreen({
     <div className="max-w-xl mx-auto px-4 py-16 w-full">
       {/* Preview mode notice — shown above the card */}
       {isPreviewMode && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
           <span className="text-lg shrink-0">🎓</span>
           <span>
-            <strong className="font-extrabold">Chế độ xem trước</strong> — Điểm và bài nộp{" "}
-            sẽ không được lưu vào hệ thống.
+            <strong className="font-extrabold">Chế độ học sinh</strong> — Bài làm được lưu và
+            chỉ hiển thị cho giáo viên và admin (không tính vào thống kê học sinh).
           </span>
         </div>
       )}

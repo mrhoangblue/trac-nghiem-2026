@@ -541,6 +541,8 @@ export default function TeacherClassDetailPage() {
         );
         snap.docs.forEach((d) => {
           const data = d.data();
+          // Skip teacher-preview submissions — they should not appear in class gradebook
+          if (data.isTeacherPreview === true) return;
           const email = String(data.studentEmail);
           const scores = data.scores ?? {};
           const existing = allSubmissions[email];

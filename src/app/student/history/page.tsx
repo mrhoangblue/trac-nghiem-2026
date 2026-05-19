@@ -25,6 +25,8 @@ interface Submission {
     p2: number;
     p3: number;
   };
+  /** True when submitted by a teacher in student-preview mode */
+  isTeacherPreview?: boolean;
 }
 
 function Spinner() {
@@ -90,6 +92,7 @@ export default function StudentHistoryPage() {
               examTitle: d.examTitle ?? "Bài thi không có tên",
               submittedAt: d.submittedAt,
               scores: d.scores ?? { total: 0, p1: 0, p2: 0, p3: 0 },
+              isTeacherPreview: d.isTeacherPreview === true,
             } as Submission;
           })
           // Sort client-side: mới nhất trước (tránh cần composite index)
@@ -176,25 +179,41 @@ export default function StudentHistoryPage() {
         </div>
       ) : (
         <>
-          {/* Tổng kết nhanh */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-              <p className="text-3xl font-extrabold text-blue-600">{submissions.length}</p>
-              <p className="text-sm text-gray-500 mt-1">Bài đã nộp</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-              <p className="text-3xl font-extrabold text-emerald-600">
-                {Math.max(...submissions.map((s) => s.scores.total))}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">Điểm cao nhất</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-              <p className="text-3xl font-extrabold text-indigo-600">
-                {(submissions.reduce((sum, s) => sum + s.scores.total, 0) / submissions.length).toFixed(1)}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">Điểm trung bình</p>
-            </div>
-          </div>
+          {/* Tổng kết nhanh — only counts real (non-preview) submissions */}
+          {(() => {
+            const real = submissions.filter((s) => !s.isTeacherPreview);
+            const preview = submissions.filter((s) => s.isTeacherPreview);
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
+                    <p className="text-3xl font-extrabold text-blue-600">{real.length}</p>
+                    <p className="text-sm text-gray-500 mt-1">Bài đã nộp</p>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
+                    <p className="text-3xl font-extrabold text-emerald-600">
+                      {real.length > 0 ? Math.max(...real.map((s) => s.scores.total)) : "—"}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">Điểm cao nhất</p>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
+                    <p className="text-3xl font-extrabold text-indigo-600">
+                      {real.length > 0
+                        ? (real.reduce((sum, s) => sum + s.scores.total, 0) / real.length).toFixed(1)
+                        : "—"}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">Điểm trung bình</p>
+                  </div>
+                </div>
+                {preview.length > 0 && (
+                  <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                    <span>🎓</span>
+                    <span>Có {preview.length} bài làm từ <strong>Chế độ học sinh</strong> (được đánh dấu "Xem trước") — chỉ giáo viên/admin thấy.</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Bảng lịch sử */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -233,6 +252,11 @@ export default function StudentHistoryPage() {
                         <p className="font-semibold text-gray-900 line-clamp-1">
                           {sub.examTitle}
                         </p>
+                        {sub.isTeacherPreview && (
+                          <span className="inline-flex items-center gap-1 mt-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">
+                            🎓 Xem trước
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-center text-gray-500 whitespace-nowrap">
                         {formatDateTime(sub.submittedAt)}
