@@ -24,6 +24,11 @@ const TIKZPICTURE_RE =
  */
 const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
   {
+    // calc library: coordinate arithmetic like $(A)!0.5!(B)$ or $(A)+(1,0)$
+    pattern: /\$\s*\(/,
+    preamble: "\\usetikzlibrary{calc}",
+  },
+  {
     // tikz-3dplot: \tdplotsetmaincoords or tdplot_main_coords key
     pattern: /\\tdplotset|tdplot_main_coords|tdplot_rotated_coords/,
     preamble: "\\usepackage{tikz-3dplot}",
