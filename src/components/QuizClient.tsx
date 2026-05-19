@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import { useRouter } from "next/navigation";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import TikzRenderer from "@/components/TikzRenderer";
@@ -156,6 +157,7 @@ export default function QuizClient({
 }: QuizClientProps) {
   const { user, userProfile, login } = useAuth();
   const { isStudentMode } = useStudentMode();
+  const router = useRouter();
 
   // ── Screen state ──────────────────────────────────────────────────────────
   const [manuallyStarted, setManuallyStarted] = useState(false);
@@ -397,6 +399,60 @@ export default function QuizClient({
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [started, isSubmitted, requestWakeLock]);
 
+  // ── Exit-navigation guard ─────────────────────────────────────────────────
+  // While the student is mid-exam (started, not yet submitted), intercept ALL
+  // navigation attempts (link clicks, back button, tab close) and show a
+  // confirmation modal. On confirm: save progress then navigate.
+  const [exitConfirmHref, setExitConfirmHref] = useState<string | null>(null);
+  const [isSavingExit, setIsSavingExit] = useState(false);
+  // Ref to bypass guard during the actual save-and-navigate phase
+  const isExitingRef = useRef(false);
+
+  // 1. Intercept in-app link clicks (capture phase fires before Next.js router)
+  useEffect(() => {
+    if (!started || isSubmitted) return;
+    const handleClick = (e: MouseEvent) => {
+      if (isExitingRef.current) return;
+      const anchor = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      // Allow hash anchors, external URLs, and same-page navigation
+      if (!href || href.startsWith("#") || href.startsWith("http") || href.startsWith("mailto")) return;
+      if (href === window.location.pathname) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setExitConfirmHref(href);
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [started, isSubmitted]);
+
+  // 2. Intercept browser back / forward button
+  useEffect(() => {
+    if (!started || isSubmitted) return;
+    // Push a guard state so the first back-press can be caught
+    window.history.pushState({ examGuard: true }, "", window.location.href);
+    const handlePopState = () => {
+      if (isExitingRef.current) return;
+      // Re-push to keep us on the quiz URL while showing the modal
+      window.history.pushState({ examGuard: true }, "", window.location.href);
+      setExitConfirmHref("__back__");
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [started, isSubmitted]);
+
+  // 3. Intercept tab close / page refresh (browser native dialog)
+  useEffect(() => {
+    if (!started || isSubmitted) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [started, isSubmitted]);
+
   // ── Question partitioning — memoized to avoid array churn ─────────────────
   const p1Qs = useMemo(() => questions.filter((q) => q.type === "multiple_choice"), [questions]);
   const p2Qs = useMemo(() => questions.filter((q) => q.type === "true_false"), [questions]);
@@ -587,6 +643,69 @@ export default function QuizClient({
     ]
   );
 
+  // ── handleExitWithSave: save progress then navigate away ─────────────────────
+  // Called from the exit-confirmation modal. Calculates score from whatever
+  // answers the student has entered so far, writes a COMPLETED doc tagged with
+  // exitedEarly:true, then navigates to the requested href.
+  const handleExitWithSave = useCallback(async () => {
+    if (!exitConfirmHref || isSavingExit) return;
+    isExitingRef.current = true;
+    setIsSavingExit(true);
+
+    const result = calculateScore();
+    const part1Results = p1Qs.map((q) => p1Ans[q.id] === (q.correctAnswer as number));
+    const part2Results = p2Qs.map((q) => {
+      const correct = q.correctAnswer as boolean[];
+      const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
+      return correct.filter((c, i) => c === student[i]).length;
+    });
+    const part3Results = p3Qs.map((q) => {
+      const s = normalizeAnswer(p3Ans[q.id] ?? "");
+      const c = normalizeAnswer(String(q.correctAnswer ?? ""));
+      return !!s && s === c;
+    });
+
+    try {
+      const submissionPayload = {
+        examId,
+        examTitle: title,
+        studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
+        studentEmail: user?.email ?? "—",
+        studentAvatar: user?.photoURL ?? "",
+        status: "COMPLETED",
+        submittedAt: serverTimestamp(),
+        part1Results,
+        part2Results,
+        part3Results,
+        scores: result,
+        answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
+        cheatCount: cheatCountRef.current,
+        exitedEarly: true, // flag: student left before finishing all questions
+        ...(isStudentMode ? { isTeacherPreview: true } : {}),
+      };
+      if (inProgressDocIdRef.current) {
+        await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
+      } else {
+        await addDoc(collection(db, "submissions"), submissionPayload);
+      }
+      if (user?.uid) clearDraft(examId, user.uid);
+      clearSession();
+    } catch (err) {
+      console.error("Lỗi lưu bài khi thoát:", err);
+      // Non-fatal: navigate anyway so the student isn't stuck
+    }
+
+    const href = exitConfirmHref;
+    setExitConfirmHref(null);
+    // Navigate: back-button exits go to home, link clicks go to the target href
+    router.push(href === "__back__" ? "/" : href);
+  }, [
+    exitConfirmHref, isSavingExit, calculateScore,
+    p1Qs, p2Qs, p3Qs, p1Ans, p2Ans, p3Ans,
+    examId, title, user, userProfile,
+    clearSession, isStudentMode, router,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keep a ref so CountdownTimer.onExpire always calls the latest handleSubmit
   const handleSubmitRef = useRef(handleSubmit);
   useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
@@ -752,6 +871,49 @@ export default function QuizClient({
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 w-full flex-1 flex flex-col">
       {CheatWarningModal}
+
+      {/* ── Exit-confirmation modal ───────────────────────────────────────────── */}
+      {exitConfirmHref && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4">
+              🚪
+            </div>
+            <h2 className="text-xl font-extrabold text-gray-900 mb-2">Thoát khỏi bài thi?</h2>
+            <p className="text-gray-600 text-sm leading-relaxed mb-1">
+              Bài làm của bạn đến thời điểm này sẽ được{" "}
+              <strong className="font-extrabold text-amber-700">ghi nhận và lưu lại</strong>.
+            </p>
+            <p className="text-gray-400 text-xs mb-6">
+              Đã trả lời:{" "}
+              <span className="font-bold text-gray-700">{totalAnswered}/{totalQuestions}</span> câu
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setExitConfirmHref(null)}
+                disabled={isSavingExit}
+                className="flex-1 py-3 rounded-xl font-bold text-sm border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                ← Tiếp tục làm bài
+              </button>
+              <button
+                onClick={handleExitWithSave}
+                disabled={isSavingExit}
+                className="flex-1 py-3 rounded-xl font-bold text-sm bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isSavingExit ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    Đang lưu…
+                  </>
+                ) : (
+                  "Lưu và thoát"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Student-preview mode banner ─────────────────────────────────────── */}
       {isStudentMode && (
