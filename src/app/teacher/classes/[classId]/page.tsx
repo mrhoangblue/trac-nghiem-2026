@@ -895,10 +895,10 @@ export default function TeacherClassDetailPage() {
                       <div className="flex flex-wrap gap-2 justify-end">
                         {(
                           [
-                            { fmt: "csv" as const, label: "CSV", color: "bg-emerald-600 hover:bg-emerald-700" },
-                            { fmt: "xlsx" as const, label: "XLSX", color: "bg-blue-600 hover:bg-blue-700" },
-                            { fmt: "pdf" as const, label: "In / PDF", color: "bg-rose-600 hover:bg-rose-700", icon: "🖨" },
-                          ] as const
+                            { fmt: "csv"  as const, label: "CSV",      color: "bg-emerald-600 hover:bg-emerald-700", icon: "⬇" },
+                            { fmt: "xlsx" as const, label: "XLSX",     color: "bg-blue-600 hover:bg-blue-700",       icon: "⬇" },
+                            { fmt: "pdf"  as const, label: "In / PDF", color: "bg-rose-600 hover:bg-rose-700",       icon: "🖨" },
+                          ]
                         ).map(({ fmt, label, color, icon }) => (
                           <button
                             key={fmt}
