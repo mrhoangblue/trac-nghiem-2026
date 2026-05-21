@@ -157,12 +157,11 @@ function renderResultRow(row: QuestionResult): string {
     </tr>`;
 }
 
-function buildHtml(payload: SendResultPayload): string {
+function buildHtml(payload: SendResultPayload, siteUrl: string): string {
   const { studentName, examName, scores, detailedResults, submissionId } = payload;
 
   const scoreColor = scores.total >= 8 ? "#16a34a" : scores.total >= 5 ? "#d97706" : "#dc2626";
   const siteName = "Hệ thống Ôn tập Toán";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const reviewUrl = submissionId
     ? `${siteUrl}/student/review/${submissionId}`
     : `${siteUrl}/student/history`;
@@ -318,8 +317,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+      req.nextUrl.origin;
+
     const transporter = createTransporter();
-    const html = buildHtml(body);
+    const html = buildHtml(body, siteUrl);
 
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME ?? "Hệ thống Ôn tập Toán"}" <${process.env.EMAIL_USER}>`,
