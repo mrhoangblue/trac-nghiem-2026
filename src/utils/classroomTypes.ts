@@ -42,6 +42,48 @@ export interface ClassMemberDoc {
   status: "active" | "suspended";
 }
 
+export type ClassResourceType = "pdf" | "video" | "slides";
+
+export interface ClassCourseResource {
+  id: string;
+  title: string;
+  description?: string;
+  type: ClassResourceType;
+  url: string;
+  embedUrl: string;
+  provider: string;
+  createdAt: string;
+}
+
+/** Firestore: `class_courses/{courseId}` */
+export interface ClassCourseDoc {
+  classId: string;
+  teacherId: string;
+  title: string;
+  description?: string;
+  published: boolean;
+  resources: ClassCourseResource[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export type ClassExamStatus = "open" | "upcoming" | "closed";
+
+export interface ClassExamSummary {
+  id: string;
+  title: string;
+  description: string;
+  questionCount: number;
+  duration: number;
+  startTime: string | null;
+  endTime: string | null;
+  createdAt: string | null;
+  status: ClassExamStatus;
+  submitted: boolean;
+  submissionId?: string;
+  totalScore?: number;
+}
+
 /** Extra fields merged into `users/{uid}` for MOD/Teacher role. */
 export interface ModUserExtension {
   phoneNumber?: string;

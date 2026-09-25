@@ -29,14 +29,15 @@ export async function DELETE(
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
 
-    const membersSnapshot = await adminDb
-      .collection("class_members")
-      .where("classId", "==", classId)
-      .get();
+    const [membersSnapshot, coursesSnapshot] = await Promise.all([
+      adminDb.collection("class_members").where("classId", "==", classId).get(),
+      adminDb.collection("class_courses").where("classId", "==", classId).get(),
+    ]);
 
-    for (let offset = 0; offset < membersSnapshot.docs.length; offset += DELETE_BATCH_SIZE) {
+    const dependentDocuments = [...membersSnapshot.docs, ...coursesSnapshot.docs];
+    for (let offset = 0; offset < dependentDocuments.length; offset += DELETE_BATCH_SIZE) {
       const batch = adminDb.batch();
-      membersSnapshot.docs
+      dependentDocuments
         .slice(offset, offset + DELETE_BATCH_SIZE)
         .forEach((member) => batch.delete(member.ref));
       await batch.commit();
@@ -57,7 +58,11 @@ export async function DELETE(
     }
 
     await finalBatch.commit();
-    return NextResponse.json({ success: true, deletedMembers: membersSnapshot.size });
+    return NextResponse.json({
+      success: true,
+      deletedMembers: membersSnapshot.size,
+      deletedCourses: coursesSnapshot.size,
+    });
   } catch (error) {
     console.error("DELETE /api/classes/[classId] failed:", error);
     return NextResponse.json({ error: "DELETE_FAILED" }, { status: 500 });

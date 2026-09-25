@@ -115,6 +115,16 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm tra cục bộ: ESLint các file thay đổi đạt; TypeScript đạt; production build đạt và nhận route `/api/classes`; request tạo lớp không có token trả đúng HTTP 401 `UNAUTHENTICATED`.
 - Giới hạn: không tự tạo dữ liệu lớp thật khi chưa có phiên đăng nhập giáo viên trong trình duyệt kiểm thử; người dùng cần thử lại thao tác tạo lớp bằng tài khoản hiện tại.
 
+### 25/09/2026 — Khóa học, tài nguyên và bài thi trong lớp
+
+- Bổ sung không gian học tập cho từng lớp với nhiều khóa học độc lập. Giáo viên có thể tạo, sửa, xuất bản hoặc giữ bản nháp và xóa khóa học.
+- Mỗi khóa học nhận tài nguyên qua liên kết chia sẻ: PDF/tài liệu, video và PPTX/Slides. Hệ thống chuẩn hóa liên kết Google Drive, Google Slides, YouTube và Vimeo để xem nhúng; nguồn khác dùng URL xem công khai và luôn có nút mở liên kết gốc.
+- Giáo viên có thể thêm, sửa, xóa và đổi thứ tự tài nguyên. Học sinh chỉ thấy khóa học đã xuất bản và chỉ khi đang là thành viên lớp.
+- Hiển thị toàn bộ bài kiểm tra được giao qua `targetClassIds` hoặc trường `classIds` cũ; phân loại đang mở, sắp mở, đã đóng; lọc theo trạng thái và sắp xếp theo trạng thái, mới nhất hoặc cũ nhất.
+- Với học sinh, bài đã nộp hiển thị điểm và liên kết xem kết quả; đề chưa mở hoặc đã đóng không có nút bắt đầu làm. Khi xóa lớp, API dọn cả dữ liệu khóa học liên quan.
+- Kiểm tra cục bộ: ESLint phần thay đổi đạt; TypeScript đạt; production build đạt và nhận hai route động mới; 5 trường hợp chuẩn hóa liên kết Drive/YouTube/Vimeo/Slides và chặn protocol nguy hiểm đều đạt; API nội dung không có token trả đúng HTTP 401; trang chi tiết lớp khi chưa đăng nhập hiển thị đúng trạng thái yêu cầu đăng nhập.
+- Giới hạn: chưa tạo dữ liệu khóa học thật vì trình duyệt kiểm thử không có phiên giáo viên; khả năng xem nhúng của nguồn lưu trữ ngoài phụ thuộc việc nguồn đó cho phép iframe và quyền chia sẻ công khai.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

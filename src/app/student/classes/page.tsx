@@ -33,7 +33,7 @@ export default function StudentClassesPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [classes, setClasses] = useState<JoinedClass[]>([]);
-  const [classesLoading, setClassesLoading] = useState(false);
+  const [classesLoading, setClassesLoading] = useState(true);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -45,7 +45,6 @@ export default function StudentClassesPage() {
 
   useEffect(() => {
     if (!user?.uid) return;
-    setClassesLoading(true);
     const fetchClasses = async () => {
       try {
         const snap = await getDocs(
@@ -116,8 +115,9 @@ export default function StudentClassesPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {classes.map((cls) => (
-              <div
+              <Link
                 key={cls.id}
+                href={`/student/classes/${cls.id}`}
                 className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center justify-between gap-4"
               >
                 <div className="min-w-0">
@@ -131,9 +131,9 @@ export default function StudentClassesPage() {
                   <p className="font-black text-brand-700 text-2xl font-mono tracking-widest leading-none">
                     {cls.classCode}
                   </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">mã lớp</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Vào lớp →</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

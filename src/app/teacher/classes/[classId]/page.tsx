@@ -22,6 +22,7 @@ import {
   where,
 } from "firebase/firestore";
 import type { ClassDoc } from "@/utils/classroomTypes";
+import ClassLearningContent from "@/components/classroom/ClassLearningContent";
 import * as XLSX from "xlsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -738,6 +739,10 @@ export default function TeacherClassDetailPage() {
                 </span>
               </div>
             </header>
+
+            <div className="mb-8 rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
+              <ClassLearningContent classId={classId} teacherMode />
+            </div>
 
             {/* ── Students table ────────────────────────────────────────── */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-8">
