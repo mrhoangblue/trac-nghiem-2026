@@ -1,3 +1,12 @@
+# Website trắc nghiệm Toán
+
+Hồ sơ dự án cập nhật ngày 25/09/2026:
+
+- [Nhật ký làm việc và lịch sử các phiên](docs/NHAT_KY_LAM_VIEC.md)
+- [Đánh giá hiện trạng và kế hoạch cải thiện](docs/KE_HOACH_CAI_THIEN.md)
+- [Định hướng phát triển website](docs/DINH_HUONG_WEBSITE.md)
+- [Mục lục tài liệu và nguồn lịch sử](docs/README.md)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

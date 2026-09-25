@@ -207,10 +207,7 @@ export default function QuizClient({
   //
   // IF no IN_PROGRESS doc is found → reveal the Start screen normally.
   useEffect(() => {
-    if (!user?.uid || !user?.email) {
-      setIsCheckingSession(false);
-      return;
-    }
+    if (!user?.uid || !user?.email) return;
 
     const checkAndRestoreSession = async () => {
       try {
@@ -616,9 +613,13 @@ export default function QuizClient({
           })),
         ];
 
+        const token = await user.getIdToken();
         fetch("/api/send-result", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
             studentEmail: user.email,
             studentName: userProfile?.fullName ?? user.displayName ?? "Học sinh",
@@ -1480,7 +1481,7 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
       <div className="flex items-end gap-2 flex-wrap">
         {/* Nút dấu trừ nằm phía trên ô đầu tiên, thẳng hàng dọc */}
         <div className="flex flex-col items-center gap-1">
-          <span className="text-[10px] text-gray-400 leading-tight text-center">Cần dấu<br/>"-" bấm đây</span>
+          <span className="text-[10px] text-gray-400 leading-tight text-center">Cần dấu<br/>&quot;-&quot; bấm đây</span>
           <button
             type="button"
             onClick={toggleMinus}

@@ -1,0 +1,36 @@
+8e6285c33c7fab261d68535ee36f0087b2035e6e | 2026-04-27T11:52:57+07:00 | Initial commit from Create Next App
+bfb63a94012bd187ebed119ab28a2ac960efa098 | 2026-04-28T16:46:28+07:00 | Hoàn thiện hệ thống LMS trắc nghiệm
+294d584d08c0d60dd5b893d28bd2b2e1619e16ee | 2026-04-28T19:14:28+07:00 | Fix lỗi đăng nhập mobile và vòng lặp Safari
+ddca0c57b4eb7d09b595486e2755c6203303065a | 2026-04-28T23:06:49+07:00 | Giữ sáng màn hình và chống tràn RAM trên điện thoại
+14b3365c3b94c68f5c775a2d023fba23b0c25d5b | 2026-04-28T23:31:38+07:00 | Kích hoạt lại Vercel cho bản ver2
+ff714246524df365a5f3a469e25933ee3ec1b6ac | 2026-04-29T11:07:16+07:00 | Đại tu toàn diện: Fix triệt để OOM Crash trên iOS, Hydration Error và tối ưu UI/UX Đề Toán 2025
+a704cf590b587a796d565f4cbbae949d83f5ed8d | 2026-04-29T16:35:34+07:00 | Fix build error: export cleanP3Answer và formatP2Answers vào examTypes
+2a13fc9ecd4c91825e348c3cfa42a49cd35462b2 | 2026-04-29T16:51:12+07:00 | Triệt tiêu hoàn toàn lỗi crash OOM trên mobile Safari/Chrome
+ff62aa710f3c7afa9342a17a61db32f136305a9c | 2026-04-29T22:27:04+07:00 | Cập nhật code tikz và chống reload mobile
+5f7f220e80c630814dc9ed11155e30b331459a6d | 2026-04-29T22:47:35+07:00 | Fix triệt để ô nhập P3: chặn ký tự lạ và tự chuyển dấu chấm thành phẩy trên iOS Safari
+19bf5d254718a45e8caedb8bea357084c6c3945f | 2026-04-29T22:56:27+07:00 | Thêm nút dấu trừ riêng biệt cho ô nhập P3 trên mobile
+95f2dfe187907bfb44b30f146d68d926053e0e9a | 2026-04-29T22:59:30+07:00 | Dời nút dấu trừ lên phía trên ô 1, thêm ghi chú hướng dẫn
+731ca93b1ce9a4ab661aee312d2f658501ce9edf | 2026-05-05T10:34:53+07:00 | Add Classroom Management UI to Teacher and Student dashboards
+1842a5994cdd52a3e71a853b2e0e32cc73cc5c05 | 2026-05-05T11:47:28+07:00 | Add teacher drill-down views and profile/search improvements
+8778c5d70c163852e124b6203d762b2f39ccd550 | 2026-05-05T17:47:51+07:00 | Fix teacher search (đ/Đ bug), add role-based DevPanel, backfill keywords
+cd1bf6cbe11a00df9142cd1963e614d889b4453b | 2026-05-06T07:40:12+07:00 | Add files via upload
+82eb52d96ec96109b66089344e72874eaee0ec65 | 2026-05-06T07:44:34+07:00 | Update Header.tsx
+313adf919cfb70d1d29f3a84cfaad327164b4371 | 2026-05-08T10:30:55+07:00 | Add Vietnamese math macros (\hoac, \heva) to KaTeX renderer and TikZ API
+f9186bc9df5ef8cdab2cfd26373e6a6eafdce5c2 | 2026-05-08T10:48:11+07:00 | Verbose error logging for HuggingFace TikZ render failures
+e77bc1d76697f73799af46fc76e2d5a91e17de7a | 2026-05-08T10:53:35+07:00 | Fix double-definition crash: \newcommand → \providecommand for \hoac/\heva
+235ce1a98c45a9ca05027df791b04edb712e84f7 | 2026-05-08T10:57:42+07:00 | Remove macro injection from tikzToImage — rely solely on HF preamble
+1244421cd0f3216a8ef7125c8e06419fa49bf829 | 2026-05-08T12:34:21+07:00 | Render tabular environments as images via HuggingFace (two-pass approach)
+b19eefbe2025074e7620a56bd8c0612d3fa2deb3 | 2026-05-08T13:15:22+07:00 | fix: render \hoac/\heva options correctly in KaTeX inline mode
+8c9402990d787cb52fd376e7da0f413b72b49cb1 | 2026-05-08T13:18:31+07:00 | fix(ExplanationRenderer): normalize itemchoice wrappers and raw \itemch
+26ef22cbbc54acb9f9d0fa03822efc72e7abeeab | 2026-05-08T13:23:37+07:00 | fix(edit-exam): replace processLatexText with ExplanationRenderer for explanation
+13f90ed7a4906e7cbb92b47d188a642e19ccc561 | 2026-05-08T13:44:10+07:00 | fix(textProcessor): use 1-level nested-brace pattern for tabular column spec
+5507e14b46b6fe85f05936b9c598943d7d53536a | 2026-05-08T16:31:46+07:00 | fix(tikzToImage): drop tabular→HF conversion, rely on frontend HTML rendering
+d4592cc03e561e982e04260e5ff432b5cc0f85ee | 2026-05-08T16:53:41+07:00 | feat(tikzToImage): switch from PNG to SVG data URI, store inline in Firestore
+929ca0d2a8fb87f31210f66898aa63e5582cd767 | 2026-05-08T16:55:55+07:00 | fix(tikzToImage): auto-detect PNG vs SVG from HF response, no broken images
+eb42ad604daaf7907e3f8ac8aa6cc01122a32f41 | 2026-05-14T12:56:51+07:00 | feat(classroom): class links, exam targeting, score export
+e218bdb30ca7707a75f655e232c44d63da037d3b | 2026-05-19T11:12:57+07:00 | feat: add/delete students, fix gradebook export, student preview mode & TikZ improvements
+79a334c839e37cfec9094389c5ccc541142e6ec6 | 2026-05-19T11:35:39+07:00 | fix(gradebook): add icon field to all export buttons to resolve TS error
+ad6e5d4604d26fbebd48f8f2a5e8a3dc1a9022a0 | 2026-05-19T12:23:28+07:00 | feat(student-mode): full UI transformation with real Firestore writes
+250a7fd85963b1d48b65efd2da0f0458708c5be2 | 2026-05-19T12:42:10+07:00 | feat(quiz): navigation guard — confirm before leaving mid-exam
+603561ea5ab8e727fca3a115f304ab031cacc6db | 2026-05-19T16:08:57+07:00 | fix(tikz): auto-inject calc library for coordinate arithmetic syntax
+b3438408ab86f54a32bdc908632c83bb29acfebf | 2026-05-21T18:46:45+07:00 | fix(email): derive review link URL from request origin instead of localhost

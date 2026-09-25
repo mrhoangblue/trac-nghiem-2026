@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/verifyAuth";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { convertTikzToImage } from "@/utils/tikzToImage";
 
@@ -54,8 +55,14 @@ async function convertQuestionTikz(
   return { question: processed, convertedCount, failedCount };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authUser = await verifyAuth(request);
+    // Vai trò được phép xử lý TikZ: admin | mod (GV được duyệt có role 'mod').
+    if (!authUser || !["admin", "mod"].includes(authUser.role)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as ProcessTikzRequest;
     const questions = body.questions;
 

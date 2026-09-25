@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/verifyAuth";
+import { adminDb } from "@/lib/firebaseAdmin";
+import { FieldValue } from "firebase-admin/firestore";
 import { ParsedQuestion } from "@/utils/latexParser";
 import {
   convertTikzToImage,
@@ -115,8 +116,14 @@ async function processQuestionTikz(
   return { question: processed, convertedCount, failedCount };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authUser = await verifyAuth(request);
+    // Vai trò được phép tạo đề: admin | mod (GV được duyệt có role 'mod').
+    if (!authUser || (authUser.role !== "admin" && authUser.role !== "mod")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as UploadQuizRequest;
 
     if (!body.title?.trim()) {
@@ -141,7 +148,7 @@ export async function POST(request: Request) {
     const p2Questions = questionsToSave.filter((q) => q.type === "true_false");
     const p3Questions = questionsToSave.filter((q) => q.type === "short_answer");
 
-    const docRef = await addDoc(collection(db, "exams"), {
+    const docRef = await adminDb.collection("exams").add({
       title: body.title,
       description: body.description ?? "",
       questions: questionsToSave,
@@ -167,7 +174,7 @@ export async function POST(request: Request) {
       examType: body.examType ?? null,
       targetType: body.targetType ?? "all",
       targetClassIds: body.targetClassIds ?? [],
-      createdAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return NextResponse.json({

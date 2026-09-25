@@ -5,6 +5,7 @@ import Link from "next/link";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import CreateClassModal from "./CreateClassModal";
+import { deleteClass } from "@/lib/classroomService";
 import type { ClassDoc } from "@/utils/classroomTypes";
 
 interface ClassRow {
@@ -36,6 +37,9 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ClassRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teacherId) {
@@ -73,6 +77,30 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
     navigator.clipboard.writeText(code).catch(() => {});
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await deleteClass(pendingDelete.id, teacherId);
+      if (!res.success) {
+        setDeleteError(
+          res.error === "FORBIDDEN"
+            ? "Bạn không có quyền xóa lớp này."
+            : "Không tìm thấy lớp — có thể đã bị xóa."
+        );
+        return;
+      }
+      setClasses((prev) => prev.filter((c) => c.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch (err) {
+      console.error("Failed to delete class:", err);
+      setDeleteError("Xóa lớp thất bại. Vui lòng thử lại.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleCreated = (result: { classId: string; classCode: string; name: string }) => {
@@ -180,6 +208,18 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
                   >
                     {copiedId === cls.id ? "✓ Đã sao chép" : "📋 Sao chép"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError(null);
+                      setPendingDelete(cls);
+                    }}
+                    aria-label={`Xóa lớp ${cls.name}`}
+                    title="Xóa lớp"
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-danger-50 hover:bg-danger-100 text-danger-600 transition-all"
+                  >
+                    🗑️ Xóa
+                  </button>
                 </div>
               </div>
 
@@ -190,6 +230,51 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="text-3xl">🗑️</span>
+              <div>
+                <h3 className="text-lg font-extrabold text-gray-900">Xóa lớp học?</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Bạn sắp xóa lớp <span className="font-bold text-gray-800">{pendingDelete.name}</span>
+                  {pendingDelete.studentCount > 0 && (
+                    <> cùng <span className="font-bold text-gray-800">{pendingDelete.studentCount}</span> học sinh đang tham gia</>
+                  )}
+                  . Hành động này <span className="font-bold text-danger-600">không thể hoàn tác</span>.
+                </p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <p className="text-sm text-danger-600 bg-danger-50 border border-danger-100 rounded-xl px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setPendingDelete(null)}
+                className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-danger-600 hover:bg-danger-700 transition-colors disabled:opacity-60 inline-flex items-center gap-2"
+              >
+                {deleting ? "Đang xóa…" : "Xóa lớp"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

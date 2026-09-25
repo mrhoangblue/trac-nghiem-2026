@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
@@ -116,14 +117,19 @@ export default function CreateExamPage() {
   // Load teacher's classes when switching to "classes" mode
   useEffect(() => {
     if (targetType !== "classes" || !user?.uid || myClasses.length > 0) return;
-    setClassesLoading(true);
-    getDocs(
-      query(collection(db, "classes"), where("teacherId", "==", user.uid), where("isActive", "==", true))
-    )
-      .then((snap) => {
+    const teacherId = user.uid;
+    async function loadClasses() {
+      setClassesLoading(true);
+      try {
+        const snap = await getDocs(
+          query(collection(db, "classes"), where("teacherId", "==", teacherId), where("isActive", "==", true))
+        );
         setMyClasses(snap.docs.map((d) => ({ id: d.id, name: (d.data() as ClassDoc).name })));
-      })
-      .finally(() => setClassesLoading(false));
+      } finally {
+        setClassesLoading(false);
+      }
+    }
+    void loadClasses();
   }, [targetType, user?.uid, myClasses.length]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -158,9 +164,13 @@ export default function CreateExamPage() {
     if (!previewData) return;
     setSaving(true);
     try {
+      const token = await user?.getIdToken();
       const uploadResponse = await fetch("/api/upload-quiz", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           title: previewData.title,
           description: "",
@@ -375,7 +385,7 @@ export default function CreateExamPage() {
                   ) : myClasses.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-2">
                       Bạn chưa có lớp nào. Tạo lớp tại{" "}
-                      <a href="/teacher/classes" className="text-success-600 underline">Quản lý lớp học</a>.
+                      <Link href="/teacher/classes" className="text-success-600 underline">Quản lý lớp học</Link>.
                     </p>
                   ) : (
                     <>

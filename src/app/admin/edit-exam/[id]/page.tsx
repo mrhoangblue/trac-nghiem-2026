@@ -145,14 +145,19 @@ export default function EditExamPage() {
   // Load teacher's classes when switching to "classes" mode
   useEffect(() => {
     if (targetType !== "classes" || !user?.uid || myClasses.length > 0) return;
-    setClassesLoading(true);
-    getDocs(
-      query(collection(db, "classes"), where("teacherId", "==", user.uid), where("isActive", "==", true))
-    )
-      .then((snap) => {
+    const teacherId = user.uid;
+    async function loadClasses() {
+      setClassesLoading(true);
+      try {
+        const snap = await getDocs(
+          query(collection(db, "classes"), where("teacherId", "==", teacherId), where("isActive", "==", true))
+        );
         setMyClasses(snap.docs.map((d) => ({ id: d.id, name: (d.data() as ClassDoc).name })));
-      })
-      .finally(() => setClassesLoading(false));
+      } finally {
+        setClassesLoading(false);
+      }
+    }
+    void loadClasses();
   }, [targetType, user?.uid, myClasses.length]);
 
   // ── Compile preview ───────────────────────────────────────────────────────
@@ -183,9 +188,13 @@ export default function EditExamPage() {
 
     setSaving(true);
     try {
+      const token = await user?.getIdToken();
       const processResponse = await fetch("/api/process-tikz", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ questions: previewData.questions }),
       });
 
@@ -448,7 +457,7 @@ export default function EditExamPage() {
                   ) : myClasses.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-2">
                       Bạn chưa có lớp nào. Tạo lớp tại{" "}
-                      <a href="/teacher/classes" className="text-success-600 underline">Quản lý lớp học</a>.
+                      <Link href="/teacher/classes" className="text-success-600 underline">Quản lý lớp học</Link>.
                     </p>
                   ) : (
                     <>

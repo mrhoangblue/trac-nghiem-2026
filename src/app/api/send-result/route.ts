@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/verifyAuth";
 import nodemailer from "nodemailer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -302,11 +303,20 @@ function buildHtml(payload: SendResultPayload, siteUrl: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const authUser = await verifyAuth(req);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body: SendResultPayload = await req.json();
     const { studentEmail, examName, scores } = body;
 
     if (!studentEmail || !examName) {
       return NextResponse.json({ error: "Thiếu trường bắt buộc." }, { status: 400 });
+    }
+
+    if (studentEmail !== authUser.email) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -327,7 +337,7 @@ export async function POST(req: NextRequest) {
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME ?? "Hệ thống Ôn tập Toán"}" <${process.env.EMAIL_USER}>`,
       to: studentEmail,
-      subject: `Kết quả bài thi: ${examName}`,
+      subject: `Kết quả bài thi: ${examName.replace(/[\r\n]+/g, " ")}`,
       html,
     });
 

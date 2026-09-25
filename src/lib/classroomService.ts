@@ -14,7 +14,9 @@ import {
   where,
   limit,
   arrayUnion,
+  arrayRemove,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ClassDoc, ClassGroupDoc } from "@/utils/classroomTypes";
@@ -143,6 +145,58 @@ export async function getClassById(classId: string): Promise<(ClassDoc & { id: s
   const snap = await getDoc(doc(db, "classes", classId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...(snap.data() as ClassDoc) };
+}
+
+// ── deleteClass ───────────────────────────────────────────────────────────────
+
+export type DeleteClassError = "NOT_FOUND" | "FORBIDDEN";
+
+export interface DeleteClassResult {
+  success: boolean;
+  error?: DeleteClassError;
+}
+
+/**
+ * Permanently deletes a class owned by `teacherId`.
+ *
+ * Only the teacher who created the class may delete it — ownership is verified
+ * against `classes.teacherId` before anything is removed. Also cleans up the
+ * mirrored `class_members` docs and detaches the class from its group.
+ */
+export async function deleteClass(
+  classId: string,
+  teacherId: string
+): Promise<DeleteClassResult> {
+  const classRef = doc(db, "classes", classId);
+  const snap = await getDoc(classRef);
+  if (!snap.exists()) return { success: false, error: "NOT_FOUND" };
+
+  const data = snap.data() as ClassDoc;
+  if (data.teacherId !== teacherId) return { success: false, error: "FORBIDDEN" };
+
+  // Remove mirrored membership docs for this class.
+  const membersSnap = await getDocs(
+    query(collection(db, "class_members"), where("classId", "==", classId))
+  );
+
+  const batch = writeBatch(db);
+  membersSnap.docs.forEach((m) => batch.delete(m.ref));
+  batch.delete(classRef);
+  await batch.commit();
+
+  // Detach from its group, if any (best-effort — not fatal on failure).
+  if (data.groupId) {
+    try {
+      await updateDoc(doc(db, "class_groups", data.groupId), {
+        classIds: arrayRemove(classId),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("deleteClass: failed to detach from group", err);
+    }
+  }
+
+  return { success: true };
 }
 
 // ── joinClassById ─────────────────────────────────────────────────────────────
