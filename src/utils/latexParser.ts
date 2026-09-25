@@ -3,12 +3,13 @@ export interface ParsedQuestion {
   type: string;
   questionText: string;
   options?: string[];
-  correctAnswer: any;
+  correctAnswer: string | number | boolean[] | null;
   explanation: string;
   tikzCode?: string;
   explanationTikzCode?: string;
   tikzImageUrl?: string;
   explanationTikzImageUrl?: string;
+  imageUrls?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -236,6 +237,9 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
     let explanation = '';
     let tikzCode: string | undefined;
     let explanationTikzCode: string | undefined;
+    const imageUrls = Array.from(raw.matchAll(/\\examimage\{([^}]+)\}/g), (item) => item[1].trim())
+      .filter((url) => /^https?:\/\//i.test(url));
+    raw = raw.replace(/\\examimage\{[^}]+\}/g, "").trim();
 
     // ── 1. Extract \loigiai{…} ──────────────────────────────────────────────
     const loigiaiIdx = raw.indexOf('\\loigiai');
@@ -283,7 +287,7 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
     // ── 4. Detect question type and extract options ──────────────────────────
     let type = 'essay';
     let options: string[] = [];
-    let correctAnswer: any = null;
+    let correctAnswer: string | number | boolean[] | null = null;
     let questionText = raw;
 
     if (questionText.includes('\\choiceTF')) {
@@ -321,6 +325,7 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
       explanation,
       ...(tikzCode ? { tikzCode } : {}),
       ...(explanationTikzCode ? { explanationTikzCode } : {}),
+      ...(imageUrls.length > 0 ? { imageUrls } : {}),
     });
   }
 

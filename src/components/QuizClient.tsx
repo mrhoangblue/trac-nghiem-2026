@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import TikzRenderer from "@/components/TikzRenderer";
@@ -565,7 +566,7 @@ export default function QuizClient({
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [started, isSubmitted, requestWakeLock]);
+  }, [started, isSubmitted, isStudentMode, requestWakeLock]);
 
   // ── Exit-navigation guard ─────────────────────────────────────────────────
   // While the student is mid-exam (started, not yet submitted), intercept ALL
@@ -1379,7 +1380,7 @@ interface CardProps {
 
 const QuestionCard = memo(
   function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
-    const { id, type, questionText, options, tikzCode, tikzImageUrl } = question;
+    const { id, type, questionText, options, tikzCode, tikzImageUrl, imageUrls } = question;
 
     // ── Memoize ALL LaTeX rendering — only recompute when the question changes ──
     // Without useMemo, every answer click re-runs the full KaTeX pipeline for
@@ -1423,11 +1424,13 @@ const QuestionCard = memo(
             {/* is mounted when navigating, so TikZJax WebAssembly is fully freed. */}
             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
               {tikzImageUrl ? (
-                <img
+                <Image
                   src={tikzImageUrl}
                   alt="Hình vẽ Toán học"
+                  width={960}
+                  height={640}
+                  unoptimized
                   className="max-w-full h-auto"
-                  loading="lazy"
                 />
               ) : (
                 <TikzRenderer code={tikzCode as string} />
@@ -1437,6 +1440,16 @@ const QuestionCard = memo(
         ) : (
           <div className="text-gray-900 leading-relaxed font-medium mb-6">
             {renderedQuestion}
+          </div>
+        )}
+
+        {imageUrls && imageUrls.length > 0 && (
+          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+            {imageUrls.map((url, index) => (
+              <div key={`${url}-${index}`} className="flex min-h-36 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <Image src={url} alt={`Hình minh họa câu ${questionNumber}.${index + 1}`} width={960} height={640} unoptimized className="max-h-80 max-w-full object-contain" />
+              </div>
+            ))}
           </div>
         )}
 

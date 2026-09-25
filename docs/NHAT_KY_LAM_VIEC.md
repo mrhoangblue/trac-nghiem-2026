@@ -167,6 +167,19 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Câu trả lời ngắn đặt nút dấu âm ở một hàng riêng phía trên. Dấu âm không còn chiếm một trong bốn ô đáp số; bốn ô chỉ nhận chữ số hoặc dấu phẩy và vẫn hỗ trợ gõ phím `-` để bật/tắt dấu âm.
 - Kiểm tra trực tiếp localhost xác nhận trang chủ, Header và Footer hiển thị đúng. ESLint không có lỗi mới; TypeScript và production build đạt. Giới hạn: trình duyệt kiểm thử không có phiên học sinh nên chưa chạy toàn bộ thao tác làm/nộp một đề thật.
 
+### 26/09/2026 — Cloudflare R2 và nhập đề DOCX/PDF
+
+- Khảo sát xác nhận trước phiên này dự án chưa có SDK, biến môi trường hoặc API Cloudflare R2; học liệu lớp học chỉ nhận liên kết ngoài. Firestore lưu cấu trúc và metadata, không phải nơi phù hợp để chứa file nhị phân.
+- Thêm kết nối R2 tương thích S3, API kiểm tra trạng thái và API tạo URL PUT ký tạm thời. Giáo viên tải file thẳng từ trình duyệt lên R2; máy chủ kiểm tra vai trò, phần mở rộng, dung lượng khai báo, MIME do server quyết định và dung lượng object thật trước khi đọc file đề.
+- Form tài nguyên lớp học nhận upload trực tiếp PDF, DOCX, PPTX, video và ảnh tối đa 100 MB rồi điền URL R2 vào bài học. File đề DOCX/PDF tối đa 25 MB được giữ ở `exam-imports/`; Firestore lưu khóa object nguồn cùng đề.
+- Thêm bộ nhập DOCX: tách câu theo `Câu n.`, đọc đáp án/lời giải, chuyển các cấu trúc Word Equation OMML phổ biến sang LaTeX và đưa ảnh/SVG nhúng lên `exam-assets/`. MathType/OLE cũ được phát hiện và cảnh báo để đổi sang Word Equation hoặc SVG trước khi nhập.
+- Thêm bộ nhập PDF dựa trên lớp văn bản và tọa độ dòng, kèm cảnh báo bắt buộc xem trước với công thức, bố cục nhiều cột hoặc bản scan. OCR và nhận dạng công thức từ PDF scan được ghi là giai đoạn tiếp theo, chưa đánh dấu hoàn tất.
+- Giao diện tạo đề có khu vực kéo/chọn DOCX/PDF, thống kê số câu/công thức/ảnh/trang, danh sách cảnh báo và xem trước ảnh. Phòng thi hiển thị ảnh được tách từ đề Word.
+- Bổ sung tài liệu cấu hình biến môi trường, public/custom domain và CORS trong `CLOUDFLARE_R2_VA_NHAP_DE.md`.
+- Nâng Next.js/eslint-config-next lên 16.3.6, Nodemailer lên 10.0.10 và Firebase Admin lên 14.5.0 sau khi audit phát hiện cảnh báo đã có bản vá; chuyển Firebase Admin sang API module. Audit production giảm từ 24 cảnh báo xuống còn 3, không còn critical. Còn 1 high ở `xlsx` không có bản vá trên npm và 2 moderate gián tiếp từ chuỗi Google Cloud Storage.
+- Kiểm tra cục bộ: DOCX tổng hợp chuyển đúng phân số OMML, đáp án B và một SVG; PDF một trang được đọc không lỗi và cảnh báo khi không có cấu trúc câu; ESLint phần thay đổi không có lỗi; TypeScript đạt; production build Next.js 16.3.6 đạt và nhận đủ ba route R2/import mới.
+- Giới hạn: chưa thể upload thật vì môi trường chưa có `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` và `R2_PUBLIC_BASE_URL`; trình duyệt kiểm thử không có phiên giáo viên nên trang bảo vệ quyền chỉ hiển thị yêu cầu đăng nhập.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

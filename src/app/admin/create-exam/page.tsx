@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
@@ -30,6 +31,21 @@ interface UploadQuizResponse {
   convertedCount: number;
   failedCount?: number;
   tikzProcessed: boolean;
+  error?: string;
+}
+
+interface FileImportResponse {
+  title?: string;
+  questions?: ParsedQuestion[];
+  latex?: string;
+  warnings?: string[];
+  stats?: {
+    questionCount: number;
+    equationCount: number;
+    imageCount: number;
+    pageCount?: number;
+  };
+  sourceObject?: { key: string; url: string | null } | null;
   error?: string;
 }
 
@@ -89,6 +105,10 @@ export default function CreateExamPage() {
   const [smartResult, setSmartResult] = useState<{
     counts: { p1: number; p2: number; p3: number; unknown: number };
   } | null>(null);
+  const [importingFile, setImportingFile] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importSummary, setImportSummary] = useState<FileImportResponse["stats"] | null>(null);
+  const [importSourceObject, setImportSourceObject] = useState<FileImportResponse["sourceObject"]>(null);
 
   const [scoringConfig, setScoringConfig] = useState<ScoringConfig>({
     part1TotalScore: 3,
@@ -147,6 +167,74 @@ export default function CreateExamPage() {
     setSmartResult({ counts: result.counts });
   };
 
+  const handleExamFile = async (file: File | null) => {
+    if (!file || !user) return;
+    setImportingFile(true);
+    setImportWarnings([]);
+    setImportSummary(null);
+    setImportSourceObject(null);
+    try {
+      const token = await user.getIdToken();
+      const presignResponse = await fetch("/api/storage/presign", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, folder: "exam-imports" }),
+      });
+      const presigned = (await presignResponse.json().catch(() => null)) as { uploadUrl?: string; key?: string; contentType?: string; error?: string } | null;
+      let response: Response;
+      if (presignResponse.ok && presigned?.uploadUrl && presigned.key) {
+        const directUpload = await fetch(presigned.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": presigned.contentType || "application/octet-stream" },
+          body: file,
+        });
+        if (!directUpload.ok) throw new Error("R2 từ chối file. Hãy kiểm tra CORS của bucket.");
+        response = await fetch("/api/import-exam-file", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ key: presigned.key, fileName: file.name, contentType: file.type, size: file.size }),
+        });
+      } else if (presigned?.error === "R2_NOT_READY") {
+        const formData = new FormData();
+        formData.set("file", file);
+        response = await fetch("/api/import-exam-file", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+      } else {
+        throw new Error(presigned?.error === "FILE_SIZE_INVALID" ? "File phải nhỏ hơn 25 MB." : "Không thể chuẩn bị vùng upload R2.");
+      }
+      const payload = (await response.json().catch(() => null)) as FileImportResponse | null;
+      if (!response.ok || !payload?.questions || typeof payload.latex !== "string") {
+        const messages: Record<string, string> = {
+          FILE_SIZE_INVALID: "File phải nhỏ hơn 25 MB.",
+          FILE_TYPE_UNSUPPORTED: "Chỉ hỗ trợ file DOCX hoặc PDF.",
+          DOCX_INVALID: "File DOCX không hợp lệ hoặc đã bị hỏng.",
+        };
+        throw new Error(messages[payload?.error ?? ""] ?? "Không thể đọc file đề thi.");
+      }
+
+      const classified = smartParseLatex(payload.latex);
+      const importedTitle = examTitle.trim() || payload.title || file.name.replace(/\.(docx|pdf)$/i, "");
+      setExamTitle(importedTitle);
+      setSmartMode(true);
+      setSmartInput(payload.latex);
+      setPart1(classified.part1);
+      setPart2(classified.part2);
+      setPart3(classified.part3);
+      setSmartResult({ counts: classified.counts });
+      setPreviewData({ title: importedTitle, questions: payload.questions });
+      setImportWarnings(payload.warnings ?? []);
+      setImportSummary(payload.stats ?? null);
+      setImportSourceObject(payload.sourceObject ?? null);
+    } catch (error) {
+      setImportWarnings([error instanceof Error ? error.message : "Không thể nhập file đề thi."]);
+    } finally {
+      setImportingFile(false);
+    }
+  };
+
   const handlePreview = () => {
     if (!examTitle.trim()) { alert("Vui lòng nhập tên bài thi!"); return; }
     try {
@@ -202,6 +290,7 @@ export default function CreateExamPage() {
           examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
           targetType,
           targetClassIds: targetType === "classes" ? targetClassIds : [],
+          importSourceObject,
         }),
       });
 
@@ -224,6 +313,7 @@ export default function CreateExamPage() {
       setMaxRetries(1); setIsShared(false);
       setGradeLevel(GRADE_LEVELS[0]); setExamType(EXAM_TYPES[0]);
       setTargetType("all"); setTargetClassIds([]);
+      setImportWarnings([]); setImportSummary(null); setImportSourceObject(null);
     } catch (err) {
       console.error(err);
       alert("❌ Lỗi khi lưu bài thi. Vui lòng thử lại.");
@@ -255,6 +345,38 @@ export default function CreateExamPage() {
                 value={examTitle}
                 onChange={(e) => setExamTitle(e.target.value)}
               />
+            </div>
+
+            <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white">⇧</span>
+                <div>
+                  <h3 className="font-extrabold text-blue-950">Nhập đề từ Word hoặc PDF</h3>
+                  <p className="mt-1 text-xs leading-5 text-blue-800/75">Hỗ trợ DOCX có Word Equation, ảnh PNG/JPG/SVG và PDF có lớp văn bản. Hãy xem trước và chỉnh lại đáp án trước khi lưu.</p>
+                </div>
+              </div>
+              <label className={`mt-4 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed px-4 py-3 text-sm font-bold transition ${importingFile ? "cursor-wait border-blue-200 bg-white/50 text-blue-400" : "border-blue-300 bg-white text-blue-700 hover:border-blue-500 hover:bg-blue-50"}`}>
+                {importingFile ? "Đang đọc và phân tích file…" : "Chọn file .docx hoặc .pdf"}
+                <input
+                  type="file"
+                  accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  disabled={importingFile}
+                  className="sr-only"
+                  onChange={(event) => {
+                    void handleExamFile(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {importSummary && (
+                <p className="mt-3 text-xs font-semibold text-blue-800">Đã nhận diện {importSummary.questionCount} câu · {importSummary.equationCount} công thức · {importSummary.imageCount} hình{importSummary.pageCount ? ` · ${importSummary.pageCount} trang` : ""}.</p>
+              )}
+              {importWarnings.length > 0 && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                  <p className="font-bold">Cần kiểm tra lại:</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">{importWarnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>
+                </div>
+              )}
             </div>
 
             {/* ── Phân loại đề (cây thư mục) ──────────────────────────── */}
@@ -739,6 +861,13 @@ export default function CreateExamPage() {
                             </div>
                           ) : (
                             <AnswerPreview q={q} />
+                          )}
+                          {q.imageUrls && q.imageUrls.length > 0 && (
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              {q.imageUrls.map((url, imageIndex) => (
+                                <Image key={`${url}-${imageIndex}`} src={url} alt={`Hình minh họa ${imageIndex + 1}`} width={960} height={640} unoptimized className="max-h-72 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                              ))}
+                            </div>
                           )}
                         </div>
                       ))}

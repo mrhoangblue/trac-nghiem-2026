@@ -112,6 +112,7 @@ export default function ClassLearningContent({
   const [data, setData] = useState<ContentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingResource, setUploadingResource] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courseDraft, setCourseDraft] = useState<CourseDraft | null>(null);
   const [lessonDraft, setLessonDraft] = useState<LessonDraft | null>(null);
@@ -229,6 +230,50 @@ export default function ClassLearningContent({
       setError(saveError instanceof Error ? saveError.message : "Không thể lưu tài nguyên.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const uploadResourceFile = async (file: File | null) => {
+    if (!file || !user || !resourceDraft) return;
+    setUploadingResource(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/storage/presign", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, folder: "learning-materials" }),
+      });
+      const payload = (await response.json().catch(() => null)) as { uploadUrl?: string; url?: string; contentType?: string; error?: string } | null;
+      if (!response.ok || !payload?.uploadUrl || !payload.url) {
+        const messages: Record<string, string> = {
+          R2_NOT_READY: "Cloudflare R2 chưa được cấu hình đầy đủ hoặc chưa có public URL.",
+          FILE_SIZE_INVALID: "File phải nhỏ hơn 100 MB.",
+          FILE_TYPE_UNSUPPORTED: "Định dạng file này chưa được hỗ trợ.",
+        };
+        throw new Error(messages[payload?.error ?? ""] ?? "Không thể upload file lên R2.");
+      }
+      const uploadResponse = await fetch(payload.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": payload.contentType || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadResponse.ok) throw new Error("R2 từ chối file. Hãy kiểm tra CORS và quyền ghi của bucket.");
+      const inferredType: ClassResourceType = file.type.startsWith("video/")
+        ? "video"
+        : file.name.toLowerCase().endsWith(".pptx")
+          ? "slides"
+          : "pdf";
+      setResourceDraft((current) => current ? {
+        ...current,
+        url: payload.url ?? current.url,
+        type: inferredType,
+        title: current.title || file.name.replace(/\.[^.]+$/, ""),
+      } : current);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Không thể upload file.");
+    } finally {
+      setUploadingResource(false);
     }
   };
 
@@ -684,9 +729,23 @@ export default function ClassLearningContent({
                 <input value={resourceDraft.title} onChange={(event) => setResourceDraft({ ...resourceDraft, title: event.target.value })} maxLength={160} required className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500" />
               </label>
             </div>
+            <label className={`block rounded-2xl border-2 border-dashed p-4 text-center text-sm font-bold transition ${uploadingResource ? "cursor-wait border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer border-brand-200 bg-brand-50/60 text-brand-700 hover:border-brand-400"}`}>
+              {uploadingResource ? "Đang upload lên Cloudflare R2…" : "Upload file trực tiếp lên R2"}
+              <span className="mt-1 block text-xs font-normal text-gray-500">PDF, DOCX, PPTX, MP4/WebM hoặc ảnh · tối đa 100 MB</span>
+              <input
+                type="file"
+                accept=".pdf,.docx,.pptx,.mp4,.webm,.png,.jpg,.jpeg,.webp,.svg"
+                disabled={uploadingResource}
+                className="sr-only"
+                onChange={(event) => {
+                  void uploadResourceFile(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+            </label>
             <label className="block text-sm font-bold text-gray-700">Liên kết chia sẻ
               <input type="url" value={resourceDraft.url} onChange={(event) => setResourceDraft({ ...resourceDraft, url: event.target.value })} required placeholder="https://drive.google.com/... hoặc liên kết có quyền xem" className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500" />
-              <span className="mt-1.5 block text-xs font-normal leading-5 text-gray-400">Hỗ trợ xem nhúng Google Drive, YouTube, Vimeo, Google Slides và các liên kết công khai cho phép iframe.</span>
+              <span className="mt-1.5 block text-xs font-normal leading-5 text-gray-400">Có thể upload lên R2 ở trên hoặc dán liên kết Google Drive, YouTube, Vimeo, Google Slides và nguồn công khai.</span>
             </label>
             <label className="block text-sm font-bold text-gray-700">Mô tả
               <textarea value={resourceDraft.description} onChange={(event) => setResourceDraft({ ...resourceDraft, description: event.target.value })} maxLength={1000} rows={2} className="mt-1.5 w-full resize-none rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500" />

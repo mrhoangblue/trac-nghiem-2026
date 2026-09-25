@@ -36,6 +36,10 @@ interface UploadQuizRequest {
   targetType?: "all" | "classes";
   targetClassIds?: string[];
   password?: string;
+  importSourceObject?: {
+    key?: string;
+    url?: string | null;
+  } | null;
 }
 
 interface ProcessedQuestion extends ParsedQuestion {
@@ -160,6 +164,12 @@ export async function POST(request: NextRequest) {
 
     const docRef = adminDb.collection("exams").doc();
     const batch = adminDb.batch();
+    const importSourceObject = body.importSourceObject?.key?.startsWith("exam-imports/")
+      ? {
+          key: body.importSourceObject.key,
+          url: typeof body.importSourceObject.url === "string" ? body.importSourceObject.url : null,
+        }
+      : null;
     batch.set(docRef, {
       title: body.title,
       description: body.description ?? "",
@@ -187,6 +197,7 @@ export async function POST(request: NextRequest) {
       targetType: body.targetType ?? "all",
       targetClassIds: body.targetClassIds ?? [],
       requiresPassword: Boolean(password),
+      importSourceObject,
       createdAt: FieldValue.serverTimestamp(),
     });
 
