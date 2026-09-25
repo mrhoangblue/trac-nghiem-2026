@@ -144,6 +144,13 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Do tài nguyên nằm trên tên miền ngoài, hệ thống dùng nút “Đã học xong” thay cho việc tự suy đoán học sinh đã đọc hết PDF/video; đây cũng là mô hình hoàn thành thủ công của Linear Progression.
 - Kiểm tra cục bộ: ESLint phần thay đổi đạt; TypeScript đạt; production build nhận route tiến độ mới; thứ tự làm phẳng tài nguyên và khóa document tiến độ đạt; request cập nhật tiến độ không có token trả đúng HTTP 401.
 
+### 25/09/2026 — Sửa cảnh báo hydration do tiện ích Bitdefender
+
+- Đối chiếu ảnh lỗi và nhật ký trình duyệt xác nhận HTML phía client bị tiện ích bảo mật chèn `bis_skin_checked`, `bis_register` và cờ `__processed_<uuid>__` trước khi React hydrate; đây không phải dữ liệu hoặc nhánh render không ổn định của ứng dụng.
+- Thêm script `beforeInteractive` dạng tệp tĩnh để gỡ riêng các thuộc tính do tiện ích chèn trong 10 giây khởi động. Bỏ `suppressHydrationWarning` ở layout gốc để các lỗi hydration thật của ứng dụng vẫn được báo.
+- Kiểm tra trực tiếp bằng cách tải lại `/teacher/classes` khi tiện ích vẫn bật: lớp phủ lỗi biến mất; phần nhật ký dev phát sinh sau lần tải lại chỉ còn thông báo React DevTools, không còn lỗi hydration hoặc cảnh báo script nội tuyến.
+- Kiểm tra mã: ESLint file layout đạt; TypeScript và production build đạt.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

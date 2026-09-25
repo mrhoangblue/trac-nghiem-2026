@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import Header from "@/components/Header";
@@ -36,11 +37,9 @@ export default function RootLayout({
     <html
       lang="vi"
       data-scroll-behavior="smooth"
-      suppressHydrationWarning
       className={`${beVietnam.variable} ${geistMono.variable} h-full antialiased`}
     >
-
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col">
         <a href="#main-content" className="skip-link">Đến nội dung chính</a>
         <BrowserWarning>
         <AuthProvider>
@@ -57,6 +56,11 @@ export default function RootLayout({
           </StudentModeProvider>
         </AuthProvider>
         </BrowserWarning>
+        <Script
+          id="browser-extension-hydration-guard"
+          src="/browser-extension-hydration-guard.js"
+          strategy="beforeInteractive"
+        />
       </body>
     </html>
   );
