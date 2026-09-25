@@ -158,6 +158,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Bố cục ảnh tự chuyển xuống dưới nội dung trên màn hình hẹp; ảnh có kích thước nội tại và vùng cắt ổn định để tránh xê dịch giao diện khi tải.
 - Kiểm tra trực tiếp trên localhost xác nhận avatar và ảnh hero tải thành công, khung trắng hiển thị đúng và nội dung mobile không tràn ngang. ESLint không có lỗi; TypeScript và production build đạt.
 
+### 25/09/2026 — Tái cấu trúc trang chủ, Footer và phòng thi
+
+- Viết lại trang chủ theo ba tầng rõ ràng: giới thiệu giá trị và CTA, quy trình học ba bước, sau đó mới đến kho đề có tìm kiếm và bộ lọc. Giữ nâu đất/kem làm màu nhận diện phong thủy nhưng tăng khoảng trắng, tương phản và tính phổ quát.
+- Header đổi nội dung thành “Học Toán THPT · Cùng Thầy Hoàng Blue”. Footer chuyển thành ba cột gồm giới thiệu, liên kết học tập và thông tin liên hệ; bổ sung địa điểm và thanh bản quyền riêng.
+- Phòng thi dùng bảng màu xanh lam–chàm trung tính cho tiến độ và thao tác chính, xanh lục/đỏ cho lựa chọn Đúng–Sai. Tách đồng hồ và danh sách câu thành khu điều hướng riêng; trên mobile, danh sách câu cuộn ngang để không chiếm chiều cao bài làm.
+- Thẻ câu hỏi, đáp án, màn hình bắt đầu, thanh tiến độ và nút chuyển câu được chuẩn hóa lại về thứ bậc, trạng thái chọn và độ tương phản.
+- Câu trả lời ngắn đặt nút dấu âm ở một hàng riêng phía trên. Dấu âm không còn chiếm một trong bốn ô đáp số; bốn ô chỉ nhận chữ số hoặc dấu phẩy và vẫn hỗ trợ gõ phím `-` để bật/tắt dấu âm.
+- Kiểm tra trực tiếp localhost xác nhận trang chủ, Header và Footer hiển thị đúng. ESLint không có lỗi mới; TypeScript và production build đạt. Giới hạn: trình duyệt kiểm thử không có phiên học sinh nên chưa chạy toàn bộ thao tác làm/nộp một đề thật.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

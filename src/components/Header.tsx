@@ -112,10 +112,10 @@ export default function Header() {
                 />
               </span>
               <div className="leading-none min-w-0">
-                <p className="text-[10px] sm:text-xs font-extrabold text-brand-600 uppercase tracking-widest whitespace-nowrap">
-                  TOÁN THPT
+                <p className="text-[10px] sm:text-xs font-extrabold text-brand-800 uppercase tracking-[.12em] whitespace-nowrap">
+                  Học Toán THPT
                 </p>
-                <p className="text-[10px] sm:text-xs font-medium text-gray-500 whitespace-nowrap">
+                <p className="mt-1 text-[8px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-[.08em] whitespace-nowrap">
                   Cùng Thầy Hoàng Blue
                 </p>
               </div>

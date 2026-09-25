@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, BookOpen, Check, ChevronRight, GraduationCap, Search, Shapes, FileText, RotateCcw } from "lucide-react";
+import { ArrowRight, BookOpen, ChevronRight, GraduationCap, Search, Shapes, FileText, RotateCcw } from "lucide-react";
 import { GRADE_LEVELS } from "@/components/Sidebar";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
@@ -203,25 +203,39 @@ function HomeContent() {
   return (
     <div className="w-full">
       <section className="home-hero border-b border-gray-200">
-        <div className="mx-auto grid max-w-6xl items-center gap-5 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1.15fr_1fr]">
+        <div className="mx-auto grid max-w-6xl items-center gap-8 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1.12fr_.88fr] lg:py-20">
           <div>
-            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[.15em] text-brand-800"><span className="h-1.5 w-1.5 rounded-full bg-sunset" />Không gian ôn tập Toán THPT</span>
-            <h1 className="text-4xl font-extrabold leading-[1.22] tracking-tight text-brand-900 sm:text-5xl">Vững kiến thức.<br /><span className="text-brand-600">Tự tin mỗi bài thi.</span></h1>
-            <p className="mt-5 max-w-lg text-sm leading-8 text-gray-600 sm:text-base">Luyện tập theo từng lớp, thử sức với đề thi và xem lại lời giải. Bắt đầu từ một bài Toán hôm nay.</p>
+            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/80 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[.15em] text-brand-800 shadow-sm"><span className="h-1.5 w-1.5 rounded-full bg-sunset" />Học đúng trọng tâm · Tiến bộ mỗi ngày</span>
+            <h1 className="max-w-2xl text-4xl font-extrabold leading-[1.18] tracking-tight text-brand-950 sm:text-5xl lg:text-[3.4rem]">Học Toán có lộ trình.<br /><span className="text-brand-600">Tiến bộ nhìn thấy được.</span></h1>
+            <p className="mt-5 max-w-xl text-sm leading-8 text-gray-600 sm:text-base">Học theo lớp, luyện đúng dạng bài và xem lại lời giải sau mỗi lần làm. Mỗi kết quả đều giúp bạn biết bước tiếp theo cần cải thiện.</p>
             <div className="mt-7 flex flex-wrap items-center gap-4">
-              <a href="#kho-de" className="sunset-button inline-flex items-center gap-3 rounded-2xl px-6 py-3.5 text-lg font-bold transition">Khám phá đề thi <ArrowRight size={19} /></a>
-              {user ? <Link href="/student/history" className="inline-flex items-center gap-2 rounded-xl py-3 text-sm font-semibold text-earth">Lịch sử làm bài <ChevronRight size={16} /></Link> : <button onClick={login} className="rounded-xl py-3 text-sm font-semibold text-earth">Đăng nhập để bắt đầu <span aria-hidden="true">↗</span></button>}
+              <a href="#kho-de" className="sunset-button inline-flex items-center gap-3 rounded-2xl px-6 py-3.5 text-base font-bold transition">Chọn đề để luyện <ArrowRight size={19} /></a>
+              {user ? <Link href="/student/history" className="inline-flex items-center gap-2 rounded-xl px-2 py-3 text-sm font-semibold text-earth">Xem tiến bộ của tôi <ChevronRight size={16} /></Link> : <button onClick={login} className="rounded-xl px-2 py-3 text-sm font-semibold text-earth">Đăng nhập để bắt đầu <span aria-hidden="true">↗</span></button>}
             </div>
-            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-xs text-gray-600">{["Trắc nghiệm", "Đúng / Sai", "Trả lời ngắn"].map(label => <span key={label} className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-700" />{label}</span>)}</div>
+            <div className="mt-9 grid max-w-xl grid-cols-3 divide-x divide-brand-200 rounded-2xl border border-brand-200 bg-white/65 px-2 py-4 shadow-sm backdrop-blur">
+              {[{ value: "3", label: "dạng câu hỏi" }, { value: "24/7", label: "học theo nhịp riêng" }, { value: "1", label: "lộ trình rõ ràng" }].map(({ value, label }) => <div key={label} className="px-3 text-center"><p className="text-lg font-extrabold text-brand-800">{value}</p><p className="mt-1 text-[10px] leading-4 text-gray-500 sm:text-xs">{label}</p></div>)}
+            </div>
           </div>
           <TeacherPortrait />
         </div>
       </section>
 
-      <section id="kho-de" className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-14" aria-labelledby="exam-library-title">
+      <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8 sm:py-16" aria-labelledby="learning-path-title">
+        <div className="mx-auto mb-9 max-w-2xl text-center">
+          <p className="mb-3 text-[10px] font-bold uppercase tracking-[.2em] text-brand-700">Một quy trình học dễ theo dõi</p>
+          <h2 id="learning-path-title" className="text-2xl font-extrabold text-brand-950 sm:text-3xl">Từ luyện tập đến tiến bộ, trong ba bước</h2>
+          <p className="mt-3 text-sm leading-7 text-gray-500">Giao diện được tổ chức để học sinh luôn biết mình đang ở đâu và cần làm gì tiếp theo.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[{ Icon: BookOpen, number: "01", title: "Chọn nội dung phù hợp", text: "Lọc theo khối lớp và dạng đề để bắt đầu đúng phần kiến thức cần ôn." }, { Icon: Shapes, number: "02", title: "Làm bài tập trung", text: "Theo dõi thời gian, tiến độ và chuyển câu rõ ràng trong một không gian ít xao nhãng." }, { Icon: GraduationCap, number: "03", title: "Xem lại và củng cố", text: "Đọc lời giải, nhận ra phần còn yếu và tiếp tục luyện tập có mục tiêu." }].map(({ Icon, number, title, text }) => <article key={title} className="group rounded-3xl border border-gray-200 bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-brand-300 hover:shadow-lift"><div className="flex items-center justify-between"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700"><Icon size={23} /></span><span className="font-mono text-sm font-bold text-brand-300">{number}</span></div><h3 className="mt-5 text-base font-extrabold text-brand-950">{title}</h3><p className="mt-3 text-sm leading-7 text-gray-500">{text}</p></article>)}
+        </div>
+      </section>
+
+      <section id="kho-de" className="border-y border-gray-200 bg-white/55" aria-labelledby="exam-library-title">
+        <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-16">
         <div className="mb-7 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-          <div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.2em] text-brand-700">Học chắc từ những điều cơ bản</p><h2 id="exam-library-title" className="text-2xl font-bold text-brand-900 sm:text-3xl">Kho đề dành cho bạn</h2></div>
-          <label className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-500 lg:max-w-xs"><Search size={18} /><span className="sr-only">Tìm kiếm đề thi</span><input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên đề thi…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
+          <div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.2em] text-brand-700">Luyện tập theo mục tiêu</p><h2 id="exam-library-title" className="text-2xl font-extrabold text-brand-950 sm:text-3xl">Kho đề dành cho bạn</h2><p className="mt-2 text-sm text-gray-500">Chọn khối lớp hoặc tìm nhanh theo tên đề.</p></div>
+          <label className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-gray-500 shadow-sm transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-100 lg:max-w-sm"><Search size={18} /><span className="sr-only">Tìm kiếm đề thi</span><input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên đề thi…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
         </div>
         <nav aria-label="Lọc theo khối lớp" className="mb-8 flex flex-wrap gap-2">
           {["Tất cả", ...GRADE_LEVELS].map(label => {
@@ -240,10 +254,7 @@ function HomeContent() {
         ) : loading ? <Spinner /> : error ? (
           <div role="alert" className="rounded-3xl border border-danger-200 bg-danger-50 px-6 py-10 text-center"><p className="text-sm text-danger-700">{error}</p><button onClick={() => window.location.reload()} className="mx-auto mt-4 flex items-center gap-2 rounded-xl border border-danger-200 px-4 py-2 text-sm font-semibold text-danger-700"><RotateCcw size={15} />Tải lại trang</button></div>
         ) : filtered.length === 0 ? <EmptyState filtered={!!grade || !!search} /> : <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{filtered.map(exam => <ExamCard key={exam.id} exam={exam} />)}</div>}
-      </section>
-
-      <section className="mx-auto mb-12 grid w-full max-w-6xl gap-5 px-5 sm:grid-cols-3 sm:px-8" aria-label="Cách ôn tập">
-        {[{ Icon: BookOpen, title: "Chọn bài phù hợp", text: "Tìm đề theo khối lớp và nội dung bạn muốn ôn tập." }, { Icon: Shapes, title: "Tập trung làm bài", text: "Đọc kỹ đề, vận dụng kiến thức và hoàn thành từng câu." }, { Icon: GraduationCap, title: "Hiểu từ lời giải", text: "Xem lại bài làm để nhận ra phần kiến thức cần củng cố." }].map(({ Icon, title, text }, index) => <div key={title} className="flex gap-4 border-t border-gray-200 pt-6"><Icon size={23} className="mt-1 shrink-0 text-brand-700" /><div><p className="mb-2 text-sm font-bold text-brand-900"><span className="mr-2 text-brand-600">0{index + 1}.</span>{title}</p><p className="text-xs leading-6 text-gray-500">{text}</p></div></div>)}
+        </div>
       </section>
     </div>
   );

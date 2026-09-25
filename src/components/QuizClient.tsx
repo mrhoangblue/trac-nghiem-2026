@@ -50,19 +50,19 @@ export const SECTION_META: Record<string, { roman: string; label: string; note: 
     roman: "I",
     label: "Câu hỏi trắc nghiệm nhiều phương án lựa chọn",
     note: "Mỗi câu trả lời đúng được 0,25 điểm",
-    colors: "border-brand-300 bg-brand-50 text-brand-800",
+    colors: "border-blue-200 bg-blue-50 text-blue-800",
   },
   true_false: {
     roman: "II",
     label: "Câu hỏi trắc nghiệm Đúng – Sai",
     note: "Điểm tối đa mỗi câu là 1,0 điểm theo quy chế",
-    colors: "border-amber-300 bg-amber-50 text-amber-800",
+    colors: "border-violet-200 bg-violet-50 text-violet-800",
   },
   short_answer: {
     roman: "III",
     label: "Câu hỏi trắc nghiệm trả lời ngắn",
     note: "Mỗi câu trả lời đúng được 0,25 hoặc 0,5 điểm tùy cấu hình",
-    colors: "border-success-300 bg-success-50 text-success-800",
+    colors: "border-cyan-200 bg-cyan-50 text-cyan-800",
   },
 };
 
@@ -119,14 +119,14 @@ const CountdownTimer = memo(function CountdownTimer({
   const isDanger  = timeLeft <= 60  && timeLeft > 0;
 
   return (
-    <div className="sticky top-16 z-40 flex justify-end mb-4 pointer-events-none">
+    <div className="sticky top-20 z-40 flex justify-end pointer-events-none lg:justify-stretch">
       <div
-        className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg font-mono font-extrabold text-lg transition-colors ${
+        className={`pointer-events-auto flex items-center justify-center gap-2 rounded-2xl px-4 py-3 font-mono text-lg font-extrabold shadow-lg transition-colors lg:w-full ${
           isDanger
-            ? "bg-danger-600 text-white animate-pulse"
+            ? "bg-rose-600 text-white animate-pulse"
             : isWarning
-            ? "bg-amber-400 text-white"
-            : "bg-white border border-gray-200 text-gray-800"
+            ? "bg-amber-500 text-white"
+            : "border border-slate-200 bg-white text-slate-800"
         }`}
       >
         <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1063,7 +1063,7 @@ export default function QuizClient({
   ) : null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10 w-full flex-1 flex flex-col">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6 lg:py-10">
       {CheatWarningModal}
 
       {/* ── Exit-confirmation modal ───────────────────────────────────────────── */}
@@ -1122,101 +1122,82 @@ export default function QuizClient({
         </div>
       )}
 
-      {/* ── Isolated countdown — server-authoritative start position on reload ── */}
-      {/* remainingSecondsOverride is set from the Firestore examStartTime on reload. */}
-      {/* null on a fresh start → timer uses the full exam duration as default.      */}
-      <CountdownTimer totalSeconds={remainingSecondsOverride ?? timing.duration * 60} onExpire={onExpire} />
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-7">
+        <div className="min-w-0">
+          {isFirstOfSection && sectionMeta && (
+            <div className={`mb-4 rounded-2xl border px-5 py-3.5 ${sectionMeta.colors}`}>
+              <p className="text-sm font-extrabold">
+                PHẦN {sectionMeta.roman}: {sectionMeta.label}
+              </p>
+              <p className="mt-1 text-xs opacity-75">{sectionMeta.note}</p>
+            </div>
+          )}
 
-      {/* ── Section banner ─────────────────────────────────────────────────── */}
-      {isFirstOfSection && sectionMeta && (
-        <div className={`mb-4 px-5 py-3 rounded-2xl border-2 ${sectionMeta.colors}`}>
-          <p className="font-extrabold text-sm">
-            PHẦN {sectionMeta.roman}: {sectionMeta.label}
-          </p>
-          <p className="text-xs opacity-80 mt-0.5">{sectionMeta.note}</p>
-        </div>
-      )}
-
-      {/* ── Header / progress ──────────────────────────────────────────────── */}
-      <div className="mb-6">
-        <div className="flex justify-between items-end mb-3">
-          <div>
-            <h1 className="text-xl font-extrabold text-gray-900 leading-tight">{title}</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Câu {currentIdx + 1}/{totalQuestions} · Đã trả lời:{" "}
-              <span className="font-semibold text-brand-600">{totalAnswered}</span>/{totalQuestions}
-            </p>
+          <div className="mb-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-[.16em] text-blue-600">Bài làm đang diễn ra</p>
+                <h1 className="truncate text-xl font-extrabold leading-tight text-slate-900">{title}</h1>
+                <p className="mt-2 text-sm text-slate-500">Câu {currentIdx + 1}/{totalQuestions} · Đã trả lời <span className="font-bold text-blue-700">{totalAnswered}/{totalQuestions}</span></p>
+              </div>
+              <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-extrabold text-blue-700">{Math.round(progress)}%</span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
           </div>
-          <span className="text-brand-600 font-bold text-sm">{Math.round(progress)}%</span>
-        </div>
-        <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-          <div
-            className="bg-brand-600 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
 
-      {/* ── Question card — key forces full unmount/remount on navigation ── */}
-      {/* key={currentQ.id} ensures old KaTeX DOM + TikZJax WebAssembly are   */}
-      {/* fully released BEFORE the new question's DOM is allocated.           */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8 flex-1">
-        <QuestionCard
-          key={currentQ.id}
-          question={currentQ}
-          questionNumber={currentIdx + 1}
-          p1Ans={p1Ans}
-          p2Ans={p2Ans}
-          p3Ans={p3Ans}
-          onP1={onP1}
-          onP2={onP2}
-          onP3={onP3}
-        />
-      </div>
+          <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_16px_45px_-28px_rgba(30,64,175,.35)] sm:p-7 md:p-8">
+            <QuestionCard
+              key={currentQ.id}
+              question={currentQ}
+              questionNumber={currentIdx + 1}
+              p1Ans={p1Ans}
+              p2Ans={p2Ans}
+              p3Ans={p3Ans}
+              onP1={onP1}
+              onP2={onP2}
+              onP3={onP3}
+            />
+          </div>
 
-      {/* ── Navigation ────────────────────────────────────────────────────── */}
-      <div className="mt-6 flex items-center gap-3 justify-between">
-        <button
-          onClick={() => onNavigate(Math.max(0, currentIdx - 1))}
-          disabled={currentIdx === 0}
-          className={`px-5 py-3 rounded-xl font-bold text-sm transition-all ${
-            currentIdx === 0
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-              : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-          }`}
-        >
-          ← Trước
-        </button>
+          <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
+            <button
+              onClick={() => onNavigate(Math.max(0, currentIdx - 1))}
+              disabled={currentIdx === 0}
+              className={`rounded-xl px-4 py-3 text-sm font-bold transition-all sm:px-5 ${currentIdx === 0 ? "cursor-not-allowed bg-slate-100 text-slate-400" : "border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"}`}
+            >
+              ← Câu trước
+            </button>
 
-        {/* Question palette — memoized component, skips render when nothing changed */}
-        <QuestionPalette
-          questions={questions}
-          currentIdx={currentIdx}
-          p1Ans={p1Ans}
-          p2Ans={p2Ans}
-          p3Ans={p3Ans}
-          onNavigate={onNavigate}
-        />
-
-        {currentIdx < questions.length - 1 ? (
-          <button
-            onClick={() => onNavigate(Math.min(questions.length - 1, currentIdx + 1))}
-            className="px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm transition-all"
-          >
-            Tiếp →
-          </button>
-        ) : (
-          <button
-            onClick={() => handleSubmit(false)}
-            disabled={submitting}
-            className="px-5 py-3 bg-success-500 hover:bg-success-600 disabled:opacity-60 text-white font-bold rounded-xl text-sm transition-all flex items-center gap-2"
-          >
-            {submitting && (
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            {currentIdx < questions.length - 1 ? (
+              <button onClick={() => onNavigate(Math.min(questions.length - 1, currentIdx + 1))} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700">
+                Câu tiếp →
+              </button>
+            ) : (
+              <button onClick={() => handleSubmit(false)} disabled={submitting} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-emerald-200 transition hover:bg-emerald-700 disabled:opacity-60">
+                {submitting && <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
+                Nộp bài
+              </button>
             )}
-            Nộp bài
-          </button>
-        )}
+          </div>
+        </div>
+
+        <aside className="order-first space-y-4 lg:order-last lg:sticky lg:top-20">
+          <CountdownTimer totalSeconds={remainingSecondsOverride ?? timing.duration * 60} onExpire={onExpire} />
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-extrabold text-slate-900">Danh sách câu</p>
+              <span className="text-xs font-semibold text-slate-400">{totalAnswered}/{totalQuestions}</span>
+            </div>
+            <QuestionPalette questions={questions} currentIdx={currentIdx} p1Ans={p1Ans} p2Ans={p2Ans} p3Ans={p3Ans} onNavigate={onNavigate} />
+            <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded bg-blue-600" />Đang xem</span>
+              <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded bg-emerald-100 ring-1 ring-emerald-300" />Đã trả lời</span>
+              <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded bg-slate-100 ring-1 ring-slate-200" />Chưa làm</span>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );
@@ -1253,7 +1234,7 @@ function IntroScreen({
   const p3Count = questions.filter((q) => q.type === "short_answer").length;
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-16 w-full">
+    <div className="mx-auto w-full max-w-2xl px-4 py-12 sm:py-16">
       {/* Preview mode notice — shown above the card */}
       {isPreviewMode && (
         <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
@@ -1265,19 +1246,23 @@ function IntroScreen({
         </div>
       )}
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-brand-600 to-brand-600 px-8 py-10 text-white">
-          <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mb-4">📝</div>
-          <h1 className="text-2xl font-extrabold leading-tight">{title}</h1>
-          <p className="mt-2 opacity-70 text-sm">{questions.length} câu hỏi</p>
+      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_70px_-38px_rgba(30,64,175,.5)]">
+        <div className="relative overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 px-6 py-9 text-white sm:px-9 sm:py-11">
+          <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full border-[28px] border-white/10" />
+          <div className="relative">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/15 text-3xl shadow-inner">📝</div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[.18em] text-blue-100">Sẵn sàng làm bài</p>
+            <h1 className="max-w-xl text-2xl font-extrabold leading-tight sm:text-3xl">{title}</h1>
+            <p className="mt-3 text-sm text-white/70">{questions.length} câu hỏi · Hoàn thành trong một phiên tập trung</p>
+          </div>
         </div>
 
-        <div className="px-8 py-6 space-y-5">
+        <div className="space-y-5 px-5 py-6 sm:px-8 sm:py-8">
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
             {[
-              { label: "Trắc nghiệm",   count: p1Count, color: "bg-brand-50 border-brand-100 text-brand-700" },
-              { label: "Đúng/Sai",      count: p2Count, color: "bg-amber-50 border-amber-100 text-amber-700" },
-              { label: "Trả lời ngắn",  count: p3Count, color: "bg-success-50 border-success-100 text-success-700" },
+              { label: "Trắc nghiệm",   count: p1Count, color: "bg-blue-50 border-blue-100 text-blue-700" },
+              { label: "Đúng/Sai",      count: p2Count, color: "bg-violet-50 border-violet-100 text-violet-700" },
+              { label: "Trả lời ngắn",  count: p3Count, color: "bg-cyan-50 border-cyan-100 text-cyan-700" },
             ].map(({ label, count, color }) => (
               <div key={label} className={`rounded-xl border p-3 ${color}`}>
                 <p className="text-2xl font-extrabold">{count}</p>
@@ -1286,10 +1271,10 @@ function IntroScreen({
             ))}
           </div>
 
-          <div className="bg-brand-50 border border-brand-100 rounded-2xl px-5 py-4 space-y-2 text-sm">
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">Thời gian làm bài</span>
-              <span className="font-bold text-brand-700">{timing.duration} phút</span>
+              <span className="font-bold text-blue-700">{timing.duration} phút</span>
             </div>
             {timing.startTime && (
               <div className="flex justify-between">
@@ -1349,8 +1334,8 @@ function IntroScreen({
             disabled={!canStart}
             className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
               canStart
-                ? "bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow hover:-translate-y-0.5"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 hover:-translate-y-0.5"
+                : "bg-slate-100 text-slate-400 cursor-not-allowed"
             }`}
           >
             {retryLimitReached
@@ -1412,18 +1397,18 @@ const QuestionCard = memo(
 
     const typeBadge =
       type === "multiple_choice"
-        ? { label: "Trắc nghiệm",   cls: "bg-brand-100 text-brand-700" }
+        ? { label: "Trắc nghiệm",   cls: "bg-blue-50 text-blue-700 ring-1 ring-blue-200" }
         : type === "true_false"
-        ? { label: "Đúng / Sai",    cls: "bg-amber-100 text-amber-700" }
-        : { label: "Trả lời ngắn", cls: "bg-success-100 text-success-700" };
+        ? { label: "Đúng / Sai",    cls: "bg-violet-50 text-violet-700 ring-1 ring-violet-200" }
+        : { label: "Trả lời ngắn", cls: "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200" };
 
     return (
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-100 text-brand-700">
+        <div className="mb-5 flex items-center gap-2">
+          <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
             Câu {questionNumber}
           </span>
-          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${typeBadge.cls}`}>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${typeBadge.cls}`}>
             {typeBadge.label}
           </span>
         </div>
@@ -1464,15 +1449,15 @@ const QuestionCard = memo(
                 <button
                   key={i}
                   onClick={() => onP1(id, i)}
-                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${
-                    selected ? "border-brand-500 bg-brand-50" : "border-gray-100 hover:border-brand-300 hover:bg-gray-50"
+                  className={`flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition-all ${
+                    selected ? "border-blue-500 bg-blue-50 shadow-sm ring-2 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-brand-500" : "border-gray-300"}`}>
-                    {selected && <div className="w-3 h-3 bg-brand-500 rounded-full" />}
+                  <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-2 ${selected ? "border-blue-600 bg-blue-600" : "border-slate-300 bg-white"}`}>
+                    {selected && <div className="h-2.5 w-2.5 rounded-full bg-white" />}
                   </div>
-                  <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
-                  <span className={`leading-relaxed ${selected ? "text-brand-900 font-medium" : "text-gray-700"}`}>
+                  <span className={`shrink-0 font-extrabold ${selected ? "text-blue-700" : "text-slate-400"}`}>{String.fromCharCode(65 + i)}.</span>
+                  <span className={`leading-relaxed ${selected ? "font-medium text-blue-950" : "text-slate-700"}`}>
                     {renderedOptions[i]}
                   </span>
                 </button>
@@ -1483,14 +1468,14 @@ const QuestionCard = memo(
 
         {/* P2 — True / False table */}
         {type === "true_false" && options && (
-          <div className="overflow-x-auto rounded-2xl border border-amber-200">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-amber-50 border-b border-amber-200">
-                  <th className="text-center px-3 py-2.5 font-bold text-amber-700 border-r border-amber-200 w-10">Ý</th>
-                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Phát biểu</th>
-                  <th className="text-center px-4 py-2.5 font-bold text-success-700 border-l border-amber-200 w-20">ĐÚNG</th>
-                  <th className="text-center px-4 py-2.5 font-bold text-danger-600 border-l border-amber-200 w-20">SAI</th>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="w-10 border-r border-slate-200 px-3 py-3 text-center font-bold text-violet-700">Ý</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">Phát biểu</th>
+                  <th className="w-20 border-l border-slate-200 px-4 py-3 text-center font-bold text-emerald-700">ĐÚNG</th>
+                  <th className="w-20 border-l border-slate-200 px-4 py-3 text-center font-bold text-rose-600">SAI</th>
                 </tr>
               </thead>
               <tbody>
@@ -1499,21 +1484,21 @@ const QuestionCard = memo(
                   const isDung = selected === true;
                   const isSai  = selected === false;
                   return (
-                    <tr key={i} className={`border-t border-amber-100 ${i % 2 === 1 ? "bg-amber-50/30" : "bg-white"}`}>
-                      <td className="px-3 py-3 text-center font-extrabold text-amber-600 border-r border-amber-100">
+                    <tr key={i} className={`border-t border-slate-100 ${i % 2 === 1 ? "bg-slate-50/70" : "bg-white"}`}>
+                      <td className="border-r border-slate-100 px-3 py-3 text-center font-extrabold text-violet-600">
                         {String.fromCharCode(97 + i)}
                       </td>
                       <td className="px-4 py-3 text-gray-800 leading-relaxed">{renderedOptions[i]}</td>
-                      <td className="px-3 py-2 text-center border-l border-amber-100">
+                      <td className="border-l border-slate-100 px-3 py-2 text-center">
                         <button
                           onClick={() => onP2(id, i, true)}
-                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-success-500 text-white shadow-sm ring-2 ring-success-300" : "bg-gray-100 text-gray-400 hover:bg-success-100 hover:text-success-700"}`}
+                          className={`w-full rounded-xl py-2 text-sm font-bold transition-all ${isDung ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-200" : "bg-slate-100 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"}`}
                         >Đúng</button>
                       </td>
-                      <td className="px-3 py-2 text-center border-l border-amber-100">
+                      <td className="border-l border-slate-100 px-3 py-2 text-center">
                         <button
                           onClick={() => onP2(id, i, false)}
-                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-danger-500 text-white shadow-sm ring-2 ring-danger-300" : "bg-gray-100 text-gray-400 hover:bg-danger-100 hover:text-danger-700"}`}
+                          className={`w-full rounded-xl py-2 text-sm font-bold transition-all ${isSai ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-200" : "bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-700"}`}
                         >Sai</button>
                       </td>
                     </tr>
@@ -1567,7 +1552,7 @@ interface PaletteProps {
 const QuestionPalette = memo(
   function QuestionPalette({ questions, currentIdx, p1Ans, p2Ans, p3Ans, onNavigate }: PaletteProps) {
     return (
-      <div className="flex gap-1 flex-wrap justify-center max-w-xs">
+      <div className="flex max-w-full gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
         {questions.map((q, i) => {
           const answered =
             q.type === "multiple_choice"
@@ -1580,12 +1565,12 @@ const QuestionPalette = memo(
               key={q.id}
               onClick={() => onNavigate(i)}
               title={`Câu ${i + 1}`}
-              className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+              className={`h-9 w-9 rounded-xl text-xs font-bold transition-all ${
                 i === currentIdx
-                  ? "bg-brand-600 text-white shadow"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-200 ring-2 ring-blue-100"
                   : answered
-                  ? "bg-brand-100 text-brand-700 hover:bg-brand-200"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                  : "bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200"
               }`}
             >
               {i + 1}
@@ -1612,22 +1597,40 @@ const QuestionPalette = memo(
 // ── ShortAnswerInput ──────────────────────────────────────────────────────────
 
 const NUM_CELLS = 4;
-const ALLOWED_RE = /^[0-9,\-]$/;
+const ALLOWED_RE = /^[0-9,]$/;
 
 function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [isNegative, setIsNegative] = useState(() => value.startsWith("-"));
   const [cells, setCells] = useState<string[]>(() => {
-    const chars = value.split("").slice(0, NUM_CELLS);
+    const chars = value.replace(/^-/, "").split("").slice(0, NUM_CELLS);
     return Array.from({ length: NUM_CELLS }, (_, i) => chars[i] ?? "");
   });
   const refs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const commit = (next: string[]) => { setCells(next); onChange(next.filter(Boolean).join("")); };
+  const commit = (next: string[], negative = isNegative) => {
+    setCells(next);
+    const answer = next.filter(Boolean).join("");
+    onChange(answer ? `${negative ? "-" : ""}${answer}` : "");
+  };
+
+  const toggleMinus = () => {
+    const nextNegative = !isNegative;
+    setIsNegative(nextNegative);
+    commit(cells, nextNegative);
+    refs.current[0]?.focus();
+  };
 
   // Tầng 1: chặn tại nguồn trước khi ký tự vào DOM (iOS Safari)
-  const handleBeforeInput = (idx: number, e: React.FormEvent<HTMLInputElement> & { data?: string }) => {
+  const handleBeforeInput = (e: React.FormEvent<HTMLInputElement> & { data?: string }) => {
     const raw = e.data ?? "";
+    if (!raw) return;
     // Dấu chấm → cho qua để xử lý thành phẩy ở bước tiếp theo
     if (raw === ".") return;
+    if (raw === "-") {
+      e.preventDefault();
+      toggleMinus();
+      return;
+    }
     // Mọi ký tự không hợp lệ → chặn hoàn toàn
     if (!ALLOWED_RE.test(raw)) e.preventDefault();
   };
@@ -1640,6 +1643,11 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
       else if (idx > 0) refs.current[idx - 1]?.focus();
       return;
     }
+    if (e.key === "-") {
+      e.preventDefault();
+      toggleMinus();
+      return;
+    }
     // Cho phép phím điều hướng và phím hệ thống đi qua
     if (e.key.length > 1) return;
     const mapped = e.key === "." ? "," : e.key;
@@ -1648,73 +1656,59 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
 
   // Tầng 3: safety net — đổi dấu chấm thành phẩy, lọc ký tự lạ còn sót
   const handleChange = (idx: number, raw: string) => {
-    const char = raw.replace(/\./g, ",").replace(/[^0-9,\-]/g, "").slice(-1);
+    const char = raw.replace(/\./g, ",").replace(/[^0-9,]/g, "").slice(-1);
     const next = [...cells]; next[idx] = char; commit(next);
     if (char && idx < NUM_CELLS - 1) refs.current[idx + 1]?.focus();
   };
 
-  const joined = cells.filter(Boolean).join("");
-
-  const toggleMinus = () => {
-    const next = [...cells];
-    if (next[0] === "-") {
-      next[0] = "";
-    } else {
-      // Đẩy các ô sang phải để chèn "-" vào đầu
-      for (let i = NUM_CELLS - 1; i > 0; i--) next[i] = next[i - 1];
-      next[0] = "-";
-    }
-    commit(next);
-    refs.current[next[0] === "-" ? 1 : 0]?.focus();
-  };
+  const digits = cells.filter(Boolean).join("");
+  const joined = `${isNegative ? "-" : ""}${digits}`;
 
   return (
-    <div className="mt-2">
-      <p className="text-sm font-semibold text-gray-600 mb-3">Nhập đáp án của bạn:</p>
-      <div className="flex items-end gap-2 flex-wrap">
-        {/* Nút dấu trừ nằm phía trên ô đầu tiên, thẳng hàng dọc */}
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-[10px] text-gray-400 leading-tight text-center">Cần dấu<br/>&quot;-&quot; bấm đây</span>
-          <button
-            type="button"
-            onClick={toggleMinus}
-            className={`w-12 h-10 text-xl font-bold border-2 rounded-md transition-all select-none
-              ${cells[0] === "-"
-                ? "border-danger-500 bg-danger-50 text-danger-700 ring-2 ring-danger-200"
-                : "border-gray-300 hover:border-gray-400 bg-white text-gray-500 hover:text-gray-800"}`}
-          >
-            −
-          </button>
+    <div className="mt-3 rounded-3xl border border-cyan-100 bg-cyan-50/45 p-4 sm:p-5">
+      <p className="mb-3 text-sm font-semibold text-slate-700">Nhập đáp án của bạn</p>
+
+      <button
+        type="button"
+        onClick={toggleMinus}
+        aria-pressed={isNegative}
+        className={`mb-4 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${isNegative ? "border-rose-300 bg-rose-50 text-rose-700 ring-2 ring-rose-100" : "border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:text-rose-700"}`}
+      >
+        <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-lg leading-none ${isNegative ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-600"}`}>−</span>
+        {isNegative ? "Đang dùng dấu âm" : "Thêm dấu âm"}
+      </button>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-2">
+          {cells.map((cell, i) => (
+            <input
+              key={i}
+              ref={(el) => { refs.current[i] = el; }}
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9,]*"
+              aria-label={`Ô đáp số ${i + 1}`}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              maxLength={1}
+              value={cell}
+              onBeforeInput={(e) => handleBeforeInput(e as React.FormEvent<HTMLInputElement> & { data?: string })}
+              onChange={(e) => handleChange(i, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(i, e)}
+              className={`h-14 w-12 rounded-xl border-2 text-center text-xl font-extrabold outline-none transition-all sm:w-14 ${cell ? "border-blue-500 bg-white text-blue-950 ring-2 ring-blue-100" : "border-slate-300 bg-white text-slate-800 hover:border-blue-300"} focus:border-blue-500 focus:ring-4 focus:ring-blue-100`}
+            />
+          ))}
         </div>
-        {cells.map((cell, i) => (
-          <input
-            key={i}
-            ref={(el) => { refs.current[i] = el; }}
-            type="text"
-            inputMode="decimal"
-            pattern="[0-9,\-]*"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            maxLength={1}
-            value={cell}
-            onBeforeInput={(e) => handleBeforeInput(i, e as React.FormEvent<HTMLInputElement> & { data?: string })}
-            onChange={(e) => handleChange(i, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(i, e)}
-            className={`w-12 h-12 text-center text-xl font-bold border-2 rounded-md outline-none transition-all
-              ${cell ? "border-brand-500 bg-brand-50 text-brand-900 ring-2 ring-brand-200"
-                     : "border-gray-300 hover:border-gray-400 bg-white text-gray-800"}
-              focus:border-brand-500 focus:ring-2 focus:ring-brand-200`}
-          />
-        ))}
-        {joined && (
-          <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success-50 border border-success-200">
-            <span className="text-xs text-success-600 font-medium">Đáp án:</span>
-            <span className="font-extrabold text-success-800 text-lg leading-none">{joined}</span>
+        {digits && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <span className="text-xs font-medium text-emerald-700">Đáp án</span>
+            <span className="text-lg font-extrabold leading-none text-emerald-900">{joined}</span>
           </div>
         )}
       </div>
+      <p className="mt-3 text-[11px] text-slate-500">Mỗi ô nhập một chữ số hoặc dấu phẩy thập phân.</p>
     </div>
   );
 }
