@@ -14,9 +14,7 @@ import {
   where,
   limit,
   arrayUnion,
-  arrayRemove,
   serverTimestamp,
-  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ClassDoc, ClassGroupDoc } from "@/utils/classroomTypes";
@@ -149,7 +147,7 @@ export async function getClassById(classId: string): Promise<(ClassDoc & { id: s
 
 // ── deleteClass ───────────────────────────────────────────────────────────────
 
-export type DeleteClassError = "NOT_FOUND" | "FORBIDDEN";
+export type DeleteClassError = "NOT_FOUND" | "FORBIDDEN" | "UNAUTHENTICATED" | "DELETE_FAILED";
 
 export interface DeleteClassResult {
   success: boolean;
@@ -157,46 +155,22 @@ export interface DeleteClassResult {
 }
 
 /**
- * Permanently deletes a class owned by `teacherId`.
- *
- * Only the teacher who created the class may delete it — ownership is verified
- * against `classes.teacherId` before anything is removed. Also cleans up the
- * mirrored `class_members` docs and detaches the class from its group.
+ * Deletes a class through the authenticated server API. The server verifies
+ * ownership and cleans up mirrored membership documents with Admin SDK.
  */
 export async function deleteClass(
   classId: string,
-  teacherId: string
+  idToken: string
 ): Promise<DeleteClassResult> {
-  const classRef = doc(db, "classes", classId);
-  const snap = await getDoc(classRef);
-  if (!snap.exists()) return { success: false, error: "NOT_FOUND" };
+  const response = await fetch(`/api/classes/${encodeURIComponent(classId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
 
-  const data = snap.data() as ClassDoc;
-  if (data.teacherId !== teacherId) return { success: false, error: "FORBIDDEN" };
+  if (response.ok) return { success: true };
 
-  // Remove mirrored membership docs for this class.
-  const membersSnap = await getDocs(
-    query(collection(db, "class_members"), where("classId", "==", classId))
-  );
-
-  const batch = writeBatch(db);
-  membersSnap.docs.forEach((m) => batch.delete(m.ref));
-  batch.delete(classRef);
-  await batch.commit();
-
-  // Detach from its group, if any (best-effort — not fatal on failure).
-  if (data.groupId) {
-    try {
-      await updateDoc(doc(db, "class_groups", data.groupId), {
-        classIds: arrayRemove(classId),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("deleteClass: failed to detach from group", err);
-    }
-  }
-
-  return { success: true };
+  const payload = (await response.json().catch(() => null)) as { error?: DeleteClassError } | null;
+  return { success: false, error: payload?.error ?? "DELETE_FAILED" };
 }
 
 // ── joinClassById ─────────────────────────────────────────────────────────────

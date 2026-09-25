@@ -88,6 +88,14 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Trạng thái: giao diện đã commit tại `3ac4b5a`; sửa Firebase, bảo mật API/lớp học và bộ tài liệu nằm trong commit tiếp theo của cùng phiên. Localhost chạy tại `http://localhost:3000`.
 - Giới hạn: chưa thử end-to-end với tài khoản học sinh/giáo viên thật; chưa chạy Firebase Emulator test cho rules; chưa triển khai Firebase rules hoặc website production.
 
+### 25/09/2026 — Sửa chức năng xóa lớp
+
+- Tái kiểm tra luồng `TeacherClassPanel → classroomService → Firestore`: phiên bản cũ đọc `class_members` và xóa trực tiếp từ browser, nên thất bại khi rules đang triển khai chưa cấp quyền collection này.
+- Chuyển thao tác sang `DELETE /api/classes/[classId]`. API xác minh Firebase ID token, chỉ chấp nhận chủ lớp hoặc admin, xóa tài liệu thành viên theo batch, tách lớp khỏi nhóm rồi xóa lớp.
+- Client gửi ID token hiện hành và hiển thị riêng lỗi hết phiên, không có quyền, không tìm thấy hoặc lỗi máy chủ.
+- Kiểm tra cục bộ: ESLint các file thay đổi đạt; TypeScript đạt; build production đạt và nhận route API mới; request xóa không có token trả đúng HTTP 401 `UNAUTHENTICATED`.
+- Giới hạn: không xóa thử lớp thật vì đây là thao tác mất dữ liệu; cần kiểm tra cuối với một lớp thử nghiệm khi đã đăng nhập giáo viên.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

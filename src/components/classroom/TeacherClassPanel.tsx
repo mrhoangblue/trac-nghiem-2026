@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import CreateClassModal from "./CreateClassModal";
 import { deleteClass } from "@/lib/classroomService";
+import { useAuth } from "@/lib/AuthContext";
 import type { ClassDoc } from "@/utils/classroomTypes";
 
 interface ClassRow {
@@ -33,6 +34,7 @@ function ClassCardSkeleton() {
 }
 
 export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
+  const { user } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -84,13 +86,21 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
     setDeleting(true);
     setDeleteError(null);
     try {
-      const res = await deleteClass(pendingDelete.id, teacherId);
+      if (!user) {
+        setDeleteError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        return;
+      }
+
+      const idToken = await user.getIdToken();
+      const res = await deleteClass(pendingDelete.id, idToken);
       if (!res.success) {
-        setDeleteError(
-          res.error === "FORBIDDEN"
-            ? "Bạn không có quyền xóa lớp này."
-            : "Không tìm thấy lớp — có thể đã bị xóa."
-        );
+        const errorMessages = {
+          FORBIDDEN: "Bạn không có quyền xóa lớp này.",
+          NOT_FOUND: "Không tìm thấy lớp — có thể đã bị xóa.",
+          UNAUTHENTICATED: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+          DELETE_FAILED: "Máy chủ chưa thể xóa lớp. Vui lòng thử lại.",
+        } as const;
+        setDeleteError(errorMessages[res.error ?? "DELETE_FAILED"]);
         return;
       }
       setClasses((prev) => prev.filter((c) => c.id !== pendingDelete.id));
