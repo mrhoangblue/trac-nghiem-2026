@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAuth, type AuthContextData } from "@/lib/verifyAuth";
 import { parseExamDateTime } from "@/lib/examAccess";
 import { normalizeResourceLink } from "@/utils/classResourceLinks";
+import { flattenCourseResources, progressDocumentId } from "@/utils/courseProgress";
 import type {
   ClassCourseLesson,
   ClassCourseResource,
@@ -23,6 +24,7 @@ interface RequestBody {
   direction?: unknown;
   title?: unknown;
   description?: unknown;
+  coverImageUrl?: unknown;
   published?: unknown;
   type?: unknown;
   url?: unknown;
@@ -39,6 +41,17 @@ function textValue(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;
   const valueTrimmed = value.trim();
   return valueTrimmed.length <= maxLength ? valueTrimmed : null;
+}
+
+function optionalHttpUrl(value: unknown): string | null {
+  if (value === undefined || value === "") return "";
+  if (typeof value !== "string" || value.length > 2000) return null;
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function toIso(value: unknown): string | null {
@@ -93,6 +106,7 @@ function serializeCourse(document: FirebaseFirestore.QueryDocumentSnapshot) {
     id: document.id,
     title: String(data.title ?? "Khóa học chưa đặt tên"),
     description: String(data.description ?? ""),
+    coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : "",
     published: Boolean(data.published),
     lessons: normalizeLessons(data),
     createdAt: toIso(data.createdAt),
@@ -190,6 +204,44 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       };
     });
 
+    const progress: Record<string, string[]> = {};
+    if (!access.isTeacher) {
+      const progressSnapshots = await Promise.all(
+        courses.map((course) =>
+          adminDb
+            .collection("class_course_progress")
+            .doc(progressDocumentId(classId, course.id, access.authUser.uid))
+            .get(),
+        ),
+      );
+      progressSnapshots.forEach((snapshot, index) => {
+        const completed = snapshot.data()?.completedResourceIds;
+        progress[courses[index].id] = Array.isArray(completed) ? completed : [];
+      });
+    }
+
+    const responseCourses = access.isTeacher
+      ? courses
+      : courses.map((course) => {
+          const flattened = flattenCourseResources(course.lessons);
+          const completed = new Set(progress[course.id] ?? []);
+          return {
+            ...course,
+            lessons: course.lessons.map((lesson) => ({
+              ...lesson,
+              resources: lesson.resources.map((resource) => {
+                const index = flattened.findIndex((item) => item.id === resource.id);
+                const unlocked = flattened
+                  .slice(0, index)
+                  .every((item) => completed.has(item.id));
+                return unlocked
+                  ? resource
+                  : { ...resource, url: "", embedUrl: "" };
+              }),
+            })),
+          };
+        });
+
     return NextResponse.json({
       class: {
         id: classId,
@@ -198,8 +250,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         teacherName: String(access.classData.teacherName ?? ""),
       },
       viewerRole: access.isTeacher ? "teacher" : "student",
-      courses,
+      courses: responseCourses,
       exams,
+      progress,
     });
   } catch (error) {
     console.error("GET /api/classes/[classId]/content failed:", error);
@@ -219,7 +272,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = (await request.json().catch(() => null)) as RequestBody | null;
     const title = textValue(body?.title, 120);
     const description = textValue(body?.description ?? "", 1000);
-    if (!title || description === null || typeof body?.published !== "boolean") {
+    const coverImageUrl = optionalHttpUrl(body?.coverImageUrl);
+    if (!title || description === null || coverImageUrl === null || typeof body?.published !== "boolean") {
       return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
     }
 
@@ -229,6 +283,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       teacherId: access.authUser.uid,
       title,
       description,
+      coverImageUrl,
       published: body.published,
       lessons: [],
       createdAt: FieldValue.serverTimestamp(),
@@ -265,12 +320,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body?.action === "update_course") {
       const title = textValue(body.title, 120);
       const description = textValue(body.description ?? "", 1000);
-      if (!title || description === null || typeof body.published !== "boolean") {
+      const coverImageUrl = optionalHttpUrl(body.coverImageUrl);
+      if (!title || description === null || coverImageUrl === null || typeof body.published !== "boolean") {
         return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
       }
       await course.courseRef.update({
         title,
         description,
+        coverImageUrl,
         published: body.published,
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -435,6 +492,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!courseId) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
     const course = await getCourse(classId, courseId);
     if (!course) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    const progressSnapshot = await adminDb
+      .collection("class_course_progress")
+      .where("courseId", "==", courseId)
+      .get();
+    for (let offset = 0; offset < progressSnapshot.docs.length; offset += 450) {
+      const batch = adminDb.batch();
+      progressSnapshot.docs.slice(offset, offset + 450).forEach((document) => batch.delete(document.ref));
+      await batch.commit();
+    }
     await course.courseRef.delete();
     return NextResponse.json({ success: true });
   } catch (error) {

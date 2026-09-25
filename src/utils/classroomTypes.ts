@@ -69,6 +69,7 @@ export interface ClassCourseDoc {
   teacherId: string;
   title: string;
   description?: string;
+  coverImageUrl?: string;
   published: boolean;
   lessons: ClassCourseLesson[];
   /** Dữ liệu phiên bản cũ, được API tự chuyển thành một bài học. */

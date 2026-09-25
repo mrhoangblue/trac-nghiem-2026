@@ -133,6 +133,17 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Biểu mẫu bài học và tài nguyên dùng hộp thoại nổi để luôn nhìn thấy khi khóa học có nội dung dài.
 - Kiểm tra cục bộ: ESLint phần thay đổi đạt; TypeScript đạt; production build đạt và giữ đủ các route lớp học.
 
+### 25/09/2026 — Course Grid, ảnh bìa và lộ trình mở khóa tuần tự
+
+- Tham khảo tài liệu chính thức LearnDash về Course Grid, thanh tiến độ và Linear Progression: học viên đánh dấu hoàn thành từng bước trước khi bước tiếp theo mở.
+- Thiết kế lại khu vực khóa học thành lưới thẻ có ảnh bìa, mô tả, số bài học, số tài nguyên, trạng thái xuất bản và tiến độ học tập.
+- Giáo viên có thể dán URL ảnh minh họa khi tạo hoặc sửa khóa học; form có xem trước ảnh và giao diện có nền mặc định khi không cung cấp ảnh.
+- Bổ sung trình xem nội dung tập trung, chương trình học đánh số và ba trạng thái cho tài nguyên: đang mở, đã hoàn thành và bị khóa.
+- Tiến độ được lưu riêng theo học sinh/lớp/khóa học. API chỉ chấp nhận hoàn thành tài nguyên khi mọi tài nguyên trước đó đã hoàn tất; URL thật của tài nguyên bị khóa không được gửi xuống trình duyệt học sinh.
+- Khi xóa khóa học hoặc lớp, dữ liệu tiến độ liên quan được dọn cùng. Giáo viên luôn xem được toàn bộ nội dung để biên tập.
+- Do tài nguyên nằm trên tên miền ngoài, hệ thống dùng nút “Đã học xong” thay cho việc tự suy đoán học sinh đã đọc hết PDF/video; đây cũng là mô hình hoàn thành thủ công của Linear Progression.
+- Kiểm tra cục bộ: ESLint phần thay đổi đạt; TypeScript đạt; production build nhận route tiến độ mới; thứ tự làm phẳng tài nguyên và khóa document tiến độ đạt; request cập nhật tiến độ không có token trả đúng HTTP 401.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.
