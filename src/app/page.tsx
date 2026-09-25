@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, BookOpen, Check, ChevronRight, GraduationCap, Search, Shapes, FileText, RotateCcw } from "lucide-react";
 import { GRADE_LEVELS } from "@/components/Sidebar";
 import { db } from "@/lib/firebase";
@@ -77,31 +78,37 @@ function ExamCard({ exam }: { exam: Exam }) {
   );
 }
 
-function MathIllustration() {
+function TeacherPortrait() {
   return (
-    <div className="relative mx-auto w-full max-w-md px-4 py-8" aria-hidden="true">
-      <div className="absolute inset-8 rounded-full border border-brand-200/60" />
-      <div className="math-paper relative rotate-[-3deg] rounded-[2rem] border border-gray-200 p-7 shadow-lift">
-        <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-          <span className="text-[10px] font-bold uppercase tracking-[.2em] text-brand-800">Góc học Toán</span>
-          <span className="text-sm text-brand-600">✦</span>
-        </div>
-        <svg viewBox="0 0 300 190" className="my-3 h-44 w-full" fill="none">
-          <path d="M35 155H275M75 175V15" stroke="#C4B9A2" strokeWidth="1.5" />
-          <path d="m268 150 8 5-8 5M70 23l5-8 5 8" stroke="#C4B9A2" strokeWidth="1.5" />
-          <path d="M95 44Q174 255 253 44" stroke="#D97706" strokeWidth="3" strokeLinecap="round" />
-          <path d="M174 155V95M75 95H174" stroke="#C4B9A2" strokeDasharray="4 5" />
-          <circle cx="174" cy="149" r="5" fill="#78350F" />
-          <text x="241" y="184" fill="#78350F" fontSize="13">x</text>
-          <text x="51" y="26" fill="#78350F" fontSize="13">y</text>
-          <text x="108" y="32" fill="#78350F" fontSize="17" fontFamily="Georgia, serif">y = ax² + bx + c</text>
-        </svg>
-        <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs text-brand-900">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-earth text-white"><Check size={15} /></span>
-          Hiểu từng bước. Vững từng dạng bài.
+    <div className="relative mx-auto w-full max-w-[25rem] px-7 py-8 sm:px-8" aria-label="Thầy Hoàng Blue">
+      <div className="absolute inset-x-10 bottom-10 top-12 rotate-[-5deg] rounded-[2.75rem] border-[10px] border-white bg-brand-100 shadow-soft" />
+      <div className="absolute right-1 top-4 h-24 w-24 rounded-full border border-brand-200 bg-brand-50/80" />
+      <div className="absolute right-5 top-8 h-14 w-14 rounded-full border border-white bg-sunset/15" />
+
+      <div className="relative ml-auto aspect-[4/5] w-[92%] rotate-[1.5deg] overflow-hidden rounded-[2.5rem] border-[10px] border-white bg-white shadow-lift">
+        <Image
+          src="/thay-hoang-blue-portrait.png"
+          alt="Thầy Hoàng Blue"
+          fill
+          sizes="(max-width: 640px) 82vw, (max-width: 1024px) 390px, 380px"
+          className="object-cover object-[center_18%]"
+          priority
+        />
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-brand-950/75 via-brand-900/20 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-brand-100">Giáo viên đồng hành</p>
+          <p className="mt-1 text-lg font-extrabold">Thầy Hoàng Blue</p>
         </div>
       </div>
-      <div className="absolute -right-1 top-5 rotate-[6deg] rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-soft"><span className="font-serif text-2xl text-earth">∑</span><span className="ml-3 text-xs font-bold text-gray-600">Mỗi ngày một chút</span></div>
+
+      <div className="absolute bottom-3 left-0 rotate-[-4deg] rounded-2xl border-4 border-white bg-earth px-4 py-3 text-white shadow-soft">
+        <span className="font-serif text-xl">∑</span>
+        <span className="ml-2 text-[11px] font-bold">Hiểu bản chất</span>
+      </div>
+      <div className="absolute right-0 top-24 rotate-[5deg] rounded-2xl border-4 border-white bg-white px-4 py-2.5 shadow-soft">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700">Toán THPT</span>
+        <span className="ml-2 text-sunset">✦</span>
+      </div>
     </div>
   );
 }
@@ -207,7 +214,7 @@ function HomeContent() {
             </div>
             <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-xs text-gray-600">{["Trắc nghiệm", "Đúng / Sai", "Trả lời ngắn"].map(label => <span key={label} className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-700" />{label}</span>)}</div>
           </div>
-          <MathIllustration />
+          <TeacherPortrait />
         </div>
       </section>
 

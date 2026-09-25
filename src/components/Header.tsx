@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Menu, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -100,7 +101,16 @@ export default function Header() {
             )}
 
             <Link href="/" className="flex items-center gap-3 shrink-0 min-w-0">
-              <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-2xl bg-earth font-serif text-2xl text-white shadow-soft">∑</span>
+              <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl border-2 border-white bg-brand-50 shadow-soft ring-1 ring-brand-200">
+                <Image
+                  src="/thay-hoang-blue-avatar.png"
+                  alt="Chân dung Thầy Hoàng Blue"
+                  fill
+                  sizes="40px"
+                  className="scale-[1.45] translate-y-1.5 object-contain"
+                  priority
+                />
+              </span>
               <div className="leading-none min-w-0">
                 <p className="text-[10px] sm:text-xs font-extrabold text-brand-600 uppercase tracking-widest whitespace-nowrap">
                   TOÁN THPT

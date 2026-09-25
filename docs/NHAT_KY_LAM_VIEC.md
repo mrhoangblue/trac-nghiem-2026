@@ -151,6 +151,13 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm tra trực tiếp bằng cách tải lại `/teacher/classes` khi tiện ích vẫn bật: lớp phủ lỗi biến mất; phần nhật ký dev phát sinh sau lần tải lại chỉ còn thông báo React DevTools, không còn lỗi hydration hoặc cảnh báo script nội tuyến.
 - Kiểm tra mã: ESLint file layout đạt; TypeScript và production build đạt.
 
+### 25/09/2026 — Khôi phục avatar và thêm chân dung ở trang chủ
+
+- Khôi phục chân dung thu nhỏ ở góc trái Header theo bố cục cũ, dùng bản avatar nền trong suốt và tối ưu hiển thị qua `next/image`.
+- Thay minh họa hình học bên phải hero bằng ảnh chân dung thật của Thầy Hoàng Blue. Ảnh dùng khung trắng kép, lớp nền xoay nhẹ, nhãn tên và chi tiết Toán THPT để hòa với bảng màu nâu đất hiện tại.
+- Bố cục ảnh tự chuyển xuống dưới nội dung trên màn hình hẹp; ảnh có kích thước nội tại và vùng cắt ổn định để tránh xê dịch giao diện khi tải.
+- Kiểm tra trực tiếp trên localhost xác nhận avatar và ảnh hero tải thành công, khung trắng hiển thị đúng và nội dung mobile không tràn ngang. ESLint không có lỗi; TypeScript và production build đạt.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.
