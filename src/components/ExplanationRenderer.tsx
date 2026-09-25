@@ -78,8 +78,8 @@ export default function ExplanationRenderer({ explanation }: ExplanationRenderer
         if (!text) return null;
 
         return (
-          <div key={idx} className="flex gap-2 items-start pl-2 border-l-2 border-blue-200">
-            <span className="font-extrabold text-blue-600 shrink-0 pt-0.5 min-w-[24px]">
+          <div key={idx} className="flex gap-2 items-start pl-2 border-l-2 border-brand-200">
+            <span className="font-extrabold text-brand-600 shrink-0 pt-0.5 min-w-[24px]">
               {label})
             </span>
             <span className="leading-relaxed text-gray-700">

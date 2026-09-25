@@ -52,8 +52,8 @@ function Spinner({ label }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       {label && <p className="text-gray-500 text-sm animate-pulse">{label}</p>}
     </div>
@@ -244,7 +244,7 @@ export default function EditExamPage() {
           createdAt: serverTimestamp(),
         });
 
-        alert("✅ Bản sao đã được tạo và thêm vào kho 'Đề được chia sẻ' của bạn!");
+        alert("✓ Bản sao đã được tạo và thêm vào kho 'Đề được chia sẻ' của bạn!");
         router.push("/admin/exam-list?tab=shared");
       } else {
         // ── UPDATE: ghi đè đề của chính mình ────────────────────────────
@@ -260,7 +260,7 @@ export default function EditExamPage() {
           updatedAt: serverTimestamp(),
         });
 
-        alert("✅ Cập nhật bài thi thành công!");
+        alert("✓ Cập nhật bài thi thành công!");
         router.push("/admin/exam-list?tab=mine");
       }
     } catch (err) {
@@ -283,7 +283,7 @@ export default function EditExamPage() {
   if (loadError) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <p className="text-red-500 font-semibold text-lg mb-6">{loadError}</p>
+        <p className="text-danger-500 font-semibold text-lg mb-6">{loadError}</p>
         <Link href="/admin/exam-list" className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-colors">
           ← Quay lại danh sách
         </Link>
@@ -299,7 +299,7 @@ export default function EditExamPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <Link href="/admin/exam-list" className="text-sm text-gray-400 hover:text-blue-600 transition-colors mb-2 inline-block">
+            <Link href="/admin/exam-list" className="text-sm text-gray-400 hover:text-brand-600 transition-colors mb-2 inline-block">
               ← Quay lại danh sách
             </Link>
             <h1 className="text-3xl font-extrabold text-gray-900">Chỉnh sửa bài thi</h1>
@@ -320,16 +320,16 @@ export default function EditExamPage() {
               <label className="block text-sm font-bold text-gray-700 mb-2">Tên bài thi</label>
               <input
                 type="text"
-                className="w-full p-4 border-2 border-gray-200 rounded-xl font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                className="w-full p-4 border-2 border-gray-200 rounded-xl font-medium focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
                 value={examTitle}
                 onChange={(e) => setExamTitle(e.target.value)}
               />
             </div>
 
             {/* ── Phân loại đề ────────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 rounded-2xl p-5 space-y-4">
+            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-5 space-y-4">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-sky-500">🗂️</span> Phân loại đề thi
+                <span className="text-brand-500">🗂️</span> Phân loại đề thi
               </h3>
               <div>
                 <label className="text-sm font-semibold text-gray-600 mb-2 block">Cấp học</label>
@@ -341,7 +341,7 @@ export default function EditExamPage() {
                       onClick={() => setGradeLevel(g)}
                       className={`py-2.5 px-3 rounded-xl text-sm font-semibold border-2 transition-all ${
                         gradeLevel === g
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          ? "border-brand-500 bg-brand-50 text-brand-700"
                           : "border-gray-200 text-gray-600 hover:border-gray-300"
                       }`}
                     >
@@ -362,7 +362,7 @@ export default function EditExamPage() {
                         onClick={() => setExamType(t)}
                         className={`w-full text-left py-2 px-3 rounded-xl text-sm font-semibold border-2 transition-all ${
                           examType === t
-                            ? "border-sky-400 bg-sky-50 text-sky-700"
+                            ? "border-brand-400 bg-brand-50 text-brand-700"
                             : "border-gray-200 text-gray-600 hover:border-gray-300"
                         }`}
                       >
@@ -375,16 +375,16 @@ export default function EditExamPage() {
             </div>
 
             {/* ── Cấu hình làm bài ────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-rose-50 to-orange-50 border border-rose-100 rounded-2xl p-5 space-y-4">
+            <div className="bg-gradient-to-br from-danger-50 to-orange-50 border border-danger-100 rounded-2xl p-5 space-y-4">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-rose-500">⚙️</span> Cấu hình làm bài
+                <span className="text-danger-500">⚙️</span> Cấu hình làm bài
               </h3>
-              <div className="bg-white rounded-xl border border-rose-100 p-4">
+              <div className="bg-white rounded-xl border border-danger-100 p-4">
                 <label className="text-sm font-bold text-gray-700 block mb-2">Số lần làm lại</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="number" min={0}
-                    className="w-24 p-2 border-2 border-rose-200 rounded-lg text-center font-bold text-rose-700 focus:border-rose-500 outline-none"
+                    className="w-24 p-2 border-2 border-danger-200 rounded-lg text-center font-bold text-danger-700 focus:border-danger-500 outline-none"
                     value={maxRetries}
                     onChange={(e) => setMaxRetries(parseInt(e.target.value) || 0)}
                   />
@@ -395,11 +395,11 @@ export default function EditExamPage() {
 
               {/* isShared — chỉ hiện nếu là tác giả */}
               {isOwnExam && (
-                <div className="bg-white rounded-xl border border-rose-100 p-4">
+                <div className="bg-white rounded-xl border border-danger-100 p-4">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <div
                       onClick={() => setIsShared(!isShared)}
-                      className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${isShared ? "bg-blue-500" : "bg-gray-300"}`}
+                      className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${isShared ? "bg-brand-500" : "bg-gray-300"}`}
                     >
                       <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isShared ? "translate-x-5" : ""}`} />
                     </div>
@@ -415,9 +415,9 @@ export default function EditExamPage() {
             </div>
 
             {/* ── Đối tượng làm bài ────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-100 rounded-2xl p-5 space-y-4">
+            <div className="bg-gradient-to-br from-success-50 to-brand-50 border border-success-100 rounded-2xl p-5 space-y-4">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-teal-500">🎯</span> Đối tượng làm bài
+                <span className="text-success-500">🎯</span> Đối tượng làm bài
               </h3>
               <div className="flex gap-3">
                 {([
@@ -430,7 +430,7 @@ export default function EditExamPage() {
                     onClick={() => setTargetType(opt.value)}
                     className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${
                       targetType === opt.value
-                        ? "border-teal-500 bg-teal-50 text-teal-800"
+                        ? "border-success-500 bg-success-50 text-success-800"
                         : "border-gray-200 text-gray-600 hover:border-gray-300"
                     }`}
                   >
@@ -440,15 +440,15 @@ export default function EditExamPage() {
                 ))}
               </div>
               {targetType === "classes" && (
-                <div className="bg-white rounded-xl border border-teal-100 p-4">
+                <div className="bg-white rounded-xl border border-success-100 p-4">
                   {classesLoading ? (
                     <div className="flex justify-center py-3">
-                      <div className="w-5 h-5 border-2 border-teal-200 border-t-teal-500 rounded-full animate-spin" />
+                      <div className="w-5 h-5 border-2 border-success-200 border-t-success-500 rounded-full animate-spin" />
                     </div>
                   ) : myClasses.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-2">
                       Bạn chưa có lớp nào. Tạo lớp tại{" "}
-                      <a href="/teacher/classes" className="text-teal-600 underline">Quản lý lớp học</a>.
+                      <a href="/teacher/classes" className="text-success-600 underline">Quản lý lớp học</a>.
                     </p>
                   ) : (
                     <>
@@ -465,9 +465,9 @@ export default function EditExamPage() {
                                 if (e.target.checked) setTargetClassIds((prev) => [...prev, cls.id]);
                                 else setTargetClassIds((prev) => prev.filter((x) => x !== cls.id));
                               }}
-                              className="w-4 h-4 accent-teal-600"
+                              className="w-4 h-4 accent-success-600"
                             />
-                            <span className="text-sm font-medium text-gray-700 group-hover:text-teal-700 transition-colors">
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-success-700 transition-colors">
                               {cls.name}
                             </span>
                           </label>
@@ -494,7 +494,7 @@ export default function EditExamPage() {
                 <div key={label}>
                   <label className="block text-sm font-bold text-gray-700 mb-2">{label}</label>
                   <textarea
-                    className="w-full h-40 p-4 border-2 border-gray-200 rounded-xl font-mono text-sm focus:border-blue-500 outline-none transition-all resize-y"
+                    className="w-full h-40 p-4 border-2 border-gray-200 rounded-xl font-mono text-sm focus:border-brand-500 outline-none transition-all resize-y"
                     placeholder="\begin{ex}...\end{ex}"
                     value={value}
                     onChange={(e) => set(e.target.value)}
@@ -505,16 +505,16 @@ export default function EditExamPage() {
             </div>
 
             {/* Điểm số */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-6 space-y-5">
+            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-6 space-y-5">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-blue-500">🎯</span> Thiết lập điểm số
+                <span className="text-brand-500">🎯</span> Thiết lập điểm số
               </h3>
-              <div className="bg-white rounded-xl border border-blue-100 p-4 space-y-2">
+              <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-2">
                 <p className="text-sm font-bold text-gray-700">Phần 1 — Trắc nghiệm 1 đáp án</p>
                 <div className="flex items-center gap-3">
                   <label className="text-sm text-gray-600">Tổng điểm:</label>
                   <input type="number" min={0} step={0.5}
-                    className="w-24 p-2 border-2 border-blue-200 rounded-lg text-center font-bold text-blue-700 focus:border-blue-500 outline-none"
+                    className="w-24 p-2 border-2 border-brand-200 rounded-lg text-center font-bold text-brand-700 focus:border-brand-500 outline-none"
                     value={scoringConfig.part1TotalScore}
                     onChange={(e) => setScoringConfig((s) => ({ ...s, part1TotalScore: parseFloat(e.target.value) || 0 }))}
                   />
@@ -532,12 +532,12 @@ export default function EditExamPage() {
                   ))}
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-blue-100 p-4 space-y-2">
+              <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-2">
                 <p className="text-sm font-bold text-gray-700">Phần 3 — Trả lời ngắn</p>
                 <div className="flex items-center gap-3">
                   <label className="text-sm text-gray-600">Tổng điểm:</label>
                   <input type="number" min={0} step={0.5}
-                    className="w-24 p-2 border-2 border-blue-200 rounded-lg text-center font-bold text-blue-700 focus:border-blue-500 outline-none"
+                    className="w-24 p-2 border-2 border-brand-200 rounded-lg text-center font-bold text-brand-700 focus:border-brand-500 outline-none"
                     value={scoringConfig.part3TotalScore}
                     onChange={(e) => setScoringConfig((s) => ({ ...s, part3TotalScore: parseFloat(e.target.value) || 0 }))}
                   />
@@ -547,34 +547,34 @@ export default function EditExamPage() {
             </div>
 
             {/* Thời gian */}
-            <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100 rounded-2xl p-6 space-y-4">
+            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-6 space-y-4">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-violet-500">⏱</span> Cấu hình thời gian
+                <span className="text-brand-500">⏱</span> Cấu hình thời gian
               </h3>
-              <div className="bg-white rounded-xl border border-violet-100 p-4">
+              <div className="bg-white rounded-xl border border-brand-100 p-4">
                 <p className="text-sm font-bold text-gray-700 mb-2">Thời gian làm bài</p>
                 <div className="flex items-center gap-3">
                   <input type="number" min={1} max={300}
-                    className="w-24 p-2 border-2 border-violet-200 rounded-lg text-center font-bold text-violet-700 focus:border-violet-500 outline-none"
+                    className="w-24 p-2 border-2 border-brand-200 rounded-lg text-center font-bold text-brand-700 focus:border-brand-500 outline-none"
                     value={duration}
                     onChange={(e) => setDuration(parseInt(e.target.value) || 90)}
                   />
                   <span className="text-sm text-gray-500">phút</span>
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-violet-100 p-4 space-y-3">
+              <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-3">
                 <p className="text-sm font-bold text-gray-700">Khung thời gian</p>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">Mở đề từ <span className="font-normal text-gray-400">(bỏ trống = mở ngay)</span></label>
                   <input type="datetime-local"
-                    className="w-full p-2.5 border-2 border-violet-200 rounded-lg text-sm focus:border-violet-500 outline-none transition-all"
+                    className="w-full p-2.5 border-2 border-brand-200 rounded-lg text-sm focus:border-brand-500 outline-none transition-all"
                     value={startTime} onChange={(e) => setStartTime(e.target.value)}
                   />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">Đóng đề lúc <span className="font-normal text-gray-400">(bỏ trống = không giới hạn)</span></label>
                   <input type="datetime-local"
-                    className="w-full p-2.5 border-2 border-violet-200 rounded-lg text-sm focus:border-violet-500 outline-none transition-all"
+                    className="w-full p-2.5 border-2 border-brand-200 rounded-lg text-sm focus:border-brand-500 outline-none transition-all"
                     value={endTime} onChange={(e) => setEndTime(e.target.value)}
                   />
                 </div>
@@ -585,14 +585,14 @@ export default function EditExamPage() {
             <div className="flex gap-3">
               <button
                 onClick={handlePreview}
-                className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5"
+                className="flex-1 py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5"
               >
                 🔄 Biên dịch lại
               </button>
               <button
                 onClick={handleUpdate}
                 disabled={saving || !previewData}
-                className="flex-1 py-4 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-success-500 hover:bg-success-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2"
               >
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {isOwnExam ? "💾 Cập nhật bài thi" : "📋 Tạo bản sao"}
@@ -620,7 +620,7 @@ export default function EditExamPage() {
                 {previewData.questions.map((q, index) => (
                   <div key={q.id} className="mb-10 border-b border-gray-100 pb-8 last:border-0">
                     <div className="flex gap-3 mb-4">
-                      <span className="font-bold text-blue-600 shrink-0">Câu {index + 1}:</span>
+                      <span className="font-bold text-brand-600 shrink-0">Câu {index + 1}:</span>
                       {!q.tikzCode && <div className="text-gray-900 leading-relaxed font-medium">{processLatexText(q.questionText)}</div>}
                     </div>
                     {q.tikzCode ? (
@@ -659,7 +659,7 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-8">
         {q.options.map((opt, i) => (
-          <div key={i} className={`p-3 rounded-xl border text-sm ${q.correctAnswer === i ? "border-green-500 bg-green-50 text-green-900" : "border-gray-200 text-gray-700"}`}>
+          <div key={i} className={`p-3 rounded-xl border text-sm ${q.correctAnswer === i ? "border-success-500 bg-success-50 text-success-900" : "border-gray-200 text-gray-700"}`}>
             <span className="font-bold mr-1">{String.fromCharCode(65 + i)}.</span>
             <Latex>{opt}</Latex>
           </div>
@@ -673,7 +673,7 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
         {q.options.map((opt, i) => (
           <div key={i} className="p-3 rounded-xl border border-gray-200 text-sm text-gray-700 flex justify-between items-center gap-4">
             <div className="flex-1"><span className="font-bold mr-1">{String.fromCharCode(97 + i)})</span><Latex>{opt}</Latex></div>
-            <span className={`font-bold px-2 py-0.5 rounded text-xs shrink-0 ${(q.correctAnswer as boolean[])[i] ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+            <span className={`font-bold px-2 py-0.5 rounded text-xs shrink-0 ${(q.correctAnswer as boolean[])[i] ? "bg-success-100 text-success-700" : "bg-danger-100 text-danger-700"}`}>
               {(q.correctAnswer as boolean[])[i] ? "ĐÚNG" : "SAI"}
             </span>
           </div>
@@ -684,7 +684,7 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
   if (q.type === "short_answer") {
     return (
       <div className="pl-8">
-        <div className="inline-block p-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-900 text-sm">
+        <div className="inline-block p-3 rounded-xl border border-brand-200 bg-brand-50 text-brand-900 text-sm">
           <span className="font-bold mr-1">Đáp án:</span>
           <Latex>{String(q.correctAnswer ?? "")}</Latex>
         </div>

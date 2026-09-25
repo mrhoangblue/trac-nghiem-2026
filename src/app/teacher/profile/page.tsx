@@ -11,8 +11,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-3">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-500 text-sm animate-pulse">Đang tải hồ sơ…</p>
     </div>
@@ -114,20 +114,20 @@ export default function TeacherProfilePage() {
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                Họ và tên <span className="text-red-500">*</span>
+                Họ và tên <span className="text-danger-500">*</span>
               </label>
               <input
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
                 placeholder="Nguyễn Văn A"
               />
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                Số điện thoại <span className="text-red-500">*</span>
+                Số điện thoại <span className="text-danger-500">*</span>
               </label>
               <input
                 required
@@ -135,7 +135,7 @@ export default function TeacherProfilePage() {
                 inputMode="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
                 placeholder="0901234567"
               />
             </div>
@@ -144,8 +144,8 @@ export default function TeacherProfilePage() {
               <div
                 className={`rounded-xl px-4 py-3 text-sm font-medium ${
                   message.type === "ok"
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                    : "bg-red-50 text-red-700 border border-red-200"
+                    ? "bg-success-50 text-success-800 border border-success-200"
+                    : "bg-danger-50 text-danger-700 border border-danger-200"
                 }`}
               >
                 {message.text}
@@ -155,7 +155,7 @@ export default function TeacherProfilePage() {
             <button
               type="submit"
               disabled={saving}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all text-sm"
+              className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all text-sm"
             >
               {saving ? "Đang lưu…" : "Lưu thay đổi"}
             </button>

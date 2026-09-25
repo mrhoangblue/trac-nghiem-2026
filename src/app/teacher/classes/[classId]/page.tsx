@@ -85,8 +85,8 @@ function Spinner() {
   return (
     <div className="flex justify-center py-24">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin" />
       </div>
     </div>
   );
@@ -225,7 +225,7 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
           {/* Email — primary lookup key */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1.5" htmlFor="add-email">
-              Email <span className="text-red-500">*</span>
+              Email <span className="text-danger-500">*</span>
             </label>
             <input
               ref={emailRef}
@@ -234,7 +234,7 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
               value={form.email}
               onChange={(e) => { setForm((f) => ({ ...f, email: e.target.value })); setError(null); }}
               placeholder="hocsinh@gmail.com"
-              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
               disabled={loading}
               autoComplete="off"
             />
@@ -255,14 +255,14 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
               value={form.fullName}
               onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
               placeholder="Nguyễn Văn A"
-              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
               disabled={loading}
             />
           </div>
 
           {/* Error banner */}
           {error && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+            <div className="flex items-start gap-2.5 bg-danger-50 border border-danger-200 text-danger-700 text-sm px-4 py-3 rounded-xl">
               <span className="mt-0.5 shrink-0">⚠️</span>
               <span>{error}</span>
             </div>
@@ -281,7 +281,7 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
             <button
               type="submit"
               disabled={loading || !form.email.trim()}
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2"
             >
               {loading ? <><BtnSpinner /> Đang thêm…</> : "✓ Thêm học sinh"}
             </button>
@@ -346,7 +346,7 @@ function DeleteConfirmModal({ student, classId, onDeleted, onClose }: DeleteConf
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
         {/* Icon + heading */}
         <div className="px-6 pt-7 pb-4 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-red-100 flex items-center justify-center text-2xl">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-danger-100 flex items-center justify-center text-2xl">
             🗑️
           </div>
           <h2 id="del-modal-title" className="text-lg font-extrabold text-gray-900">
@@ -364,7 +364,7 @@ function DeleteConfirmModal({ student, classId, onDeleted, onClose }: DeleteConf
         </div>
 
         {error && (
-          <div className="mx-6 mb-3 text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-2.5 rounded-xl">
+          <div className="mx-6 mb-3 text-sm text-danger-700 bg-danger-50 border border-danger-200 px-4 py-2.5 rounded-xl">
             {error}
           </div>
         )}
@@ -381,7 +381,7 @@ function DeleteConfirmModal({ student, classId, onDeleted, onClose }: DeleteConf
           <button
             onClick={handleConfirm}
             disabled={loading}
-            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 bg-danger-600 hover:bg-danger-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2"
           >
             {loading ? <><BtnSpinner /> Đang xóa…</> : "Xóa khỏi lớp"}
           </button>
@@ -695,7 +695,7 @@ export default function TeacherClassDetailPage() {
       <div className="max-w-5xl mx-auto px-4 py-10 w-full">
         {/* Back link */}
         <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-          <Link href="/teacher/classes" className="text-indigo-600 hover:text-indigo-800 font-semibold">
+          <Link href="/teacher/classes" className="text-brand-600 hover:text-brand-800 font-semibold">
             ← Quản lý lớp học
           </Link>
         </div>
@@ -703,30 +703,30 @@ export default function TeacherClassDetailPage() {
         {loading ? (
           <Spinner />
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center text-red-700 font-semibold">
+          <div className="bg-danger-50 border border-danger-200 rounded-2xl p-8 text-center text-danger-700 font-semibold">
             {error}
           </div>
         ) : classData ? (
           <>
             {/* ── Class header ──────────────────────────────────────────── */}
-            <header className="mb-8 rounded-3xl bg-gradient-to-r from-indigo-600 to-blue-700 text-white p-8 shadow-lg">
-              <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Lớp học</p>
+            <header className="mb-8 rounded-3xl bg-gradient-to-r from-brand-600 to-brand-700 text-white p-8 shadow-lg">
+              <p className="text-brand-200 text-xs font-bold uppercase tracking-widest mb-1">Lớp học</p>
               <h1 className="text-3xl font-extrabold">{classData.name}</h1>
               <div className="mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-3">
-                <span className="text-sm text-indigo-100 font-medium">
+                <span className="text-sm text-brand-100 font-medium">
                   Mã lớp:{" "}
                   <strong className="text-white tracking-[0.35em] text-lg font-black font-mono">
                     {classData.classCode}
                   </strong>
                 </span>
-                <span className="text-sm text-indigo-100 font-medium">
+                <span className="text-sm text-brand-100 font-medium">
                   Link tham gia:{" "}
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`${window.location.origin}/join/${classId}`);
                       alert("Đã sao chép link lớp học!");
                     }}
-                    className="underline text-white hover:text-indigo-200 transition-colors"
+                    className="underline text-white hover:text-brand-200 transition-colors"
                   >
                     {typeof window !== "undefined"
                       ? `${window.location.origin}/join/${classId}`
@@ -751,7 +751,7 @@ export default function TeacherClassDetailPage() {
                 </div>
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-bold rounded-xl shadow-sm transition-all whitespace-nowrap"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-sm font-bold rounded-xl shadow-sm transition-all whitespace-nowrap"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -780,7 +780,7 @@ export default function TeacherClassDetailPage() {
                       {students.map((s, i) => (
                         <tr
                           key={s.uid}
-                          className={`group transition-colors ${i % 2 === 1 ? "bg-gray-50/40" : ""} hover:bg-blue-50/60`}
+                          className={`group transition-colors ${i % 2 === 1 ? "bg-gray-50/40" : ""} hover:bg-brand-50/60`}
                         >
                           {/* Name — clickable to student detail */}
                           <td
@@ -823,7 +823,7 @@ export default function TeacherClassDetailPage() {
                               }}
                               title={`Xóa ${s.fullName} khỏi lớp`}
                               aria-label={`Xóa ${s.fullName} khỏi lớp`}
-                              className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                              className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-danger-400 hover:text-danger-600 hover:bg-danger-50 transition-all"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -871,7 +871,7 @@ export default function TeacherClassDetailPage() {
                         <select
                           value={selectedExamId}
                           onChange={(e) => { setSelectedExamId(e.target.value); setScoreRows(null); }}
-                          className="flex-1 p-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-indigo-500 outline-none transition-colors"
+                          className="flex-1 p-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-brand-500 outline-none transition-colors"
                         >
                           <option value="">— Chọn đề thi —</option>
                           {myExams.map((e) => (
@@ -881,7 +881,7 @@ export default function TeacherClassDetailPage() {
                         <button
                           onClick={handleLoadScores}
                           disabled={!selectedExamId || loadingScores || students.length === 0}
-                          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all whitespace-nowrap flex items-center gap-2"
+                          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all whitespace-nowrap flex items-center gap-2"
                         >
                           {loadingScores ? <><BtnSpinner /> Đang tải…</> : "Tải điểm"}
                         </button>
@@ -897,9 +897,9 @@ export default function TeacherClassDetailPage() {
                       <div className="flex flex-wrap gap-2 justify-end">
                         {(
                           [
-                            { fmt: "csv"  as const, label: "CSV",      color: "bg-emerald-600 hover:bg-emerald-700", icon: "⬇" },
-                            { fmt: "xlsx" as const, label: "XLSX",     color: "bg-blue-600 hover:bg-blue-700",       icon: "⬇" },
-                            { fmt: "pdf"  as const, label: "In / PDF", color: "bg-rose-600 hover:bg-rose-700",       icon: "🖨" },
+                            { fmt: "csv"  as const, label: "CSV",      color: "bg-success-600 hover:bg-success-700", icon: "⬇" },
+                            { fmt: "xlsx" as const, label: "XLSX",     color: "bg-brand-600 hover:bg-brand-700",       icon: "⬇" },
+                            { fmt: "pdf"  as const, label: "In / PDF", color: "bg-danger-600 hover:bg-danger-700",       icon: "🖨" },
                           ]
                         ).map(({ fmt, label, color, icon }) => (
                           <button
@@ -920,7 +920,7 @@ export default function TeacherClassDetailPage() {
                       <div className="overflow-x-auto rounded-2xl border border-gray-100">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-indigo-50 text-indigo-700 text-xs uppercase tracking-wider">
+                            <tr className="bg-brand-50 text-brand-700 text-xs uppercase tracking-wider">
                               <th className="text-center px-3 py-3 font-bold w-10">STT</th>
                               <th className="text-left px-4 py-3 font-bold">Họ và tên</th>
                               <th className="text-left px-4 py-3 font-bold hidden sm:table-cell">Email</th>
@@ -940,7 +940,7 @@ export default function TeacherClassDetailPage() {
                                 <td className="text-center px-3 py-3 text-gray-700">{r.p1}</td>
                                 <td className="text-center px-3 py-3 text-gray-700">{r.p2}</td>
                                 <td className="text-center px-3 py-3 text-gray-700">{r.p3}</td>
-                                <td className="text-center px-3 py-3 font-black text-indigo-700">{r.total}</td>
+                                <td className="text-center px-3 py-3 font-black text-brand-700">{r.total}</td>
                                 <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell whitespace-nowrap">
                                   {r.submittedAt}
                                 </td>

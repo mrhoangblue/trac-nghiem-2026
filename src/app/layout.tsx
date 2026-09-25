@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Roboto, Montserrat, Geist, Geist_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import Header from "@/components/Header";
@@ -10,14 +10,11 @@ import DevPanel from "@/components/DevPanel";
 import { AuthProvider } from "@/lib/AuthContext";
 import { StudentModeProvider } from "@/lib/StudentModeContext";
 
-const roboto = Roboto({
-  variable: "--font-roboto",
-  subsets: ["latin"],
-});
-
-const montserrat = Montserrat({
-  variable: "--font-montserrat",
-  subsets: ["latin"],
+const beVietnam = Be_Vietnam_Pro({
+  variable: "--font-be-vietnam",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -38,18 +35,20 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={`${roboto.variable} ${montserrat.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${beVietnam.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head></head>
+
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <a href="#main-content" className="skip-link">Đến nội dung chính</a>
         <BrowserWarning>
         <AuthProvider>
           <StudentModeProvider>
           <Header />
           <div className="flex flex-1 min-h-0">
             <Sidebar />
-            <main className="flex-1 flex flex-col min-w-0">
+            <main id="main-content" className="flex-1 flex flex-col min-w-0">
               {children}
             </main>
           </div>

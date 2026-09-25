@@ -47,7 +47,7 @@ export const SECTION_META: Record<string, { roman: string; label: string; note: 
     roman: "I",
     label: "Câu hỏi trắc nghiệm nhiều phương án lựa chọn",
     note: "Mỗi câu trả lời đúng được 0,25 điểm",
-    colors: "border-purple-300 bg-purple-50 text-purple-800",
+    colors: "border-brand-300 bg-brand-50 text-brand-800",
   },
   true_false: {
     roman: "II",
@@ -59,7 +59,7 @@ export const SECTION_META: Record<string, { roman: string; label: string; note: 
     roman: "III",
     label: "Câu hỏi trắc nghiệm trả lời ngắn",
     note: "Mỗi câu trả lời đúng được 0,25 hoặc 0,5 điểm tùy cấu hình",
-    colors: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    colors: "border-success-300 bg-success-50 text-success-800",
   },
 };
 
@@ -120,7 +120,7 @@ const CountdownTimer = memo(function CountdownTimer({
       <div
         className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg font-mono font-extrabold text-lg transition-colors ${
           isDanger
-            ? "bg-red-600 text-white animate-pulse"
+            ? "bg-danger-600 text-white animate-pulse"
             : isWarning
             ? "bg-amber-400 text-white"
             : "bg-white border border-gray-200 text-gray-800"
@@ -755,9 +755,9 @@ export default function QuizClient({
   // ── Auth guard ────────────────────────────────────────────────────────────
   if (!user) {
     return (
-      <div className="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
+      <div className="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-brand-50 to-brand-50">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 max-w-md w-full overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-8 text-center">
+          <div className="bg-gradient-to-r from-brand-600 to-brand-600 px-8 py-8 text-center">
             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-3">🔐</div>
             <h2 className="text-xl font-extrabold text-white">{title}</h2>
           </div>
@@ -768,7 +768,7 @@ export default function QuizClient({
             </p>
             <button
               onClick={login}
-              className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all hover:-translate-y-0.5"
+              className="w-full flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl transition-all hover:-translate-y-0.5"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#fff" />
@@ -808,7 +808,7 @@ export default function QuizClient({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-gray-400">
-          <div className="w-8 h-8 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
+          <div className="w-8 h-8 rounded-full border-4 border-brand-100 border-t-brand-500 animate-spin" />
           <p className="text-sm">Đang khôi phục bài làm…</p>
         </div>
       </div>
@@ -848,19 +848,19 @@ export default function QuizClient({
 
   // Anti-cheat warning modal
   const CheatWarningModal = showCheatWarning ? (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-red-950/80 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-2 border-red-200">
-        <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4">⚠️</div>
-        <h2 className="text-2xl font-extrabold text-red-600 mb-2">Cảnh báo gian lận!</h2>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-danger-950/80 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-2 border-danger-200">
+        <div className="w-16 h-16 bg-danger-100 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4">⚠️</div>
+        <h2 className="text-2xl font-extrabold text-danger-600 mb-2">Cảnh báo gian lận!</h2>
         <p className="text-gray-700 text-sm leading-relaxed mb-1">
           Bạn đã <strong>rời khỏi màn hình bài thi</strong>.
         </p>
         <p className="text-gray-500 text-sm mb-6">
-          Số lần vi phạm: <strong className="text-red-600 text-lg">{cheatCount}</strong>
+          Số lần vi phạm: <strong className="text-danger-600 text-lg">{cheatCount}</strong>
         </p>
         <button
           onClick={() => setShowCheatWarning(false)}
-          className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-colors"
+          className="w-full bg-danger-600 hover:bg-danger-700 text-white font-bold py-3 rounded-xl transition-colors"
         >
           Tôi hiểu, quay lại làm bài
         </button>
@@ -950,14 +950,14 @@ export default function QuizClient({
             <h1 className="text-xl font-extrabold text-gray-900 leading-tight">{title}</h1>
             <p className="text-sm text-gray-500 mt-1">
               Câu {currentIdx + 1}/{totalQuestions} · Đã trả lời:{" "}
-              <span className="font-semibold text-blue-600">{totalAnswered}</span>/{totalQuestions}
+              <span className="font-semibold text-brand-600">{totalAnswered}</span>/{totalQuestions}
             </p>
           </div>
-          <span className="text-blue-600 font-bold text-sm">{Math.round(progress)}%</span>
+          <span className="text-brand-600 font-bold text-sm">{Math.round(progress)}%</span>
         </div>
         <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
           <div
-            className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+            className="bg-brand-600 h-2 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -1007,7 +1007,7 @@ export default function QuizClient({
         {currentIdx < questions.length - 1 ? (
           <button
             onClick={() => setCurrentIdx((i) => Math.min(questions.length - 1, i + 1))}
-            className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-all"
+            className="px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm transition-all"
           >
             Tiếp →
           </button>
@@ -1015,7 +1015,7 @@ export default function QuizClient({
           <button
             onClick={() => handleSubmit(false)}
             disabled={submitting}
-            className="px-5 py-3 bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white font-bold rounded-xl text-sm transition-all flex items-center gap-2"
+            className="px-5 py-3 bg-success-500 hover:bg-success-600 disabled:opacity-60 text-white font-bold rounded-xl text-sm transition-all flex items-center gap-2"
           >
             {submitting && (
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1072,7 +1072,7 @@ function IntroScreen({
       )}
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-10 text-white">
+        <div className="bg-gradient-to-r from-brand-600 to-brand-600 px-8 py-10 text-white">
           <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mb-4">📝</div>
           <h1 className="text-2xl font-extrabold leading-tight">{title}</h1>
           <p className="mt-2 opacity-70 text-sm">{questions.length} câu hỏi</p>
@@ -1081,9 +1081,9 @@ function IntroScreen({
         <div className="px-8 py-6 space-y-5">
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
             {[
-              { label: "Trắc nghiệm",   count: p1Count, color: "bg-purple-50 border-purple-100 text-purple-700" },
+              { label: "Trắc nghiệm",   count: p1Count, color: "bg-brand-50 border-brand-100 text-brand-700" },
               { label: "Đúng/Sai",      count: p2Count, color: "bg-amber-50 border-amber-100 text-amber-700" },
-              { label: "Trả lời ngắn",  count: p3Count, color: "bg-emerald-50 border-emerald-100 text-emerald-700" },
+              { label: "Trả lời ngắn",  count: p3Count, color: "bg-success-50 border-success-100 text-success-700" },
             ].map(({ label, count, color }) => (
               <div key={label} className={`rounded-xl border p-3 ${color}`}>
                 <p className="text-2xl font-extrabold">{count}</p>
@@ -1092,10 +1092,10 @@ function IntroScreen({
             ))}
           </div>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 space-y-2 text-sm">
+          <div className="bg-brand-50 border border-brand-100 rounded-2xl px-5 py-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">Thời gian làm bài</span>
-              <span className="font-bold text-blue-700">{timing.duration} phút</span>
+              <span className="font-bold text-brand-700">{timing.duration} phút</span>
             </div>
             {timing.startTime && (
               <div className="flex justify-between">
@@ -1121,7 +1121,7 @@ function IntroScreen({
             </div>
           )}
           {alreadyClosed && (
-            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800">
+            <div className="flex items-center gap-3 p-4 bg-danger-50 border border-danger-200 rounded-2xl text-danger-800">
               <span className="text-2xl">🔒</span>
               <div>
                 <p className="font-bold text-sm">Đề thi đã đóng</p>
@@ -1130,7 +1130,7 @@ function IntroScreen({
             </div>
           )}
           {retryLimitReached && (
-            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800">
+            <div className="flex items-center gap-3 p-4 bg-danger-50 border border-danger-200 rounded-2xl text-danger-800">
               <span className="text-2xl">🚫</span>
               <div>
                 <p className="font-bold text-sm">Hết lượt làm bài</p>
@@ -1155,7 +1155,7 @@ function IntroScreen({
             disabled={!canStart}
             className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
               canStart
-                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow hover:-translate-y-0.5"
+                ? "bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow hover:-translate-y-0.5"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           >
@@ -1218,15 +1218,15 @@ const QuestionCard = memo(
 
     const typeBadge =
       type === "multiple_choice"
-        ? { label: "Trắc nghiệm",   cls: "bg-purple-100 text-purple-700" }
+        ? { label: "Trắc nghiệm",   cls: "bg-brand-100 text-brand-700" }
         : type === "true_false"
         ? { label: "Đúng / Sai",    cls: "bg-amber-100 text-amber-700" }
-        : { label: "Trả lời ngắn", cls: "bg-emerald-100 text-emerald-700" };
+        : { label: "Trả lời ngắn", cls: "bg-success-100 text-success-700" };
 
     return (
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-100 text-brand-700">
             Câu {questionNumber}
           </span>
           <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${typeBadge.cls}`}>
@@ -1271,14 +1271,14 @@ const QuestionCard = memo(
                   key={i}
                   onClick={() => onP1(id, i)}
                   className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${
-                    selected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-300 hover:bg-gray-50"
+                    selected ? "border-brand-500 bg-brand-50" : "border-gray-100 hover:border-brand-300 hover:bg-gray-50"
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-500" : "border-gray-300"}`}>
-                    {selected && <div className="w-3 h-3 bg-blue-500 rounded-full" />}
+                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-brand-500" : "border-gray-300"}`}>
+                    {selected && <div className="w-3 h-3 bg-brand-500 rounded-full" />}
                   </div>
                   <span className="font-bold text-gray-400 shrink-0">{String.fromCharCode(65 + i)}.</span>
-                  <span className={`leading-relaxed ${selected ? "text-blue-900 font-medium" : "text-gray-700"}`}>
+                  <span className={`leading-relaxed ${selected ? "text-brand-900 font-medium" : "text-gray-700"}`}>
                     {renderedOptions[i]}
                   </span>
                 </button>
@@ -1295,8 +1295,8 @@ const QuestionCard = memo(
                 <tr className="bg-amber-50 border-b border-amber-200">
                   <th className="text-center px-3 py-2.5 font-bold text-amber-700 border-r border-amber-200 w-10">Ý</th>
                   <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Phát biểu</th>
-                  <th className="text-center px-4 py-2.5 font-bold text-emerald-700 border-l border-amber-200 w-20">ĐÚNG</th>
-                  <th className="text-center px-4 py-2.5 font-bold text-red-600 border-l border-amber-200 w-20">SAI</th>
+                  <th className="text-center px-4 py-2.5 font-bold text-success-700 border-l border-amber-200 w-20">ĐÚNG</th>
+                  <th className="text-center px-4 py-2.5 font-bold text-danger-600 border-l border-amber-200 w-20">SAI</th>
                 </tr>
               </thead>
               <tbody>
@@ -1313,13 +1313,13 @@ const QuestionCard = memo(
                       <td className="px-3 py-2 text-center border-l border-amber-100">
                         <button
                           onClick={() => onP2(id, i, true)}
-                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300" : "bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-700"}`}
+                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isDung ? "bg-success-500 text-white shadow-sm ring-2 ring-success-300" : "bg-gray-100 text-gray-400 hover:bg-success-100 hover:text-success-700"}`}
                         >Đúng</button>
                       </td>
                       <td className="px-3 py-2 text-center border-l border-amber-100">
                         <button
                           onClick={() => onP2(id, i, false)}
-                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-red-500 text-white shadow-sm ring-2 ring-red-300" : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-700"}`}
+                          className={`w-full py-2 rounded-xl font-bold text-sm transition-all ${isSai ? "bg-danger-500 text-white shadow-sm ring-2 ring-danger-300" : "bg-gray-100 text-gray-400 hover:bg-danger-100 hover:text-danger-700"}`}
                         >Sai</button>
                       </td>
                     </tr>
@@ -1388,9 +1388,9 @@ const QuestionPalette = memo(
               title={`Câu ${i + 1}`}
               className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
                 i === currentIdx
-                  ? "bg-blue-600 text-white shadow"
+                  ? "bg-brand-600 text-white shadow"
                   : answered
-                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  ? "bg-brand-100 text-brand-700 hover:bg-brand-200"
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200"
               }`}
             >
@@ -1486,7 +1486,7 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
             onClick={toggleMinus}
             className={`w-12 h-10 text-xl font-bold border-2 rounded-md transition-all select-none
               ${cells[0] === "-"
-                ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
+                ? "border-danger-500 bg-danger-50 text-danger-700 ring-2 ring-danger-200"
                 : "border-gray-300 hover:border-gray-400 bg-white text-gray-500 hover:text-gray-800"}`}
           >
             −
@@ -1509,15 +1509,15 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             className={`w-12 h-12 text-center text-xl font-bold border-2 rounded-md outline-none transition-all
-              ${cell ? "border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-200"
+              ${cell ? "border-brand-500 bg-brand-50 text-brand-900 ring-2 ring-brand-200"
                      : "border-gray-300 hover:border-gray-400 bg-white text-gray-800"}
-              focus:border-blue-500 focus:ring-2 focus:ring-blue-200`}
+              focus:border-brand-500 focus:ring-2 focus:ring-brand-200`}
           />
         ))}
         {joined && (
-          <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
-            <span className="text-xs text-emerald-600 font-medium">Đáp án:</span>
-            <span className="font-extrabold text-emerald-800 text-lg leading-none">{joined}</span>
+          <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success-50 border border-success-200">
+            <span className="text-xs text-success-600 font-medium">Đáp án:</span>
+            <span className="font-extrabold text-success-800 text-lg leading-none">{joined}</span>
           </div>
         )}
       </div>

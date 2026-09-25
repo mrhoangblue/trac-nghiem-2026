@@ -94,7 +94,7 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 text-sm whitespace-nowrap"
+          className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 text-sm whitespace-nowrap"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -117,7 +117,7 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
           </p>
           <button
             onClick={() => setShowModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-colors"
           >
             Tạo lớp học mới
           </button>
@@ -129,7 +129,7 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
               key={cls.id}
               className={`bg-white rounded-2xl border-2 p-5 flex flex-col gap-4 transition-all hover:shadow-md ${
                 cls.isActive
-                  ? "border-indigo-100 hover:border-indigo-300"
+                  ? "border-brand-100 hover:border-brand-300"
                   : "border-gray-100 opacity-60"
               }`}
             >
@@ -139,7 +139,7 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
                 <span
                   className={`shrink-0 text-xs px-2.5 py-0.5 rounded-full font-semibold ${
                     cls.isActive
-                      ? "bg-emerald-100 text-emerald-700"
+                      ? "bg-success-100 text-success-700"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >
@@ -148,11 +148,11 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
               </div>
 
               {/* Code display */}
-              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl px-4 py-4 text-center">
-                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-1.5">
+              <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-xl px-4 py-4 text-center">
+                <p className="text-[10px] text-brand-400 font-bold uppercase tracking-widest mb-1.5">
                   Mã lớp học
                 </p>
-                <p className="text-4xl font-black tracking-[0.3em] text-indigo-700 font-mono select-all">
+                <p className="text-4xl font-black tracking-[0.3em] text-brand-700 font-mono select-all">
                   {cls.classCode}
                 </p>
               </div>
@@ -165,7 +165,7 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/teacher/classes/${cls.id}`}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-all"
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 transition-all"
                   >
                     Danh sách →
                   </Link>
@@ -174,8 +174,8 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
                     onClick={() => copyCode(cls.id, cls.classCode)}
                     className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
                       copiedId === cls.id
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700"
+                        ? "bg-success-100 text-success-700"
+                        : "bg-brand-50 hover:bg-brand-100 text-brand-700"
                     }`}
                   >
                     {copiedId === cls.id ? "✓ Đã sao chép" : "📋 Sao chép"}

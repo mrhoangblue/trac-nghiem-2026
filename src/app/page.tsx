@@ -3,8 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ArrowRight, BookOpen, Check, ChevronRight, GraduationCap, Search, Shapes, FileText, RotateCcw } from "lucide-react";
+import { GRADE_LEVELS } from "@/components/Sidebar";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { collection, getDocs, query, where, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { useAuth } from "@/lib/AuthContext";
 
 interface Exam {
   id: string;
@@ -13,6 +16,9 @@ interface Exam {
   questionCount: number;
   gradeLevel?: string;
   examType?: string;
+  /** "all" = mọi học sinh; "classes" = chỉ HS thuộc targetClassIds. Mặc định "all". */
+  targetType?: "all" | "classes";
+  targetClassIds?: string[];
 }
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
@@ -21,8 +27,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-5">
       <div className="relative w-16 h-16">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-500 font-medium animate-pulse">Đang tải danh sách bài thi…</p>
     </div>
@@ -34,14 +40,14 @@ function Spinner() {
 function EmptyState({ filtered }: { filtered: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
-      <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center text-4xl shadow-sm">
+      <div className="w-20 h-20 bg-brand-50 rounded-2xl flex items-center justify-center text-4xl shadow-sm">
         📭
       </div>
       <h2 className="text-xl font-bold text-gray-800">
         {filtered ? "Không có đề thi nào trong mục này" : "Chưa có bài thi nào"}
       </h2>
       {filtered && (
-        <Link href="/" className="text-sm text-blue-600 hover:underline font-medium">
+        <Link href="/" className="text-sm text-brand-600 hover:underline font-medium">
           ← Xem tất cả đề thi
         </Link>
       )}
@@ -53,50 +59,49 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 
 function ExamCard({ exam }: { exam: Exam }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md border border-gray-100 overflow-hidden flex flex-col transition-all hover:-translate-y-1 group">
-      <div className="p-6 flex-1 flex flex-col">
-        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:bg-blue-100 transition-colors">
-          📝
-        </div>
-
-        {/* Category badges */}
-        {(exam.gradeLevel || exam.examType) && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {exam.gradeLevel && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                {exam.gradeLevel}
-              </span>
-            )}
-            {exam.examType && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                {exam.examType}
-              </span>
-            )}
-          </div>
-        )}
-
-        <h2 className="text-xl font-bold text-gray-900 mb-2">{exam.title}</h2>
-        <p className="text-gray-500 mb-5 flex-1 line-clamp-2 leading-relaxed text-sm">
-          {exam.description || "Không có mô tả."}
-        </p>
-
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-5 bg-gray-50 p-3 rounded-lg w-fit">
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          {exam.questionCount ?? 0} câu hỏi
-        </div>
-
-        <Link
-          href={`/quiz/${exam.id}`}
-          className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-center transition-colors flex items-center justify-center gap-2 group/btn"
-        >
-          Bắt đầu làm bài
-          <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-          </svg>
+    <article className="exam-card group flex flex-col rounded-3xl bg-white p-6 transition-all duration-200">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-earth"><FileText size={23} /></span>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{exam.gradeLevel || "Môn Toán"}</span>
+      </div>
+      <p className="mb-2 text-xs font-semibold text-brand-700">{exam.examType || "Đề ôn tập"}</p>
+      <h3 className="mb-3 text-lg font-bold leading-relaxed text-gray-900">{exam.title}</h3>
+      <p className="mb-6 line-clamp-2 text-sm leading-7 text-gray-500">{exam.description || "Đọc kỹ câu hỏi và chọn đáp án phù hợp để hoàn thành bài ôn tập."}</p>
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-gray-100 pt-5">
+        <span className="text-xs font-medium text-gray-500">{exam.questionCount ?? 0} câu hỏi</span>
+        <Link href={`/quiz/${exam.id}`} className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-brand-100">
+          Làm bài <ArrowRight size={16} />
         </Link>
       </div>
+    </article>
+  );
+}
+
+function MathIllustration() {
+  return (
+    <div className="relative mx-auto w-full max-w-md px-4 py-8" aria-hidden="true">
+      <div className="absolute inset-8 rounded-full border border-brand-200/60" />
+      <div className="math-paper relative rotate-[-3deg] rounded-[2rem] border border-gray-200 p-7 shadow-lift">
+        <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+          <span className="text-[10px] font-bold uppercase tracking-[.2em] text-brand-800">Góc học Toán</span>
+          <span className="text-sm text-brand-600">✦</span>
+        </div>
+        <svg viewBox="0 0 300 190" className="my-3 h-44 w-full" fill="none">
+          <path d="M35 155H275M75 175V15" stroke="#C4B9A2" strokeWidth="1.5" />
+          <path d="m268 150 8 5-8 5M70 23l5-8 5 8" stroke="#C4B9A2" strokeWidth="1.5" />
+          <path d="M95 44Q174 255 253 44" stroke="#D97706" strokeWidth="3" strokeLinecap="round" />
+          <path d="M174 155V95M75 95H174" stroke="#C4B9A2" strokeDasharray="4 5" />
+          <circle cx="174" cy="149" r="5" fill="#78350F" />
+          <text x="241" y="184" fill="#78350F" fontSize="13">x</text>
+          <text x="51" y="26" fill="#78350F" fontSize="13">y</text>
+          <text x="108" y="32" fill="#78350F" fontSize="17" fontFamily="Georgia, serif">y = ax² + bx + c</text>
+        </svg>
+        <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs text-brand-900">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-earth text-white"><Check size={15} /></span>
+          Hiểu từng bước. Vững từng dạng bài.
+        </div>
+      </div>
+      <div className="absolute -right-1 top-5 rotate-[6deg] rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-soft"><span className="font-serif text-2xl text-earth">∑</span><span className="ml-3 text-xs font-bold text-gray-600">Mỗi ngày một chút</span></div>
     </div>
   );
 }
@@ -108,9 +113,14 @@ function HomeContent() {
   const grade = searchParams.get("grade");
   const type = searchParams.get("type");
 
+  const { user, isMod, login } = useAuth();
+  const [search, setSearch] = useState("");
+
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Tập classId mà học sinh hiện tại đang tham gia. null = chưa tải xong.
+  const [myClassIds, setMyClassIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     const fetchExams = async () => {
@@ -127,6 +137,8 @@ function HomeContent() {
               : (raw.questionCount ?? 0),
             gradeLevel: raw.gradeLevel ?? undefined,
             examType: raw.examType ?? undefined,
+            targetType: raw.targetType ?? "all",
+            targetClassIds: Array.isArray(raw.targetClassIds) ? raw.targetClassIds : [],
           } as Exam;
         });
         setExams(data);
@@ -137,57 +149,95 @@ function HomeContent() {
         setLoading(false);
       }
     };
-    fetchExams();
-  }, []);
+    if (user) fetchExams();
+  }, [user]);
+
+  // Tải danh sách lớp học sinh đang tham gia — để lọc đề giao riêng cho lớp.
+  // admin/mod và người chưa đăng nhập không cần tải: filter coi myClassIds=null như [].
+  useEffect(() => {
+    if (isMod || !user?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, "classes"), where("studentIds", "array-contains", user.uid))
+        );
+        if (!cancelled) setMyClassIds(snap.docs.map((d) => d.id));
+      } catch (err) {
+        console.error("Lỗi tải lớp của học sinh:", err);
+        if (!cancelled) setMyClassIds([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, isMod]);
+
+  // Đề "giao cho lớp" chỉ hiện với HS thuộc lớp đó (admin/mod thấy tất cả).
+  const visibleToUser = (e: Exam): boolean => {
+    if (isMod) return true;
+    if (e.targetType !== "classes") return true; // "all" hoặc legacy → mọi người
+    const targets = e.targetClassIds ?? [];
+    if (targets.length === 0) return true; // cấu hình lớp nhưng chưa chọn lớp nào
+    const mine = myClassIds ?? [];
+    return targets.some((id) => mine.includes(id));
+  };
 
   const filtered = exams.filter((e) => {
+    if (!visibleToUser(e)) return false;
+    if (search.trim() && !e.title.toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"))) return false;
     if (grade && e.gradeLevel !== grade) return false;
     if (type && e.examType !== type) return false;
     return true;
   });
 
-  const filterLabel = grade ? `${grade}${type ? ` › ${type}` : ""}` : null;
-  const isFiltered = !!grade;
+  const filterLabel = grade ? `${grade}${type ? ` · ${type}` : ""}` : "Tất cả đề thi";
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12 w-full">
-      {/* Heading */}
-      <div className="text-center mb-10">
-        {filterLabel ? (
-          <div className="space-y-2">
-            <h1 className="text-3xl font-extrabold text-gray-900">{filterLabel}</h1>
-            <Link href="/" className="text-sm text-blue-600 hover:underline font-medium">
-              ← Xem tất cả đề thi
-            </Link>
+    <div className="w-full">
+      <section className="home-hero border-b border-gray-200">
+        <div className="mx-auto grid max-w-6xl items-center gap-5 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1.15fr_1fr]">
+          <div>
+            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[.15em] text-brand-800"><span className="h-1.5 w-1.5 rounded-full bg-sunset" />Không gian ôn tập Toán THPT</span>
+            <h1 className="text-4xl font-extrabold leading-[1.22] tracking-tight text-brand-900 sm:text-5xl">Vững kiến thức.<br /><span className="text-brand-600">Tự tin mỗi bài thi.</span></h1>
+            <p className="mt-5 max-w-lg text-sm leading-8 text-gray-600 sm:text-base">Luyện tập theo từng lớp, thử sức với đề thi và xem lại lời giải. Bắt đầu từ một bài Toán hôm nay.</p>
+            <div className="mt-7 flex flex-wrap items-center gap-4">
+              <a href="#kho-de" className="sunset-button inline-flex items-center gap-3 rounded-2xl px-6 py-3.5 text-lg font-bold transition">Khám phá đề thi <ArrowRight size={19} /></a>
+              {user ? <Link href="/student/history" className="inline-flex items-center gap-2 rounded-xl py-3 text-sm font-semibold text-earth">Lịch sử làm bài <ChevronRight size={16} /></Link> : <button onClick={login} className="rounded-xl py-3 text-sm font-semibold text-earth">Đăng nhập để bắt đầu <span aria-hidden="true">↗</span></button>}
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-xs text-gray-600">{["Trắc nghiệm", "Đúng / Sai", "Trả lời ngắn"].map(label => <span key={label} className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-700" />{label}</span>)}</div>
           </div>
-        ) : (
-          <>
-            <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              Danh Sách Bài Thi
-            </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Lựa chọn một bài kiểm tra để bắt đầu ôn tập. Cố gắng suy nghĩ thật kỹ trước khi chọn đáp án nhé!
-            </p>
-          </>
-        )}
-      </div>
+          <MathIllustration />
+        </div>
+      </section>
 
-      {loading ? (
-        <Spinner />
-      ) : error ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="text-4xl">⚠️</div>
-          <p className="text-red-500 font-medium">{error}</p>
+      <section id="kho-de" className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-14" aria-labelledby="exam-library-title">
+        <div className="mb-7 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.2em] text-brand-700">Học chắc từ những điều cơ bản</p><h2 id="exam-library-title" className="text-2xl font-bold text-brand-900 sm:text-3xl">Kho đề dành cho bạn</h2></div>
+          <label className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-500 lg:max-w-xs"><Search size={18} /><span className="sr-only">Tìm kiếm đề thi</span><input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên đề thi…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState filtered={isFiltered} />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((exam) => (
-            <ExamCard key={exam.id} exam={exam} />
-          ))}
-        </div>
-      )}
+        <nav aria-label="Lọc theo khối lớp" className="mb-8 flex flex-wrap gap-2">
+          {["Tất cả", ...GRADE_LEVELS].map(label => {
+            const active = label === "Tất cả" ? !grade : grade === label;
+            return <Link key={label} href={label === "Tất cả" ? "/#kho-de" : `/?grade=${encodeURIComponent(label)}#kho-de`} aria-current={active ? "page" : undefined} className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${active ? "border-earth bg-earth text-white shadow-soft" : "border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:text-earth"}`}>{label}</Link>;
+          })}
+        </nav>
+        <div className="mb-5 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-gray-700">{filterLabel}</h3>{user && !loading && !error && <span className="text-xs text-gray-500">{filtered.length} đề thi</span>}</div>
+        {!user ? (
+          <div className="rounded-3xl border border-gray-200 bg-white px-6 py-10 text-center shadow-soft">
+            <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-earth"><BookOpen size={25} /></span>
+            <h3 className="text-xl font-bold text-brand-900">Bài luyện tập đang chờ bạn</h3>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-gray-500">Đăng nhập bằng Google để xem đề thi, làm bài và lưu lại kết quả ôn tập của bạn.</p>
+            <button onClick={login} className="mt-6 rounded-xl bg-earth px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-900">Đăng nhập bằng Google</button>
+          </div>
+        ) : loading ? <Spinner /> : error ? (
+          <div role="alert" className="rounded-3xl border border-danger-200 bg-danger-50 px-6 py-10 text-center"><p className="text-sm text-danger-700">{error}</p><button onClick={() => window.location.reload()} className="mx-auto mt-4 flex items-center gap-2 rounded-xl border border-danger-200 px-4 py-2 text-sm font-semibold text-danger-700"><RotateCcw size={15} />Tải lại trang</button></div>
+        ) : filtered.length === 0 ? <EmptyState filtered={!!grade || !!search} /> : <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{filtered.map(exam => <ExamCard key={exam.id} exam={exam} />)}</div>}
+      </section>
+
+      <section className="mx-auto mb-12 grid w-full max-w-6xl gap-5 px-5 sm:grid-cols-3 sm:px-8" aria-label="Cách ôn tập">
+        {[{ Icon: BookOpen, title: "Chọn bài phù hợp", text: "Tìm đề theo khối lớp và nội dung bạn muốn ôn tập." }, { Icon: Shapes, title: "Tập trung làm bài", text: "Đọc kỹ đề, vận dụng kiến thức và hoàn thành từng câu." }, { Icon: GraduationCap, title: "Hiểu từ lời giải", text: "Xem lại bài làm để nhận ra phần kiến thức cần củng cố." }].map(({ Icon, title, text }, index) => <div key={title} className="flex gap-4 border-t border-gray-200 pt-6"><Icon size={23} className="mt-1 shrink-0 text-brand-700" /><div><p className="mb-2 text-sm font-bold text-brand-900"><span className="mr-2 text-brand-600">0{index + 1}.</span>{title}</p><p className="text-xs leading-6 text-gray-500">{text}</p></div></div>)}
+      </section>
     </div>
   );
 }

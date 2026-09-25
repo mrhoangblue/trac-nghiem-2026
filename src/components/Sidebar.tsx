@@ -44,7 +44,7 @@ function SideLink({
       href={href}
       className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
         active
-          ? "bg-blue-50 text-blue-700"
+          ? "bg-brand-100/60 text-brand-900"
           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
       }`}
     >
@@ -79,7 +79,7 @@ export default function Sidebar() {
   // ── Admin / Mod sidebar — hidden when teacher has switched to student mode ───
   if (isMod && !isStudentMode) {
     return (
-      <aside className="hidden md:block w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+      <aside className="hidden md:block w-60 shrink-0 site-sidebar sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
         <nav className="p-3">
           <SectionLabel>Quản lý</SectionLabel>
           <SideLink
@@ -156,7 +156,7 @@ export default function Sidebar() {
 
   // ── Student sidebar: exam category tree ──────────────────────────────────────
   return (
-    <aside className="hidden md:block w-56 shrink-0 bg-white border-r border-gray-100 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+    <aside className="hidden md:block w-60 shrink-0 site-sidebar sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
       <nav className="p-3">
         <SideLink href="/" icon="🏠" active={pathname === "/"}>
           Tất cả đề thi
@@ -205,7 +205,7 @@ export default function Sidebar() {
                 <div className="ml-5 mt-0.5 mb-1 space-y-0.5 border-l-2 border-gray-100 pl-2">
                   <Link
                     href={`/?grade=${encodeURIComponent(grade)}`}
-                    className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-all"
+                    className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition-all"
                   >
                     — Tất cả
                   </Link>
@@ -213,7 +213,7 @@ export default function Sidebar() {
                     <Link
                       key={type}
                       href={`/?grade=${encodeURIComponent(grade)}&type=${encodeURIComponent(type)}`}
-                      className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-all"
+                      className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition-all"
                     >
                       {type}
                     </Link>

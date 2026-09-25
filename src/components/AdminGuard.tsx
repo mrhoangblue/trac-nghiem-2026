@@ -22,7 +22,7 @@ export default function AdminGuard({
   if (!hasAccess) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-6 text-center px-4">
-        <div className="w-20 h-20 bg-red-50 rounded-2xl flex items-center justify-center text-4xl shadow-sm">
+        <div className="w-20 h-20 bg-danger-50 rounded-2xl flex items-center justify-center text-4xl shadow-sm">
           🔒
         </div>
         <div>
@@ -37,7 +37,7 @@ export default function AdminGuard({
         </div>
         <Link
           href="/"
-          className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+          className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
         >
           Về trang chủ
         </Link>

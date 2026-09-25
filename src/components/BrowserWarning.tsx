@@ -52,8 +52,8 @@ export default function BrowserWarning({
       {/* Main message */}
       <p className="text-gray-600 text-center text-base leading-relaxed mb-8 max-w-sm">
         Vui lòng mở trang web bằng{" "}
-        <strong className="text-blue-600">Safari</strong> hoặc{" "}
-        <strong className="text-blue-600">Chrome</strong> để hệ thống hoạt động
+        <strong className="text-brand-600">Safari</strong> hoặc{" "}
+        <strong className="text-brand-600">Chrome</strong> để hệ thống hoạt động
         ổn định nhất.
       </p>
 
@@ -64,7 +64,7 @@ export default function BrowserWarning({
         </p>
 
         <div className="flex items-start gap-3">
-          <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
+          <span className="w-7 h-7 rounded-full bg-brand-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
             1
           </span>
           <p className="text-sm text-gray-700 leading-relaxed">
@@ -76,16 +76,16 @@ export default function BrowserWarning({
         </div>
 
         <div className="flex items-start gap-3">
-          <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
+          <span className="w-7 h-7 rounded-full bg-brand-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
             2
           </span>
           <p className="text-sm text-gray-700 leading-relaxed">
             Chọn{" "}
-            <span className="font-bold text-blue-600">
+            <span className="font-bold text-brand-600">
               &ldquo;Mở bằng trình duyệt&rdquo;
             </span>{" "}
             hoặc{" "}
-            <span className="font-bold text-blue-600">
+            <span className="font-bold text-brand-600">
               &ldquo;Open in Safari / Chrome&rdquo;
             </span>
             .
@@ -93,7 +93,7 @@ export default function BrowserWarning({
         </div>
 
         <div className="flex items-start gap-3">
-          <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
+          <span className="w-7 h-7 rounded-full bg-brand-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
             3
           </span>
           <p className="text-sm text-gray-700 leading-relaxed">

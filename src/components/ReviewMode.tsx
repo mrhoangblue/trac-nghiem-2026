@@ -33,7 +33,7 @@ export default function ReviewMode({
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 w-full">
       {/* ── Score banner ──────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-8 text-white text-center mb-8 shadow-lg">
+      <div className="bg-gradient-to-br from-brand-600 to-brand-700 rounded-3xl p-8 text-white text-center mb-8 shadow-lg">
         <p className="text-sm opacity-70 mb-1 font-medium">{title}</p>
         <p className="text-7xl font-extrabold tracking-tight">
           {scoreResult.total}
@@ -130,15 +130,15 @@ export default function ReviewMode({
             <div
               className={`rounded-2xl border-2 p-6 ${
                 isCorrect
-                  ? "border-green-400 bg-green-50/40"
-                  : "border-red-300 bg-red-50/40"
+                  ? "border-success-400 bg-success-50/40"
+                  : "border-danger-300 bg-danger-50/40"
               }`}
             >
               {/* Header */}
               <div className="flex items-start gap-3 mb-4">
                 <span
                   className={`w-8 h-8 rounded-full flex items-center justify-center font-extrabold text-sm flex-shrink-0 ${
-                    isCorrect ? "bg-green-500 text-white" : "bg-red-400 text-white"
+                    isCorrect ? "bg-success-500 text-white" : "bg-danger-400 text-white"
                   }`}
                 >
                   {idx + 1}
@@ -175,9 +175,9 @@ export default function ReviewMode({
                         key={i}
                         className={`p-3 rounded-xl border flex items-center gap-2 text-sm ${
                           isCorrectAns
-                            ? "border-green-400 bg-green-100 text-green-900"
+                            ? "border-success-400 bg-success-100 text-success-900"
                             : isStudentPick
-                            ? "border-red-300 bg-red-100 text-red-900"
+                            ? "border-danger-300 bg-danger-100 text-danger-900"
                             : "border-gray-200 bg-white text-gray-600"
                         }`}
                       >
@@ -186,12 +186,12 @@ export default function ReviewMode({
                         </span>
                         <span className="flex-1">{processLatexText(opt)}</span>
                         {isCorrectAns && (
-                          <span className="ml-auto font-bold text-green-600 shrink-0">
+                          <span className="ml-auto font-bold text-success-600 shrink-0">
                             ✓ Đúng
                           </span>
                         )}
                         {isStudentPick && !isCorrectAns && (
-                          <span className="ml-auto font-bold text-red-500 shrink-0">
+                          <span className="ml-auto font-bold text-danger-500 shrink-0">
                             ✗ Sai
                           </span>
                         )}
@@ -213,10 +213,10 @@ export default function ReviewMode({
                         <th className="text-left px-4 py-2 font-semibold text-gray-500">
                           Phát biểu
                         </th>
-                        <th className="text-center px-3 py-2 font-bold text-emerald-700 border-l border-gray-200 w-20">
+                        <th className="text-center px-3 py-2 font-bold text-success-700 border-l border-gray-200 w-20">
                           ĐÚNG
                         </th>
-                        <th className="text-center px-3 py-2 font-bold text-red-600 border-l border-gray-200 w-20">
+                        <th className="text-center px-3 py-2 font-bold text-danger-600 border-l border-gray-200 w-20">
                           SAI
                         </th>
                         <th className="text-center px-3 py-2 font-semibold text-gray-500 border-l border-gray-200 w-24">
@@ -239,11 +239,11 @@ export default function ReviewMode({
                               : "bg-white"
                             : isMatch
                             ? i % 2 === 1
-                              ? "bg-green-50/70"
-                              : "bg-green-50/40"
+                              ? "bg-success-50/70"
+                              : "bg-success-50/40"
                             : i % 2 === 1
-                            ? "bg-red-50/70"
-                            : "bg-red-50/40";
+                            ? "bg-danger-50/70"
+                            : "bg-danger-50/40";
 
                         return (
                           <tr
@@ -262,8 +262,8 @@ export default function ReviewMode({
                               className={`px-2 py-2 text-center border-l border-gray-100 ${
                                 isDungSelected
                                   ? correctBool === true
-                                    ? "bg-emerald-100"
-                                    : "bg-red-100"
+                                    ? "bg-success-100"
+                                    : "bg-danger-100"
                                   : ""
                               }`}
                             >
@@ -271,15 +271,15 @@ export default function ReviewMode({
                                 <span
                                   className={`text-lg font-black ${
                                     correctBool === true
-                                      ? "text-emerald-600"
-                                      : "text-red-500"
+                                      ? "text-success-600"
+                                      : "text-danger-500"
                                   }`}
                                 >
                                   {correctBool === true ? "✓" : "✗"}
                                 </span>
                               ) : correctBool === true ? (
                                 <span
-                                  className="text-emerald-400 text-base font-bold opacity-60"
+                                  className="text-success-400 text-base font-bold opacity-60"
                                   title="Đáp án đúng"
                                 >
                                   ●
@@ -292,8 +292,8 @@ export default function ReviewMode({
                               className={`px-2 py-2 text-center border-l border-gray-100 ${
                                 isSaiSelected
                                   ? correctBool === false
-                                    ? "bg-emerald-100"
-                                    : "bg-red-100"
+                                    ? "bg-success-100"
+                                    : "bg-danger-100"
                                   : ""
                               }`}
                             >
@@ -301,15 +301,15 @@ export default function ReviewMode({
                                 <span
                                   className={`text-lg font-black ${
                                     correctBool === false
-                                      ? "text-emerald-600"
-                                      : "text-red-500"
+                                      ? "text-success-600"
+                                      : "text-danger-500"
                                   }`}
                                 >
                                   {correctBool === false ? "✓" : "✗"}
                                 </span>
                               ) : correctBool === false ? (
                                 <span
-                                  className="text-emerald-400 text-base font-bold opacity-60"
+                                  className="text-success-400 text-base font-bold opacity-60"
                                   title="Đáp án đúng"
                                 >
                                   ●
@@ -322,8 +322,8 @@ export default function ReviewMode({
                               <span
                                 className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${
                                   correctBool
-                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                    : "bg-red-100 text-red-600 border border-red-200"
+                                    ? "bg-success-100 text-success-700 border border-success-200"
+                                    : "bg-danger-100 text-danger-600 border border-danger-200"
                                 }`}
                               >
                                 {correctBool ? "ĐÚNG" : "SAI"}
@@ -343,8 +343,8 @@ export default function ReviewMode({
                   <div
                     className={`px-3 py-2 rounded-xl border ${
                       isCorrect
-                        ? "border-green-300 bg-green-50 text-green-900"
-                        : "border-red-300 bg-red-50 text-red-900"
+                        ? "border-success-300 bg-success-50 text-success-900"
+                        : "border-danger-300 bg-danger-50 text-danger-900"
                     }`}
                   >
                     <span className="opacity-60">Bạn nhập: </span>
@@ -354,7 +354,7 @@ export default function ReviewMode({
                       )}
                     </strong>
                   </div>
-                  <div className="px-3 py-2 rounded-xl border border-green-400 bg-green-100 text-green-900">
+                  <div className="px-3 py-2 rounded-xl border border-success-400 bg-success-100 text-success-900">
                     <span className="opacity-60">Đáp án đúng: </span>
                     <strong>
                       <Latex>{String(q.correctAnswer ?? "")}</Latex>
@@ -407,7 +407,7 @@ export default function ReviewMode({
           </Link>
           <Link
             href="/student/history"
-            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+            className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
           >
             Lịch sử làm bài
           </Link>

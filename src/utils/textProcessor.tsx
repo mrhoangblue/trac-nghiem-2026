@@ -87,7 +87,7 @@ function parseTabularToHTML(raw: string): React.ReactNode {
     // Column spec may contain nested braces, e.g. {|p{3cm}|l|}.
     // Use a 1-level nested-brace pattern so {p{3cm}} is captured correctly.
     const m = /\\begin\{tabular\}\{((?:[^{}]|\{[^{}]*\})*)\}([\s\S]*?)\\end\{tabular\}/.exec(raw);
-    if (!m) return <span className="text-xs text-red-400 font-mono">[tabular parse error]</span>;
+    if (!m) return <span className="text-xs text-danger-400 font-mono">[tabular parse error]</span>;
 
     const colSpec = m[1];
     const body = m[2];
@@ -144,7 +144,7 @@ function parseTabularToHTML(raw: string): React.ReactNode {
       </div>
     );
   } catch {
-    return <span className="text-xs text-red-400 font-mono">[bảng lỗi]</span>;
+    return <span className="text-xs text-danger-400 font-mono">[bảng lỗi]</span>;
   }
 }
 

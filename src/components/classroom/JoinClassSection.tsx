@@ -63,7 +63,7 @@ export default function JoinClassSection({ user, fullName }: Props) {
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
+        <div className="w-10 h-10 bg-brand-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
           🏫
         </div>
         <div>
@@ -84,7 +84,7 @@ export default function JoinClassSection({ user, fullName }: Props) {
             maxLength={6}
             spellCheck={false}
             autoCapitalize="characters"
-            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-center text-2xl font-black tracking-[0.35em] text-gray-800 transition-colors placeholder:text-gray-300 placeholder:text-xl placeholder:tracking-widest"
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-brand-500 focus:outline-none text-center text-2xl font-black tracking-[0.35em] text-gray-800 transition-colors placeholder:text-gray-300 placeholder:text-xl placeholder:tracking-widest"
           />
           {/* Progress dots */}
           {code.length > 0 && code.length < 6 && (
@@ -93,7 +93,7 @@ export default function JoinClassSection({ user, fullName }: Props) {
                 <div
                   key={i}
                   className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    i < code.length ? "bg-blue-500" : "bg-gray-200"
+                    i < code.length ? "bg-brand-500" : "bg-gray-200"
                   }`}
                 />
               ))}
@@ -104,7 +104,7 @@ export default function JoinClassSection({ user, fullName }: Props) {
         <button
           onClick={handleJoin}
           disabled={code.length !== 6 || joining}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md text-sm whitespace-nowrap"
+          className="px-6 py-3 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md text-sm whitespace-nowrap"
         >
           {joining ? (
             <span className="flex items-center gap-2">
@@ -122,11 +122,11 @@ export default function JoinClassSection({ user, fullName }: Props) {
         <div
           className={`mt-6 flex items-start gap-3 p-4 rounded-xl text-sm font-medium border ${
             result.success
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-red-50 border-red-200 text-red-700"
+              ? "bg-success-50 border-success-200 text-success-800"
+              : "bg-danger-50 border-danger-200 text-danger-700"
           }`}
         >
-          <span className="text-base shrink-0">{result.success ? "✅" : "❌"}</span>
+          <span className="text-base shrink-0">{result.success ? "✓" : "❌"}</span>
           <span>{result.message}</span>
         </div>
       )}

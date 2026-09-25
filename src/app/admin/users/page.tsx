@@ -44,9 +44,9 @@ function formatDate(ts: Timestamp | null | undefined): string {
 
 function RoleBadge({ role }: { role: Role }) {
   const map: Record<Role, { label: string; cls: string }> = {
-    admin: { label: "Admin", cls: "bg-blue-100 text-blue-700" },
-    mod: { label: "Giáo viên", cls: "bg-emerald-100 text-emerald-700" },
-    student: { label: "Học sinh", cls: "bg-purple-100 text-purple-700" },
+    admin: { label: "Admin", cls: "bg-brand-100 text-brand-700" },
+    mod: { label: "Giáo viên", cls: "bg-success-100 text-success-700" },
+    student: { label: "Học sinh", cls: "bg-brand-100 text-brand-700" },
     pending_teacher: { label: "Chờ duyệt", cls: "bg-amber-100 text-amber-700" },
   };
   const { label, cls } = map[role] ?? { label: role, cls: "bg-gray-100 text-gray-500" };
@@ -59,8 +59,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-400 text-sm animate-pulse">Đang tải…</p>
     </div>
@@ -176,7 +176,7 @@ export default function AdminUsersPage() {
           updated++;
         })
       );
-      setBackfillResult(`✅ Đã cập nhật ${updated} tài khoản giáo viên/admin.`);
+      setBackfillResult(`✓ Đã cập nhật ${updated} tài khoản giáo viên/admin.`);
     } catch (err) {
       console.error(err);
       setBackfillResult("❌ Có lỗi xảy ra. Kiểm tra console.");
@@ -235,7 +235,7 @@ export default function AdminUsersPage() {
             {rows.map((u, i) => (
               <tr
                 key={u.uid}
-                className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 1 ? "bg-gray-50/40" : ""}`}
+                className={`hover:bg-brand-50/30 transition-colors ${i % 2 === 1 ? "bg-gray-50/40" : ""}`}
               >
                 <td className="px-6 py-4 font-semibold text-gray-900 whitespace-nowrap">
                   {u.fullName}
@@ -251,7 +251,7 @@ export default function AdminUsersPage() {
                   <RoleBadge role={u.role} />
                 </td>
                 <td className="px-4 py-4 text-center">
-                  <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full text-xs">
+                  <span className="font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full text-xs">
                     {u.submissionCount}
                   </span>
                 </td>
@@ -264,18 +264,18 @@ export default function AdminUsersPage() {
                       <button
                         onClick={() => approveTeacher(u.uid)}
                         disabled={actionId === u.uid}
-                        className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-800 font-semibold border border-emerald-200 hover:border-emerald-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-40"
+                        className="inline-flex items-center gap-1 text-success-600 hover:text-success-800 font-semibold border border-success-200 hover:border-success-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-40"
                       >
                         {actionId === u.uid ? (
-                          <span className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                          <span className="w-3 h-3 border-2 border-success-400 border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          "✅ Phê duyệt"
+                          "✓ Phê duyệt"
                         )}
                       </button>
                       <button
                         onClick={() => rejectTeacher(u.uid, u.fullName)}
                         disabled={actionId === u.uid}
-                        className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 font-semibold border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-40"
+                        className="inline-flex items-center gap-1 text-danger-500 hover:text-danger-700 font-semibold border border-danger-200 hover:border-danger-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-40"
                       >
                         ❌ Từ chối
                       </button>
@@ -303,7 +303,7 @@ export default function AdminUsersPage() {
             <div className="flex gap-2">
               <button
                 onClick={fetchData}
-                className="inline-flex items-center gap-2 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 font-semibold py-2 px-4 rounded-xl transition-all text-sm"
+                className="inline-flex items-center gap-2 border border-gray-200 text-gray-600 hover:text-brand-600 hover:border-brand-300 font-semibold py-2 px-4 rounded-xl transition-all text-sm"
               >
                 ↻ Làm mới
               </button>
@@ -334,7 +334,7 @@ export default function AdminUsersPage() {
               onClick={() => setActiveTab(t.key)}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                 activeTab === t.key
-                  ? "bg-white shadow text-blue-700"
+                  ? "bg-white shadow text-brand-700"
                   : "text-gray-500 hover:text-gray-800"
               }`}
             >
@@ -345,7 +345,7 @@ export default function AdminUsersPage() {
                     activeTab === t.key
                       ? t.key === "pending"
                         ? "bg-amber-100 text-amber-700"
-                        : "bg-blue-100 text-blue-700"
+                        : "bg-brand-100 text-brand-700"
                       : "bg-gray-200 text-gray-600"
                   }`}
                 >
@@ -378,8 +378,8 @@ export default function AdminUsersPage() {
                 <h2 className="font-bold text-gray-800">Danh sách Học sinh</h2>
                 <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                   students.length >= STUDENT_LIMIT
-                    ? "bg-red-100 text-red-700"
-                    : "bg-purple-100 text-purple-700"
+                    ? "bg-danger-100 text-danger-700"
+                    : "bg-brand-100 text-brand-700"
                 }`}>
                   Số lượng: {students.length} / {STUDENT_LIMIT}
                 </span>

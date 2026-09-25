@@ -21,8 +21,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-500 text-sm animate-pulse">Đang tải lớp học…</p>
     </div>
@@ -86,7 +86,7 @@ export default function StudentClassesPage() {
         <p className="text-gray-500 mb-8">Vui lòng đăng nhập để xem lớp học của bạn.</p>
         <Link
           href="/"
-          className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+          className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
         >
           Về trang chủ
         </Link>
@@ -128,7 +128,7 @@ export default function StudentClassesPage() {
                   <p className="text-xs text-gray-400 mt-1">👨‍🎓 {cls.studentCount} học sinh</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="font-black text-indigo-700 text-2xl font-mono tracking-widest leading-none">
+                  <p className="font-black text-brand-700 text-2xl font-mono tracking-widest leading-none">
                     {cls.classCode}
                   </p>
                   <p className="text-[10px] text-gray-400 mt-0.5">mã lớp</p>

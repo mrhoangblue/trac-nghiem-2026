@@ -1,15 +1,97 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #FFFDF6;
+  --foreground: #1C1917;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-be-vietnam);
   --font-mono: var(--font-geist-mono);
+}
+
+/* Design source: Website Gia Su — ivory / amber / earth / sunset (60/30/10). */
+@theme {
+  --color-ivory: #FFFDF6;
+  --color-earth: #78350F;
+  --color-sunset: #EA580C;
+  --color-brand-50: #FFFBEB;
+  --color-brand-100: #FEF3C7;
+  --color-brand-200: #FDE3A0;
+  --color-brand-300: #F4C570;
+  --color-brand-400: #EAA63D;
+  --color-brand-500: #D97706;
+  --color-brand-600: #B45309;
+  --color-brand-700: #92400E;
+  --color-brand-800: #78350F;
+  --color-brand-900: #451A03;
+  --color-brand-950: #2D170D;
+  --color-success-50: #FFFBEB;
+  --color-success-100: #FEF3C7;
+  --color-success-200: #FDE3A0;
+  --color-success-300: #F4C570;
+  --color-success-400: #EAA63D;
+  --color-success-500: #B45309;
+  --color-success-600: #92400E;
+  --color-success-700: #78350F;
+  --color-success-800: #5C280B;
+  --color-success-900: #451A03;
+  --color-danger-50: #FFF1F2;
+  --color-danger-100: #FFE4E6;
+  --color-danger-200: #FECDD3;
+  --color-danger-300: #FDA4AF;
+  --color-danger-400: #E56783;
+  --color-danger-500: #BE185D;
+  --color-danger-600: #9F1239;
+  --color-danger-700: #881337;
+  --color-danger-800: #701A35;
+  --color-danger-900: #4C0519;
+  --color-gray-50: #FAF8F2;
+  --color-gray-100: #F5F1E8;
+  --color-gray-200: #EDE7DA;
+  --color-gray-300: #DED6C4;
+  --color-gray-400: #8A7B68;
+  --color-gray-500: #786B5C;
+  --color-gray-600: #655848;
+  --color-gray-700: #534636;
+  --color-gray-800: #3D2E20;
+  --color-gray-900: #261C14;
+  --color-slate-50: #FAF8F2;
+  --color-slate-100: #F5F1E8;
+  --color-slate-200: #EDE7DA;
+  --color-slate-500: #786B5C;
+  --color-slate-600: #655848;
+  --color-slate-700: #534636;
+  --color-slate-800: #3D2E20;
+  --color-slate-900: #261C14;
+  --shadow-soft: 0 2px 8px -2px #451A0314, 0 10px 30px -12px #451A031f;
+  --shadow-lift: 0 8px 20px -6px #451A0324, 0 24px 48px -20px #451A0338;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+  button:not(:disabled), select { cursor: pointer; }
+  :focus-visible { outline: 3px solid #B45309; outline-offset: 4px; }
+  ::selection { background: #FDE3A0; color: #451A03; }
+  h1, h2, h3 { text-wrap: balance; }
+}
+
+.skip-link { position: fixed; top: -6rem; left: 1rem; z-index: 100; padding: .75rem 1rem; background: #78350F; color: white; border-radius: 1rem; }
+.skip-link:focus { top: .5rem; }
+.site-header { background: #fffdf6f2; backdrop-filter: blur(16px); border-bottom: 1px solid #EDE7DA; }
+.site-sidebar { background: #FFFEFA; border-right: 1px solid #EDE7DA; }
+.home-hero { background: radial-gradient(ellipse at 82% 20%, #FDE3A070, transparent 55%), #FFFDF6; }
+.math-paper { background-color: #FFFEFA; background-image: linear-gradient(#78350F09 1px, transparent 1px), linear-gradient(90deg, #78350F09 1px, transparent 1px); background-size: 24px 24px; }
+.sunset-button { background: #EA580C; color: white; box-shadow: 0 8px 22px -9px #EA580C80; }
+.sunset-button:hover { background: #C2410C; }
+.exam-card { box-shadow: var(--shadow-soft); border: 1px solid #EDE7DA; }
+.exam-card:hover { border-color: #D9AA70; box-shadow: var(--shadow-lift); transform: translateY(-3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
 body {

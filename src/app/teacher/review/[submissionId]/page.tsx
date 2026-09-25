@@ -104,8 +104,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-500 text-sm animate-pulse">Đang tải bài làm…</p>
     </div>
@@ -214,7 +214,7 @@ export default function TeacherSubmissionReviewPage() {
       ) : error ? (
         <div className="max-w-lg mx-auto px-4 py-20 text-center">
           <div className="text-5xl mb-4">⚠️</div>
-          <p className="text-red-500 font-semibold text-lg mb-6">{error}</p>
+          <p className="text-danger-500 font-semibold text-lg mb-6">{error}</p>
           <Link
             href={backHref}
             className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-colors"
@@ -227,7 +227,7 @@ export default function TeacherSubmissionReviewPage() {
           <div className="max-w-3xl mx-auto px-4 pt-6">
             <Link
               href={backHref}
-              className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-indigo-600 transition-colors"
+              className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-brand-600 transition-colors"
             >
               ← Quay lại học sinh / lớp
             </Link>

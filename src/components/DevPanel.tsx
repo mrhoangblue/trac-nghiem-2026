@@ -53,7 +53,7 @@ export default function DevPanel() {
         const names = await caches.keys();
         await Promise.all(names.map((n) => caches.delete(n)));
       }
-      setResetMsg("✅ Cache cleared! Reloading…");
+      setResetMsg("✓ Cache cleared! Reloading…");
       setTimeout(() => window.location.reload(), 800);
     } catch {
       setResetMsg("❌ Lỗi khi reset cache.");
@@ -162,10 +162,10 @@ export default function DevPanel() {
         title="Dev Tools"
         className={`w-9 h-9 rounded-full shadow-lg flex items-center justify-center text-sm font-bold transition-all border ${
           open
-            ? "bg-indigo-600 border-indigo-500 text-white scale-95"
+            ? "bg-brand-600 border-brand-500 text-white scale-95"
             : isDark
-            ? "bg-[#1a1a1a] border-[#444] text-gray-300 hover:border-indigo-400"
-            : "bg-white border-gray-200 text-gray-600 hover:border-indigo-400 hover:text-indigo-600"
+            ? "bg-[#1a1a1a] border-[#444] text-gray-300 hover:border-brand-400"
+            : "bg-white border-gray-200 text-gray-600 hover:border-brand-400 hover:text-brand-600"
         }`}
       >
         ⚙

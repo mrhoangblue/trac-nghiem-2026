@@ -29,7 +29,7 @@ export default function UploadExam() {
         </p>
 
         <textarea
-          className="w-full h-80 p-5 border-2 border-gray-200 rounded-2xl mb-6 font-mono text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all resize-y"
+          className="w-full h-80 p-5 border-2 border-gray-200 rounded-2xl mb-6 font-mono text-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all resize-y"
           placeholder="\begin{ex}
   Nội dung câu hỏi ở đây...
   \choice
@@ -48,7 +48,7 @@ export default function UploadExam() {
         
         <button
           onClick={handleParse}
-          className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
+          className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold text-lg rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
         >
           Phân tích đề
         </button>
@@ -59,7 +59,7 @@ export default function UploadExam() {
               <h3 className="text-xl font-bold text-gray-900">
                 Kết quả phân tích JSON:
               </h3>
-              <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+              <span className="text-sm font-medium text-brand-600 bg-brand-50 px-3 py-1 rounded-full">
                 {result.length} câu hỏi
               </span>
             </div>

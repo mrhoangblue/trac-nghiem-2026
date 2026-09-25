@@ -33,8 +33,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-500 text-sm animate-pulse">Đang tải lịch sử bài làm…</p>
     </div>
@@ -44,10 +44,10 @@ function Spinner() {
 function ScoreBadge({ score }: { score: number }) {
   const color =
     score >= 8
-      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+      ? "bg-success-100 text-success-700 border-success-200"
       : score >= 5
       ? "bg-amber-100 text-amber-700 border-amber-200"
-      : "bg-red-100 text-red-600 border-red-200";
+      : "bg-danger-100 text-danger-600 border-danger-200";
   return (
     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-extrabold border ${color}`}>
       {score}/10
@@ -128,7 +128,7 @@ export default function StudentHistoryPage() {
         </p>
         <Link
           href="/"
-          className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+          className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
         >
           Về trang chủ
         </Link>
@@ -146,7 +146,7 @@ export default function StudentHistoryPage() {
             alt={user.displayName ?? "Avatar"}
             width={48}
             height={48}
-            className="w-12 h-12 rounded-full border-2 border-blue-200"
+            className="w-12 h-12 rounded-full border-2 border-brand-200"
             referrerPolicy="no-referrer"
           />
         )}
@@ -163,7 +163,7 @@ export default function StudentHistoryPage() {
       ) : error ? (
         <div className="text-center py-16">
           <div className="text-4xl mb-4">⚠️</div>
-          <p className="text-red-500 font-medium">{error}</p>
+          <p className="text-danger-500 font-medium">{error}</p>
         </div>
       ) : submissions.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
@@ -172,7 +172,7 @@ export default function StudentHistoryPage() {
           <p className="text-gray-500 mb-8">Bạn chưa nộp bài thi nào. Hãy làm một bài ngay!</p>
           <Link
             href="/"
-            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+            className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
           >
             Chọn bài thi
           </Link>
@@ -187,17 +187,17 @@ export default function StudentHistoryPage() {
               <>
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                    <p className="text-3xl font-extrabold text-blue-600">{real.length}</p>
+                    <p className="text-3xl font-extrabold text-brand-600">{real.length}</p>
                     <p className="text-sm text-gray-500 mt-1">Bài đã nộp</p>
                   </div>
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                    <p className="text-3xl font-extrabold text-emerald-600">
+                    <p className="text-3xl font-extrabold text-success-600">
                       {real.length > 0 ? Math.max(...real.map((s) => s.scores.total)) : "—"}
                     </p>
                     <p className="text-sm text-gray-500 mt-1">Điểm cao nhất</p>
                   </div>
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                    <p className="text-3xl font-extrabold text-indigo-600">
+                    <p className="text-3xl font-extrabold text-brand-600">
                       {real.length > 0
                         ? (real.reduce((sum, s) => sum + s.scores.total, 0) / real.length).toFixed(1)
                         : "—"}
@@ -225,13 +225,13 @@ export default function StudentHistoryPage() {
                     <th className="text-center px-4 py-4 font-bold text-gray-600 whitespace-nowrap">
                       Thời gian nộp
                     </th>
-                    <th className="text-center px-4 py-4 font-bold text-purple-600 whitespace-nowrap">
+                    <th className="text-center px-4 py-4 font-bold text-brand-600 whitespace-nowrap">
                       P1
                     </th>
                     <th className="text-center px-4 py-4 font-bold text-amber-600 whitespace-nowrap">
                       P2
                     </th>
-                    <th className="text-center px-4 py-4 font-bold text-emerald-600 whitespace-nowrap">
+                    <th className="text-center px-4 py-4 font-bold text-success-600 whitespace-nowrap">
                       P3
                     </th>
                     <th className="text-center px-4 py-4 font-bold text-gray-700 whitespace-nowrap">
@@ -261,13 +261,13 @@ export default function StudentHistoryPage() {
                       <td className="px-4 py-4 text-center text-gray-500 whitespace-nowrap">
                         {formatDateTime(sub.submittedAt)}
                       </td>
-                      <td className="px-4 py-4 text-center font-semibold text-purple-600">
+                      <td className="px-4 py-4 text-center font-semibold text-brand-600">
                         {sub.scores.p1 ?? "—"}
                       </td>
                       <td className="px-4 py-4 text-center font-semibold text-amber-600">
                         {sub.scores.p2 ?? "—"}
                       </td>
-                      <td className="px-4 py-4 text-center font-semibold text-emerald-600">
+                      <td className="px-4 py-4 text-center font-semibold text-success-600">
                         {sub.scores.p3 ?? "—"}
                       </td>
                       <td className="px-4 py-4 text-center">
@@ -276,7 +276,7 @@ export default function StudentHistoryPage() {
                       <td className="px-4 py-4 text-right">
                         <Link
                           href={`/student/review/${sub.id}`}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded-lg text-xs transition-colors whitespace-nowrap"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 font-semibold rounded-lg text-xs transition-colors whitespace-nowrap"
                         >
                           Xem lại →
                         </Link>

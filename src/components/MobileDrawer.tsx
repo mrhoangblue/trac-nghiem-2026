@@ -29,7 +29,7 @@ function DrawerLink({
       onClick={onClose}
       className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
         active
-          ? "bg-blue-50 text-blue-700"
+          ? "bg-brand-50 text-brand-700"
           : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
       }`}
     >
@@ -82,9 +82,9 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
     userProfile?.role === "pending_teacher"
       ? { label: "Chờ duyệt", cls: "bg-amber-100 text-amber-700" }
       : userProfile?.role === "mod"
-      ? { label: "Giáo viên", cls: "bg-emerald-100 text-emerald-700" }
+      ? { label: "Giáo viên", cls: "bg-success-100 text-success-700" }
       : userProfile?.role === "admin"
-      ? { label: "Admin", cls: "bg-blue-100 text-blue-700" }
+      ? { label: "Admin", cls: "bg-brand-100 text-brand-700" }
       : null;
 
   return (
@@ -100,6 +100,8 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
       {/* Drawer panel */}
       <aside
+        inert={!open}
+        aria-hidden={!open}
         className={`fixed top-0 left-0 z-50 h-full w-72 max-w-[85vw] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -107,15 +109,15 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
         {/* Header: branding + close button */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0">
           <Link href="/" onClick={onClose} className="flex items-center gap-2.5">
-            <span className="bg-blue-600 text-white w-8 h-8 rounded-xl flex items-center justify-center text-lg font-extrabold shadow-sm shrink-0">
+            <span className="bg-brand-600 text-white w-8 h-8 rounded-xl flex items-center justify-center text-lg font-extrabold shadow-sm shrink-0">
               ∑
             </span>
             <div className="leading-none">
-              <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-widest">
-                HỆ THỐNG THI TRẮC NGHIỆM
+              <p className="text-[9px] font-extrabold text-brand-600 uppercase tracking-widest">
+                TOÁN THPT
               </p>
               <p className="text-[11px] font-extrabold text-gray-900 uppercase tracking-wide">
-                DÀNH CHO CẤP THPT
+                CÙNG THẦY HOÀNG BLUE
               </p>
             </div>
           </Link>
@@ -137,7 +139,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 alt={user.displayName ?? "Avatar"}
                 width={36}
                 height={36}
-                className="w-9 h-9 rounded-full object-cover border-2 border-blue-200 shrink-0"
+                className="w-9 h-9 rounded-full object-cover border-2 border-brand-200 shrink-0"
                 referrerPolicy="no-referrer"
               />
             )}
@@ -284,7 +286,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                         <Link
                           href={`/?grade=${encodeURIComponent(grade)}`}
                           onClick={onClose}
-                          className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-all"
+                          className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition-all"
                         >
                           — Tất cả
                         </Link>
@@ -293,7 +295,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                             key={type}
                             href={`/?grade=${encodeURIComponent(grade)}&type=${encodeURIComponent(type)}`}
                             onClick={onClose}
-                            className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-all"
+                            className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition-all"
                           >
                             {type}
                           </Link>
@@ -347,7 +349,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 onClose();
                 logout();
               }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-all"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-danger-600 hover:bg-danger-50 transition-all"
             >
               <LogOut size={16} className="shrink-0" />
               Đăng xuất

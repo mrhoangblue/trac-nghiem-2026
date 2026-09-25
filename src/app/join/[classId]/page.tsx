@@ -13,8 +13,8 @@ function Spinner() {
   return (
     <div className="flex justify-center py-20">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
     </div>
   );
@@ -90,7 +90,7 @@ export default function JoinClassByLinkPage() {
           <p className="text-gray-500 text-sm mb-6">Bạn cần đăng nhập để tham gia lớp học.</p>
           <Link
             href="/"
-            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all"
+            className="inline-block px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all"
           >
             Đăng nhập
           </Link>
@@ -110,7 +110,7 @@ export default function JoinClassByLinkPage() {
           </p>
           <Link
             href="/student/classes"
-            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all"
+            className="inline-block px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all"
           >
             ← Quay lại
           </Link>
@@ -124,7 +124,7 @@ export default function JoinClassByLinkPage() {
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4">
+          <div className="w-16 h-16 bg-brand-100 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4">
             🏫
           </div>
           <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-1">
@@ -139,7 +139,7 @@ export default function JoinClassByLinkPage() {
         {result?.success ? (
           <div className="flex flex-col items-center gap-4 py-4">
             <div className="text-5xl">🎉</div>
-            <p className="text-emerald-700 font-bold text-center">{result.message}</p>
+            <p className="text-success-700 font-bold text-center">{result.message}</p>
             <p className="text-gray-400 text-sm">Đang chuyển hướng…</p>
           </div>
         ) : (
@@ -159,7 +159,7 @@ export default function JoinClassByLinkPage() {
                     maxLength={6}
                     spellCheck={false}
                     autoCapitalize="characters"
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-center text-2xl font-black tracking-[0.35em] text-gray-800 transition-colors placeholder:text-gray-300 placeholder:text-xl placeholder:tracking-widest"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-brand-500 focus:outline-none text-center text-2xl font-black tracking-[0.35em] text-gray-800 transition-colors placeholder:text-gray-300 placeholder:text-xl placeholder:tracking-widest"
                   />
                   {code.length > 0 && code.length < 6 && (
                     <div className="absolute -bottom-5 left-0 right-0 flex justify-center gap-1">
@@ -167,7 +167,7 @@ export default function JoinClassByLinkPage() {
                         <div
                           key={i}
                           className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                            i < code.length ? "bg-blue-500" : "bg-gray-200"
+                            i < code.length ? "bg-brand-500" : "bg-gray-200"
                           }`}
                         />
                       ))}
@@ -177,7 +177,7 @@ export default function JoinClassByLinkPage() {
                 <button
                   onClick={handleJoin}
                   disabled={code.length !== 6 || joining}
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-sm whitespace-nowrap"
+                  className="px-5 py-3 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-sm whitespace-nowrap"
                 >
                   {joining ? (
                     <span className="flex items-center gap-2">
@@ -192,7 +192,7 @@ export default function JoinClassByLinkPage() {
             </div>
 
             {result && !result.success && (
-              <div className="mt-6 flex items-start gap-3 p-4 rounded-xl text-sm font-medium border bg-red-50 border-red-200 text-red-700">
+              <div className="mt-6 flex items-start gap-3 p-4 rounded-xl text-sm font-medium border bg-danger-50 border-danger-200 text-danger-700">
                 <span className="text-base shrink-0">❌</span>
                 <span>{result.message}</span>
               </div>

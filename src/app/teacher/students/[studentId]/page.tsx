@@ -32,8 +32,8 @@ function Spinner() {
   return (
     <div className="flex justify-center py-24">
       <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin" />
       </div>
     </div>
   );
@@ -241,7 +241,7 @@ export default function TeacherStudentDetailPage() {
     <AdminGuard>
       <div className="max-w-5xl mx-auto px-4 py-10 w-full">
         <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-          <Link href={backHref} className="text-indigo-600 hover:text-indigo-800 font-semibold">
+          <Link href={backHref} className="text-brand-600 hover:text-brand-800 font-semibold">
             ← {fromClass ? "Quay lại lớp học" : "Quản lý lớp học"}
           </Link>
         </div>
@@ -249,7 +249,7 @@ export default function TeacherStudentDetailPage() {
         {loading ? (
           <Spinner />
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center text-red-700 font-semibold">
+          <div className="bg-danger-50 border border-danger-200 rounded-2xl p-8 text-center text-danger-700 font-semibold">
             {error}
           </div>
         ) : (
@@ -292,7 +292,7 @@ export default function TeacherStudentDetailPage() {
                           <td className="px-4 py-3 align-middle font-semibold text-gray-800 max-w-[200px]">
                             <Link
                               href={`/teacher/review/${encodeURIComponent(r.id)}?returnTo=${encodeURIComponent(returnQuery)}`}
-                              className="text-indigo-600 hover:text-indigo-900 hover:underline"
+                              className="text-brand-600 hover:text-brand-900 hover:underline"
                             >
                               {r.examTitle}
                             </Link>
@@ -310,7 +310,7 @@ export default function TeacherStudentDetailPage() {
                             {typeof r.scores.p3 === "number" ? r.scores.p3 : "—"}
                           </td>
                           <td className="px-3 py-3 align-middle text-center">
-                            <span className="inline-flex px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-extrabold border border-emerald-100">
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full bg-success-50 text-success-700 text-xs font-extrabold border border-success-100">
                               {typeof r.scores.total === "number" ? r.scores.total : "—"}/10
                             </span>
                           </td>

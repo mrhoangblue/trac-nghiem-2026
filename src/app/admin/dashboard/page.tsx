@@ -30,8 +30,8 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">
       <div className="relative w-12 h-12">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-500 text-sm animate-pulse">Đang tải dữ liệu…</p>
     </div>
@@ -116,7 +116,7 @@ export default function AdminDashboardPage() {
         </div>
         <Link
           href="/admin/create-exam"
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
+          className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-6 rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
         >
           <span className="text-lg">＋</span> Tạo bài thi mới
         </Link>
@@ -125,9 +125,9 @@ export default function AdminDashboardPage() {
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Tổng bài thi", value: exams.length, icon: "📋", color: "bg-blue-50 border-blue-100 text-blue-700" },
-          { label: "Lượt nộp bài", value: exams.reduce((s, e) => s + e.submissionCount, 0), icon: "📝", color: "bg-green-50 border-green-100 text-green-700" },
-          { label: "Học sinh hoạt động", value: exams.reduce((s, e) => s + e.submissionCount, 0), icon: "👨‍🎓", color: "bg-purple-50 border-purple-100 text-purple-700" },
+          { label: "Tổng bài thi", value: exams.length, icon: "📋", color: "bg-brand-50 border-brand-100 text-brand-700" },
+          { label: "Lượt nộp bài", value: exams.reduce((s, e) => s + e.submissionCount, 0), icon: "📝", color: "bg-success-50 border-success-100 text-success-700" },
+          { label: "Học sinh hoạt động", value: exams.reduce((s, e) => s + e.submissionCount, 0), icon: "👨‍🎓", color: "bg-brand-50 border-brand-100 text-brand-700" },
         ].map(({ label, value, icon, color }) => (
           <div key={label} className={`rounded-2xl border p-5 flex items-center gap-4 ${color}`}>
             <span className="text-2xl">{icon}</span>
@@ -166,18 +166,18 @@ export default function AdminDashboardPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {exams.map((exam, i) => (
-                  <tr key={exam.id} className={`hover:bg-blue-50/40 transition-colors ${i % 2 === 1 ? "bg-gray-50/50" : ""}`}>
+                  <tr key={exam.id} className={`hover:bg-brand-50/40 transition-colors ${i % 2 === 1 ? "bg-gray-50/50" : ""}`}>
                     <td className="px-6 py-4">
                       <span className="font-semibold text-gray-900">{exam.title}</span>
                     </td>
                     <td className="px-6 py-4 text-gray-500">{formatDate(exam.createdAt)}</td>
                     <td className="px-6 py-4 text-center">
-                      <span className="bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-xs">
+                      <span className="bg-brand-100 text-brand-700 font-bold px-3 py-1 rounded-full text-xs">
                         {exam.questionCount} câu
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-xs">
+                      <span className="bg-success-100 text-success-700 font-bold px-3 py-1 rounded-full text-xs">
                         {exam.submissionCount} HS
                       </span>
                     </td>
@@ -185,7 +185,7 @@ export default function AdminDashboardPage() {
                       <div className="flex items-center justify-center gap-2">
                         <Link
                           href={`/admin/exam/${exam.id}`}
-                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-all text-xs"
+                          className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-semibold border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
                           🔍 Chi tiết
                         </Link>
@@ -198,7 +198,7 @@ export default function AdminDashboardPage() {
                         <button
                           onClick={() => handleDelete(exam.id, exam.title)}
                           disabled={deleting === exam.id}
-                          className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 font-semibold border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-danger-600 hover:text-danger-800 font-semibold border border-danger-200 hover:border-danger-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50"
                         >
                           {deleting === exam.id ? "…" : "🗑 Xóa"}
                         </button>

@@ -157,7 +157,7 @@ export default function FindTeacherSection() {
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 bg-purple-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
+        <div className="w-10 h-10 bg-brand-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
           🔍
         </div>
         <div>
@@ -186,10 +186,10 @@ export default function FindTeacherSection() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Nhập tên giáo viên, email…"
-          className="w-full pl-10 pr-10 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-sm transition-colors"
+          className="w-full pl-10 pr-10 py-3 rounded-xl border-2 border-gray-200 focus:border-brand-500 focus:outline-none text-sm transition-colors"
         />
         {searching && (
-          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-purple-200 border-t-purple-500 rounded-full animate-spin" />
+          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
         )}
         {!searching && searchInput && (
           <button
@@ -223,15 +223,15 @@ export default function FindTeacherSection() {
           {teachers.map((teacher, idx) => (
             <div
               key={teacher.uid}
-              className="border-2 border-gray-100 hover:border-purple-200 rounded-2xl overflow-hidden transition-colors"
+              className="border-2 border-gray-100 hover:border-brand-200 rounded-2xl overflow-hidden transition-colors"
             >
               {/* Teacher summary row — click to expand */}
               <button
                 onClick={() => toggleExpand(idx)}
-                className="w-full flex items-center gap-4 p-4 text-left hover:bg-purple-50/40 transition-colors"
+                className="w-full flex items-center gap-4 p-4 text-left hover:bg-brand-50/40 transition-colors"
               >
                 {/* Avatar */}
-                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white font-extrabold text-sm shrink-0 select-none">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-brand-400 to-brand-500 flex items-center justify-center text-white font-extrabold text-sm shrink-0 select-none">
                   {initials(teacher.fullName)}
                 </div>
 
@@ -240,7 +240,7 @@ export default function FindTeacherSection() {
                   <p className="text-xs text-gray-500 truncate mt-0.5">{teacher.school}</p>
                 </div>
 
-                <span className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 font-semibold">
+                <span className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-brand-100 text-brand-700 font-semibold">
                   Giáo viên
                 </span>
 
@@ -261,7 +261,7 @@ export default function FindTeacherSection() {
                 <div className="border-t-2 border-gray-100 bg-gray-50/50 px-4 py-4">
                   {teacher.classesLoading ? (
                     <div className="flex justify-center py-4">
-                      <div className="w-5 h-5 border-2 border-purple-200 border-t-purple-500 rounded-full animate-spin" />
+                      <div className="w-5 h-5 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
                     </div>
                   ) : !teacher.classes || teacher.classes.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-3">
@@ -277,17 +277,17 @@ export default function FindTeacherSection() {
                           <Link
                             key={cls.id}
                             href={`/join/${cls.id}`}
-                            className="flex items-center justify-between bg-white border border-gray-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl px-4 py-3 gap-3 transition-colors group"
+                            className="flex items-center justify-between bg-white border border-gray-200 hover:border-brand-400 hover:bg-brand-50/40 rounded-xl px-4 py-3 gap-3 transition-colors group"
                           >
                             <div className="min-w-0">
-                              <p className="font-semibold text-gray-800 text-sm truncate group-hover:text-blue-700 transition-colors">
+                              <p className="font-semibold text-gray-800 text-sm truncate group-hover:text-brand-700 transition-colors">
                                 {cls.name}
                               </p>
                               <p className="text-xs text-gray-400 mt-0.5">
                                 👨‍🎓 {cls.studentCount} học sinh
                               </p>
                             </div>
-                            <span className="shrink-0 text-xs text-blue-600 font-semibold whitespace-nowrap">
+                            <span className="shrink-0 text-xs text-brand-600 font-semibold whitespace-nowrap">
                               Tham gia →
                             </span>
                           </Link>

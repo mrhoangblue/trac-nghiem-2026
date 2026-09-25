@@ -86,8 +86,8 @@ function LoadingScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
       <div className="relative w-12 h-12">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
       </div>
       <p className="text-gray-400 text-sm animate-pulse">Đang tải…</p>
     </div>
