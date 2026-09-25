@@ -3,6 +3,7 @@ import { verifyAuth } from "@/lib/verifyAuth";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 import { ParsedQuestion } from "@/utils/latexParser";
+import { hashExamPassword, validateExamPassword } from "@/lib/examAccess";
 import {
   convertTikzToImage,
   processTikzToImagesWithStats,
@@ -34,6 +35,7 @@ interface UploadQuizRequest {
   timeoutMs?: number;
   targetType?: "all" | "classes";
   targetClassIds?: string[];
+  password?: string;
 }
 
 interface ProcessedQuestion extends ParsedQuestion {
@@ -148,7 +150,17 @@ export async function POST(request: NextRequest) {
     const p2Questions = questionsToSave.filter((q) => q.type === "true_false");
     const p3Questions = questionsToSave.filter((q) => q.type === "short_answer");
 
-    const docRef = await adminDb.collection("exams").add({
+    const password = body.password ?? "";
+    if (password) {
+      const passwordError = validateExamPassword(password);
+      if (passwordError) {
+        return NextResponse.json({ error: passwordError }, { status: 400 });
+      }
+    }
+
+    const docRef = adminDb.collection("exams").doc();
+    const batch = adminDb.batch();
+    batch.set(docRef, {
       title: body.title,
       description: body.description ?? "",
       questions: questionsToSave,
@@ -167,15 +179,24 @@ export async function POST(request: NextRequest) {
       tikzProcessed: true,
       tikzImageCount: convertedCount,
       tikzFailedCount: failedCount,
-      authorEmail: body.authorEmail ?? "",
+      authorEmail: authUser.email,
       maxRetries: Number(body.maxRetries ?? 1),
       isShared: Boolean(body.isShared),
       gradeLevel: body.gradeLevel ?? "",
       examType: body.examType ?? null,
       targetType: body.targetType ?? "all",
       targetClassIds: body.targetClassIds ?? [],
+      requiresPassword: Boolean(password),
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    if (password) {
+      batch.set(adminDb.collection("exam_secrets").doc(docRef.id), {
+        ...hashExamPassword(password),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
 
     return NextResponse.json({
       id: docRef.id,

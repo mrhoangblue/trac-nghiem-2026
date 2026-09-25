@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle, BookOpenCheck, LogIn, RefreshCw } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { AlertCircle, BookOpenCheck, KeyRound, LockKeyhole, LogIn, RefreshCw } from "lucide-react";
 import QuizClient, { QuizClientProps } from "@/components/QuizClient";
 import { useAuth } from "@/lib/AuthContext";
-import { db } from "@/lib/firebase";
 import { ScoringConfig, TimingConfig } from "@/utils/examTypes";
+import { formatDateTime } from "@/utils/examTypes";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 
 type QuizData = Omit<QuizClientProps, "examId">;
+type AccessMetadata = TimingConfig & { title: string; requiresPassword: boolean };
 
 function LoadingExam() {
   return (
@@ -26,27 +26,54 @@ function LoadingExam() {
 export default function QuizPageClient({ examId }: { examId: string }) {
   const { user, login } = useAuth();
   const [quiz, setQuiz] = useState<QuizData | null>(null);
-  const [error, setError] = useState<"not-found" | "permission" | "unknown" | null>(null);
+  const [metadata, setMetadata] = useState<AccessMetadata | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [needsPassword, setNeedsPassword] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [error, setError] = useState<"not-found" | "not-open" | "closed" | "permission" | "unknown" | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    if (!user) return;
-
-    let cancelled = false;
-
-    async function loadExam() {
+  const loadExam = useCallback(async (suppliedPassword = "", signal?: AbortSignal) => {
+      if (!user) return;
       setError(null);
-      setQuiz(null);
+      setPasswordError(null);
 
       try {
-        const snapshot = await getDoc(doc(db, "exams", examId));
-        if (cancelled) return;
-        if (!snapshot.exists()) {
-          setError("not-found");
+        const idToken = await user.getIdToken();
+        const response = await fetch(`/api/exams/${encodeURIComponent(examId)}/access`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify(suppliedPassword ? { password: suppliedPassword } : {}),
+          signal,
+        });
+        const payload = await response.json();
+        if (signal?.aborted) return;
+
+        if (!response.ok) {
+          if (payload.metadata) setMetadata(payload.metadata as AccessMetadata);
+          if (payload.error === "PASSWORD_REQUIRED") {
+            setNeedsPassword(true);
+            return;
+          }
+          if (payload.error === "INVALID_PASSWORD") {
+            setPasswordError("Mật khẩu chưa đúng. Vui lòng kiểm tra lại.");
+            return;
+          }
+          const errorMap: Record<string, typeof error> = {
+            NOT_FOUND: "not-found",
+            NOT_OPEN: "not-open",
+            CLOSED: "closed",
+            FORBIDDEN: "permission",
+          };
+          setError(errorMap[payload.error] ?? "unknown");
           return;
         }
 
-        const data = snapshot.data();
+        const data = payload.exam;
         const scoringConfig: ScoringConfig = data.scoringConfig ?? {
           part1TotalScore: 3,
           part3TotalScore: 1,
@@ -80,19 +107,38 @@ export default function QuizPageClient({ examId }: { examId: string }) {
           timing,
           maxRetries: data.maxRetries ?? 1,
         });
+        setMetadata({
+          title: data.title ?? "Bài thi",
+          duration: data.duration ?? 90,
+          startTime: data.startTime ?? null,
+          endTime: data.endTime ?? null,
+          requiresPassword: Boolean(data.requiresPassword),
+        });
+        setNeedsPassword(false);
       } catch (cause) {
-        if (cancelled) return;
+        if (signal?.aborted) return;
         const code = (cause as { code?: string }).code;
         setError(code === "permission-denied" ? "permission" : "unknown");
         console.error("Không thể tải đề thi:", cause);
       }
-    }
+  }, [examId, user]);
 
-    void loadExam();
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    queueMicrotask(() => void loadExam("", controller.signal));
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [examId, reloadKey, user]);
+  }, [loadExam, reloadKey, user]);
+
+  const handleUnlock = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!password || unlocking) return;
+    setUnlocking(true);
+    await loadExam(password);
+    setUnlocking(false);
+  };
 
   if (!user) {
     return (
@@ -114,10 +160,52 @@ export default function QuizPageClient({ examId }: { examId: string }) {
     );
   }
 
+  if (needsPassword) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-6 text-center">
+        <div className="mb-5 grid h-16 w-16 place-items-center rounded-3xl bg-amber-100 text-amber-800 shadow-soft">
+          <LockKeyhole className="h-8 w-8" aria-hidden="true" />
+        </div>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-700">Đề thi có mật khẩu</p>
+        <h1 className="mt-2 text-2xl font-extrabold text-earth-900">{metadata?.title ?? "Nhập mật khẩu mở đề"}</h1>
+        <form onSubmit={handleUnlock} className="mt-6 w-full rounded-3xl border border-brand-100 bg-white p-6 text-left shadow-card">
+          <label htmlFor="exam-password" className="mb-2 block text-sm font-bold text-gray-700">
+            Mật khẩu đề thi
+          </label>
+          <div className="relative">
+            <KeyRound className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-gray-400" aria-hidden="true" />
+            <input
+              id="exam-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoFocus
+              className="w-full rounded-xl border-2 border-brand-200 py-2.5 pl-10 pr-3 outline-none focus:border-brand-500"
+              placeholder="Nhập mật khẩu do giáo viên cung cấp"
+            />
+          </div>
+          {passwordError && <p className="mt-2 text-sm font-semibold text-danger-600">{passwordError}</p>}
+          <button
+            type="submit"
+            disabled={!password || unlocking}
+            className="sunset-button mt-4 w-full rounded-xl px-5 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {unlocking ? "Đang kiểm tra…" : "Mở đề thi"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   if (error) {
     const message =
       error === "not-found"
         ? "Đề thi không tồn tại hoặc đã được gỡ."
+        : error === "not-open"
+          ? `Đề thi chưa mở${metadata?.startTime ? `; thời gian mở là ${formatDateTime(metadata.startTime)}` : ""}.`
+          : error === "closed"
+            ? `Đề thi đã hết hạn${metadata?.endTime ? ` từ ${formatDateTime(metadata.endTime)}` : ""}. Giáo viên có thể gia hạn để mở lại.`
         : error === "permission"
           ? "Tài khoản của bạn chưa được cấp quyền đọc đề thi này."
           : "Có lỗi khi tải đề thi. Vui lòng thử lại.";

@@ -83,6 +83,11 @@ service cloud.firestore {
       );
     }
 
+    // Mật khẩu đề chỉ được đọc/ghi bởi API dùng Admin SDK.
+    match /exam_secrets/{examId} {
+      allow read, write: if false;
+    }
+
     // ── Bài nộp của học sinh ────────────────────────────────────────────────────
     match /submissions/{submissionId} {
       // Học sinh xem bài của mình, admin/mod xem tất cả

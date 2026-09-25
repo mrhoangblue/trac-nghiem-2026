@@ -96,6 +96,17 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm tra cục bộ: ESLint các file thay đổi đạt; TypeScript đạt; build production đạt và nhận route API mới; request xóa không có token trả đúng HTTP 401 `UNAUTHENTICATED`.
 - Giới hạn: không xóa thử lớp thật vì đây là thao tác mất dữ liệu; cần kiểm tra cuối với một lớp thử nghiệm khi đã đăng nhập giáo viên.
 
+### 25/09/2026 — Nhật ký thời gian, mật khẩu và lịch mở đề
+
+- Xác nhận hệ thống đã có `duration`, `startTime`, `endTime` và kiểm tra ở màn hình bắt đầu, nhưng chưa có mật khẩu; mốc đóng chưa giới hạn phiên đang làm và kiểm tra lịch chưa dựa hoàn toàn vào server.
+- Thêm nhật ký tối đa 500 sự kiện cho mỗi bài: vào/rời câu, chọn đáp án, snapshot trả lời ngắn khi chuyển câu, số lượt xem và thời gian theo từng câu. Lưu tổng thời gian, tương tác cuối và khoảng không tương tác trước khi nộp.
+- Trang giáo viên xem bài làm hiển thị tổng thời gian, bảng từng câu, timeline và cảnh báo khi không tương tác ít nhất 5 phút. Trang kết quả đề có cột thời gian và liên kết tới nhật ký.
+- Thêm mật khẩu đề thi: tạo/đổi/gỡ; dùng salt + scrypt hash trong `exam_secrets`, không lưu mật khẩu rõ trong `exams`; rules chặn client đọc/ghi secrets.
+- Thêm API mở đề xác minh Firebase ID token, giờ server và mật khẩu. Đề mới lưu thời gian ISO có timezone; dữ liệu `datetime-local` cũ được hiểu theo UTC+7.
+- Khi đang làm, đồng hồ dùng mốc sớm hơn giữa thời lượng phiên và giờ đóng đề. Giáo viên có thể gia hạn nhanh tại trang kết quả hoặc chỉnh lịch trong trang sửa đề.
+- Kiểm tra cục bộ: ESLint phần thay đổi không có lỗi, TypeScript và production build đạt; API mở đề không có token trả HTTP 401; hàm hash xác minh đúng mật khẩu và từ chối mật khẩu sai.
+- Giới hạn: chưa chạy end-to-end bằng hai tài khoản giáo viên/học sinh thật; cảnh báo không tương tác chỉ là tín hiệu hỗ trợ, không tự kết luận gian lận.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

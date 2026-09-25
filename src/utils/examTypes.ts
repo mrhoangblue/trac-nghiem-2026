@@ -9,6 +9,34 @@ export interface TimingConfig {
   endTime: string | null;
 }
 
+export type ExamActivityAction = "enter" | "answer" | "leave" | "submit";
+
+export interface ExamActivityEvent {
+  atSeconds: number;
+  questionId: number;
+  questionNumber: number;
+  action: ExamActivityAction;
+  answer?: string;
+  spentSeconds?: number;
+}
+
+export interface QuestionTimingStat {
+  questionId: number;
+  questionNumber: number;
+  totalSeconds: number;
+  visits: number;
+  firstVisitedAtSeconds: number;
+  lastAnsweredAtSeconds?: number;
+}
+
+export interface ExamActivitySummary {
+  activityLog: ExamActivityEvent[];
+  questionTimings: QuestionTimingStat[];
+  totalElapsedSeconds: number;
+  lastInteractionAtSeconds: number;
+  idleBeforeSubmitSeconds: number;
+}
+
 export interface ScoreResult {
   p1: number;
   p2: number;
@@ -68,8 +96,9 @@ export function formatDateTime(value: unknown): string {
   if (!value) return "—";
   let d: Date;
   // Firestore Timestamp object
-  if (value && typeof (value as any).toDate === "function") {
-    d = (value as any).toDate();
+  const timestampLike = value as { toDate?: () => Date };
+  if (typeof timestampLike.toDate === "function") {
+    d = timestampLike.toDate();
   } else {
     d = new Date(value as string);
   }

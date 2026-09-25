@@ -13,7 +13,15 @@ import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
-import { ScoreResult, P2_TABLE, normalizeAnswer } from "@/utils/examTypes";
+import {
+  ScoreResult,
+  P2_TABLE,
+  normalizeAnswer,
+  formatCountdown,
+  type ExamActivityEvent,
+  type ExamActivitySummary,
+  type QuestionTimingStat,
+} from "@/utils/examTypes";
 import ReviewMode from "@/components/ReviewMode";
 
 interface StoredAnswers {
@@ -128,12 +136,13 @@ export default function TeacherSubmissionReviewPage() {
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [activitySummary, setActivitySummary] = useState<ExamActivitySummary | null>(null);
 
   const backHref =
     returnToRaw &&
     returnToRaw.startsWith("/") &&
     !returnToRaw.startsWith("//") &&
-    returnToRaw.startsWith("/teacher/")
+    (returnToRaw.startsWith("/teacher/") || returnToRaw.startsWith("/admin/"))
       ? returnToRaw
       : "/teacher/classes";
 
@@ -191,6 +200,15 @@ export default function TeacherSubmissionReviewPage() {
 
         const score = recalcScore(qs, a1, a2, a3, sub.scores);
         setScoreResult(score);
+        if (Array.isArray(sub.activityLog) || Array.isArray(sub.questionTimings)) {
+          setActivitySummary({
+            activityLog: (sub.activityLog ?? []) as ExamActivityEvent[],
+            questionTimings: (sub.questionTimings ?? []) as QuestionTimingStat[],
+            totalElapsedSeconds: Number(sub.totalElapsedSeconds ?? 0),
+            lastInteractionAtSeconds: Number(sub.lastInteractionAtSeconds ?? 0),
+            idleBeforeSubmitSeconds: Number(sub.idleBeforeSubmitSeconds ?? 0),
+          });
+        }
       } catch (err) {
         console.error(err);
         if (!cancelled) setError("Lỗi khi tải dữ liệu. Vui lòng thử lại.");
@@ -231,6 +249,106 @@ export default function TeacherSubmissionReviewPage() {
             >
               ← Quay lại học sinh / lớp
             </Link>
+          </div>
+
+          <div className="max-w-3xl mx-auto px-4 pt-6">
+            <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-card">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Nhật ký thời gian</p>
+                  <h2 className="mt-1 text-xl font-extrabold text-earth-900">Tiến trình làm bài theo từng câu</h2>
+                </div>
+                {!activitySummary && (
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+                    Bài cũ chưa có nhật ký
+                  </span>
+                )}
+              </div>
+
+              {activitySummary && (
+                <>
+                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-brand-50 p-4">
+                      <p className="text-xs font-semibold text-brand-700">Tổng thời gian</p>
+                      <p className="mt-1 text-2xl font-extrabold text-brand-900">
+                        {formatCountdown(activitySummary.totalElapsedSeconds)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-amber-50 p-4">
+                      <p className="text-xs font-semibold text-amber-700">Tương tác cuối</p>
+                      <p className="mt-1 text-2xl font-extrabold text-amber-900">
+                        +{formatCountdown(activitySummary.lastInteractionAtSeconds)}
+                      </p>
+                    </div>
+                    <div className={`rounded-2xl p-4 ${activitySummary.idleBeforeSubmitSeconds >= 300 ? "bg-danger-50" : "bg-brand-50"}`}>
+                      <p className={`text-xs font-semibold ${activitySummary.idleBeforeSubmitSeconds >= 300 ? "text-danger-700" : "text-brand-700"}`}>
+                        Không tương tác trước khi nộp
+                      </p>
+                      <p className={`mt-1 text-2xl font-extrabold ${activitySummary.idleBeforeSubmitSeconds >= 300 ? "text-danger-900" : "text-brand-900"}`}>
+                        {formatCountdown(activitySummary.idleBeforeSubmitSeconds)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {activitySummary.idleBeforeSubmitSeconds >= 300 && (
+                    <p className="mt-4 rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-800">
+                      ⚠️ Học sinh không có tương tác trong ít nhất 5 phút trước khi bài được nộp. Đây là tín hiệu để giáo viên xem xét cùng các dữ liệu khác.
+                    </p>
+                  )}
+
+                  <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-100">
+                    <table className="w-full text-sm">
+                      <thead className="bg-brand-50 text-left text-xs uppercase tracking-wide text-brand-700">
+                        <tr>
+                          <th className="px-4 py-3">Câu</th>
+                          <th className="px-4 py-3">Thời gian xem</th>
+                          <th className="px-4 py-3">Số lượt vào</th>
+                          <th className="px-4 py-3">Trả lời lần cuối</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {activitySummary.questionTimings.map((item) => (
+                          <tr key={item.questionId}>
+                            <td className="px-4 py-3 font-bold text-gray-800">Câu {item.questionNumber}</td>
+                            <td className="px-4 py-3 text-gray-600">{formatCountdown(item.totalSeconds)}</td>
+                            <td className="px-4 py-3 text-gray-600">{item.visits}</td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {item.lastAnsweredAtSeconds === undefined
+                                ? "—"
+                                : `+${formatCountdown(item.lastAnsweredAtSeconds)}`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <details className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                    <summary className="cursor-pointer font-bold text-gray-700">
+                      Xem dòng thời gian chi tiết ({activitySummary.activityLog.length} sự kiện)
+                    </summary>
+                    <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1">
+                      {activitySummary.activityLog.map((event, index) => {
+                        const actionLabel = {
+                          enter: "Mở câu",
+                          answer: "Chọn/nhập đáp án",
+                          leave: "Rời câu",
+                          submit: "Nộp bài tại câu",
+                        }[event.action];
+                        return (
+                          <div key={`${event.atSeconds}-${index}`} className="flex gap-3 rounded-xl bg-white px-3 py-2 text-xs">
+                            <span className="w-16 shrink-0 font-mono font-bold text-brand-700">+{formatCountdown(event.atSeconds)}</span>
+                            <span className="font-semibold text-gray-700">Câu {event.questionNumber}</span>
+                            <span className="text-gray-500">{actionLabel}</span>
+                            {event.answer && <span className="ml-auto max-w-[45%] truncate font-semibold text-brand-800">{event.answer}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </>
+              )}
+            </section>
           </div>
 
           <ReviewMode

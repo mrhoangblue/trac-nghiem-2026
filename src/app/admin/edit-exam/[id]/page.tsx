@@ -25,6 +25,7 @@ import ExplanationRenderer from "@/components/ExplanationRenderer";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 import type { ClassDoc } from "@/utils/classroomTypes";
+import { toDateTimeLocal, toStoredDateTime, validateTimeRange } from "@/utils/examSchedule";
 
 interface ClassOption { id: string; name: string; }
 
@@ -85,6 +86,9 @@ export default function EditExamPage() {
   const [duration, setDuration] = useState(90);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [hasPassword, setHasPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [removePassword, setRemovePassword] = useState(false);
 
   // ── New fields ─────────────────────────────────────────────────────────────
   const [maxRetries, setMaxRetries] = useState(1);
@@ -113,8 +117,9 @@ export default function EditExamPage() {
         setExamTitle(data.title ?? "");
         setScoringConfig(data.scoringConfig ?? { part1TotalScore: 3, part3TotalScore: 1 });
         setDuration(data.duration ?? 90);
-        setStartTime(data.startTime ?? "");
-        setEndTime(data.endTime ?? "");
+        setStartTime(toDateTimeLocal(data.startTime));
+        setEndTime(toDateTimeLocal(data.endTime));
+        setHasPassword(Boolean(data.requiresPassword));
         setMaxRetries(data.maxRetries ?? 1);
         setIsShared(data.isShared ?? false);
         setGradeLevel(data.gradeLevel ?? GRADE_LEVELS[0]);
@@ -185,10 +190,20 @@ export default function EditExamPage() {
 
     // Determine if this is someone else's exam (clone operation)
     const isOwnExam = !originalAuthorEmail || originalAuthorEmail === user?.email;
+    const timeError = validateTimeRange(startTime, endTime);
+    if (timeError) {
+      alert(timeError);
+      return;
+    }
+    if (newPassword && newPassword.normalize("NFKC").length < 4) {
+      alert("Mật khẩu đề thi phải có ít nhất 4 ký tự.");
+      return;
+    }
 
     setSaving(true);
     try {
       const token = await user?.getIdToken();
+      if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
       const processResponse = await fetch("/api/process-tikz", {
         method: "POST",
         headers: {
@@ -227,8 +242,8 @@ export default function EditExamPage() {
           part3TotalScore: Number(scoringConfig.part3TotalScore),
         },
         duration: Number(duration),
-        startTime: startTime || null,
-        endTime: endTime || null,
+        startTime: toStoredDateTime(startTime),
+        endTime: toStoredDateTime(endTime),
         rawLatex: { part1, part2, part3 },
         tikzProcessed: processed.tikzProcessed,
         tikzImageCount: processed.convertedCount,
@@ -245,13 +260,26 @@ export default function EditExamPage() {
           "Đây là đề của giáo viên khác.\nHệ thống sẽ TẠO BẢN SAO mới và gán cho bạn (đề gốc không bị thay đổi).\n\nTiếp tục?"
         )) { setSaving(false); return; }
 
-        await addDoc(collection(db, "exams"), {
+        const cloneRef = await addDoc(collection(db, "exams"), {
           ...examPayload,
           authorEmail: user?.email ?? "",
           isClonedFromShared: true,
           isShared: false,
+          requiresPassword: false,
           createdAt: serverTimestamp(),
         });
+
+        if (newPassword) {
+          const accessResponse = await fetch(`/api/exams/${cloneRef.id}/access`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ passwordAction: "set", password: newPassword }),
+          });
+          if (!accessResponse.ok) throw new Error("Không thể đặt mật khẩu cho bản sao.");
+        }
 
         alert("✓ Bản sao đã được tạo và thêm vào kho 'Đề được chia sẻ' của bạn!");
         router.push("/admin/exam-list?tab=shared");
@@ -268,6 +296,25 @@ export default function EditExamPage() {
           isShared,
           updatedAt: serverTimestamp(),
         });
+
+        const passwordAction = removePassword ? "remove" : newPassword ? "set" : "keep";
+        const accessResponse = await fetch(`/api/exams/${id}/access`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            passwordAction,
+            ...(newPassword ? { password: newPassword } : {}),
+            startTime: examPayload.startTime,
+            endTime: examPayload.endTime,
+          }),
+        });
+        if (!accessResponse.ok) {
+          const payload = await accessResponse.json().catch(() => null);
+          throw new Error(payload?.message ?? "Không thể cập nhật mật khẩu hoặc thời gian mở đề.");
+        }
 
         alert("✓ Cập nhật bài thi thành công!");
         router.push("/admin/exam-list?tab=mine");
@@ -400,6 +447,38 @@ export default function EditExamPage() {
                   <span className="text-sm text-gray-500">lần</span>
                 </div>
                 <p className="text-xs text-gray-400 italic mt-1.5">💡 <strong>0</strong> = không giới hạn.</p>
+              </div>
+
+              <div className="bg-white rounded-xl border border-danger-100 p-4 space-y-3">
+                <div>
+                  <label className="text-sm font-bold text-gray-700 block mb-2">
+                    {hasPassword ? "Đổi mật khẩu mở đề" : "Đặt mật khẩu mở đề"}
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={4}
+                    maxLength={128}
+                    value={newPassword}
+                    disabled={removePassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder={hasPassword ? "Bỏ trống để giữ mật khẩu hiện tại" : "Tối thiểu 4 ký tự (không bắt buộc)"}
+                    className="w-full p-2.5 border-2 border-danger-200 rounded-lg text-sm focus:border-danger-500 outline-none disabled:bg-gray-100"
+                  />
+                </div>
+                {hasPassword && (
+                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={removePassword}
+                      onChange={(event) => {
+                        setRemovePassword(event.target.checked);
+                        if (event.target.checked) setNewPassword("");
+                      }}
+                    />
+                    Gỡ mật khẩu khỏi đề thi
+                  </label>
+                )}
               </div>
 
               {/* isShared — chỉ hiện nếu là tác giả */}

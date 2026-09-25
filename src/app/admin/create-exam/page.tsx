@@ -13,6 +13,7 @@ import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import type { ClassDoc } from "@/utils/classroomTypes";
+import { toStoredDateTime, validateTimeRange } from "@/utils/examSchedule";
 
 interface ScoringConfig {
   part1TotalScore: number;
@@ -96,6 +97,7 @@ export default function CreateExamPage() {
   const [duration, setDuration] = useState(90);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [examPassword, setExamPassword] = useState("");
 
   // ── New fields ─────────────────────────────────────────────────────────────
   const [maxRetries, setMaxRetries] = useState(1);
@@ -162,6 +164,15 @@ export default function CreateExamPage() {
 
   const handleSave = async () => {
     if (!previewData) return;
+    const timeError = validateTimeRange(startTime, endTime);
+    if (timeError) {
+      alert(timeError);
+      return;
+    }
+    if (examPassword && examPassword.normalize("NFKC").length < 4) {
+      alert("Mật khẩu đề thi phải có ít nhất 4 ký tự.");
+      return;
+    }
     setSaving(true);
     try {
       const token = await user?.getIdToken();
@@ -180,8 +191,9 @@ export default function CreateExamPage() {
             part3TotalScore: Number(scoringConfig.part3TotalScore),
           },
           duration: Number(duration),
-          startTime: startTime || null,
-          endTime: endTime || null,
+          startTime: toStoredDateTime(startTime),
+          endTime: toStoredDateTime(endTime),
+          password: examPassword,
           rawLatex: { part1, part2, part3 },
           authorEmail: user?.email ?? "",
           maxRetries: Number(maxRetries),
@@ -208,7 +220,7 @@ export default function CreateExamPage() {
       setExamTitle(""); setPart1(""); setPart2(""); setPart3("");
       setSmartInput(""); setSmartResult(null); setPreviewData(null);
       setScoringConfig({ part1TotalScore: 3, part3TotalScore: 1 });
-      setDuration(90); setStartTime(""); setEndTime("");
+      setDuration(90); setStartTime(""); setEndTime(""); setExamPassword("");
       setMaxRetries(1); setIsShared(false);
       setGradeLevel(GRADE_LEVELS[0]); setExamType(EXAM_TYPES[0]);
       setTargetType("all"); setTargetClassIds([]);
@@ -319,6 +331,25 @@ export default function CreateExamPage() {
                 </div>
                 <p className="text-xs text-gray-400 italic mt-1.5">
                   💡 Nhập <strong>0</strong> = không giới hạn số lần làm bài.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl border border-danger-100 p-4">
+                <label className="text-sm font-bold text-gray-700 block mb-2">
+                  Mật khẩu mở đề <span className="font-normal text-gray-400">(không bắt buộc)</span>
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={4}
+                  maxLength={128}
+                  value={examPassword}
+                  onChange={(event) => setExamPassword(event.target.value)}
+                  placeholder="Tối thiểu 4 ký tự"
+                  className="w-full p-2.5 border-2 border-danger-200 rounded-lg text-sm focus:border-danger-500 outline-none"
+                />
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Mật khẩu được mã hóa một chiều và không lưu chung với nội dung đề.
                 </p>
               </div>
 

@@ -15,6 +15,8 @@ import {
   getDocs,
   Timestamp,
 } from "firebase/firestore";
+import { formatCountdown } from "@/utils/examTypes";
+import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ScoringConfig {
@@ -29,6 +31,8 @@ interface ExamData {
   part3Count: number;
   scoringConfig: ScoringConfig;
   authorEmail: string;
+  startTime: string | null;
+  endTime: string | null;
 }
 
 interface Submission {
@@ -41,6 +45,8 @@ interface Submission {
   part2Results: number[];
   part3Results: boolean[];
   cheatCount?: number;
+  totalElapsedSeconds?: number;
+  idleBeforeSubmitSeconds?: number;
 }
 
 interface ScoreBreakdown {
@@ -163,6 +169,8 @@ export default function ExamDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [newEndTime, setNewEndTime] = useState("");
+  const [extending, setExtending] = useState(false);
 
   useEffect(() => {
     if (!id || authLoading) return;
@@ -183,6 +191,8 @@ export default function ExamDetailPage() {
           part3Count: d.part3Count ?? 0,
           scoringConfig: d.scoringConfig ?? { part1TotalScore: 3, part3TotalScore: 1 },
           authorEmail: d.authorEmail ?? "",
+          startTime: d.startTime ?? null,
+          endTime: d.endTime ?? null,
         };
 
         // Privacy check: mods can only view results for their own exams
@@ -192,6 +202,7 @@ export default function ExamDetailPage() {
         }
 
         setExam(examData);
+        setNewEndTime(toDateTimeLocal(examData.endTime));
 
         // 2. Fetch submissions for this exam
         const subSnap = await getDocs(
@@ -209,6 +220,8 @@ export default function ExamDetailPage() {
             part2Results: s.part2Results ?? [],
             part3Results: s.part3Results ?? [],
             cheatCount: s.cheatCount ?? 0,
+            totalElapsedSeconds: Number(s.totalElapsedSeconds ?? 0),
+            idleBeforeSubmitSeconds: Number(s.idleBeforeSubmitSeconds ?? 0),
           };
         });
         setSubmissions(subs);
@@ -295,9 +308,13 @@ export default function ExamDetailPage() {
         })),
       ];
 
+      const token = await user?.getIdToken();
       const res = await fetch("/api/send-result", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           studentEmail: sub.studentEmail,
           studentName: sub.studentName,
@@ -319,6 +336,35 @@ export default function ExamDetailPage() {
       alert("❌ Không thể kết nối đến server. Vui lòng thử lại.");
     } finally {
       setSendingEmail(null);
+    }
+  };
+
+  const handleExtendExam = async () => {
+    if (!exam || !newEndTime || !user) return;
+    const nextEndTime = toStoredDateTime(newEndTime);
+    if (!nextEndTime || new Date(nextEndTime) <= new Date()) {
+      alert("Thời gian gia hạn phải nằm trong tương lai.");
+      return;
+    }
+    setExtending(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/exams/${id}/access`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ endTime: nextEndTime, passwordAction: "keep" }),
+      });
+      if (!response.ok) throw new Error("Không thể gia hạn đề thi.");
+      setExam((current) => current ? { ...current, endTime: nextEndTime } : current);
+      alert("✓ Đã gia hạn thời gian đóng đề.");
+    } catch (error) {
+      console.error(error);
+      alert("❌ Không thể gia hạn đề thi. Vui lòng thử lại.");
+    } finally {
+      setExtending(false);
     }
   };
 
@@ -363,6 +409,35 @@ export default function ExamDetailPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-extrabold text-gray-900">{exam.title}</h1>
           <p className="text-gray-500 mt-1">Chi tiết kết quả làm bài của học sinh.</p>
+        </div>
+
+        <div className="mb-8 rounded-3xl border border-brand-100 bg-brand-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">Khung thời gian mở đề</p>
+              <p className="mt-1 text-sm text-gray-600">
+                Mở: <strong>{exam.startTime ? new Date(exam.startTime).toLocaleString("vi-VN") : "Ngay lập tức"}</strong>
+                {" · "}Đóng: <strong>{exam.endTime ? new Date(exam.endTime).toLocaleString("vi-VN") : "Không giới hạn"}</strong>
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="datetime-local"
+                value={newEndTime}
+                onChange={(event) => setNewEndTime(event.target.value)}
+                className="rounded-xl border-2 border-brand-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
+                aria-label="Thời gian đóng đề mới"
+              />
+              <button
+                type="button"
+                onClick={handleExtendExam}
+                disabled={!newEndTime || extending}
+                className="rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {extending ? "Đang gia hạn…" : "Gia hạn đề"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Info cards */}
@@ -524,7 +599,9 @@ export default function ExamDetailPage() {
                     <th className="text-center px-3 py-3 font-semibold">P3</th>
                     <th className="text-center px-3 py-3 font-semibold">Điểm cao nhất</th>
                     <th className="text-left px-4 py-3 font-semibold">Lần nộp gần nhất</th>
+                    <th className="text-center px-3 py-3 font-semibold">Thời gian làm</th>
                     <th className="text-center px-3 py-3 font-semibold">Gian lận</th>
+                    <th className="text-center px-3 py-3 font-semibold">Chi tiết</th>
                     <th className="text-center px-4 py-3 font-semibold">Email</th>
                   </tr>
                 </thead>
@@ -597,6 +674,19 @@ export default function ExamDetailPage() {
                         {formatDateTime(row.latestSubmittedAt)}
                       </td>
 
+                      <td className="px-3 py-4 text-center text-xs">
+                        {row.bestSub.totalElapsedSeconds ? (
+                          <div>
+                            <p className="font-bold text-earth">{formatCountdown(row.bestSub.totalElapsedSeconds)}</p>
+                            {(row.bestSub.idleBeforeSubmitSeconds ?? 0) >= 300 && (
+                              <p className="mt-1 font-semibold text-danger-600">
+                                nghỉ {formatCountdown(row.bestSub.idleBeforeSubmitSeconds ?? 0)}
+                              </p>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+
                       {/* Total cheat events across all attempts */}
                       <td className="px-3 py-4 text-center">
                         {row.totalCheatCount > 0 ? (
@@ -606,6 +696,15 @@ export default function ExamDetailPage() {
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>
                         )}
+                      </td>
+
+                      <td className="px-3 py-4 text-center">
+                        <Link
+                          href={`/teacher/review/${row.bestSub.id}?returnTo=${encodeURIComponent(`/admin/exam/${id}`)}`}
+                          className="font-bold text-brand-700 hover:underline"
+                        >
+                          Nhật ký →
+                        </Link>
                       </td>
 
                       {/* Resend email for best submission */}

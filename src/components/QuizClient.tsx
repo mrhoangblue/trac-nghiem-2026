@@ -23,6 +23,9 @@ import {
   ScoringConfig,
   TimingConfig,
   ScoreResult,
+  ExamActivityEvent,
+  ExamActivitySummary,
+  QuestionTimingStat,
   P2_TABLE,
   normalizeAnswer,
   formatCountdown,
@@ -190,6 +193,13 @@ export default function QuizClient({
   const [p1Ans, setP1Ans] = useState<Record<number, number>>({});
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const activityLogRef = useRef<ExamActivityEvent[]>([]);
+  const questionTimingsRef = useRef<Map<number, QuestionTimingStat>>(new Map());
+  const attemptStartedAtRef = useRef<number | null>(null);
+  const questionEnteredAtRef = useRef<number | null>(null);
+  const currentIdxRef = useRef(0);
+  const lastInteractionAtSecondsRef = useRef(0);
 
   // ── Mount effect: check Firestore for an existing IN_PROGRESS session ────
   //
@@ -229,6 +239,15 @@ export default function QuizClient({
             if (Object.keys(draft.p1Ans).length) setP1Ans(draft.p1Ans);
             if (Object.keys(draft.p2Ans).length) setP2Ans(draft.p2Ans);
             if (Object.keys(draft.p3Ans).length) setP3Ans(draft.p3Ans);
+          } else if (typeof sessionDoc.data().answersJson === "string") {
+            try {
+              const stored = JSON.parse(sessionDoc.data().answersJson);
+              setP1Ans(stored.p1Ans ?? {});
+              setP2Ans(stored.p2Ans ?? {});
+              setP3Ans(stored.p3Ans ?? {});
+            } catch {
+              // Bài cũ hoặc dữ liệu nháp lỗi: tiếp tục với đáp án rỗng.
+            }
           }
 
           // Calculate remaining seconds from the authoritative server timestamp
@@ -236,10 +255,29 @@ export default function QuizClient({
           const startTs = data.examStartTime as { toDate?: () => Date } | null;
           const startDate = startTs?.toDate?.();
           if (startDate) {
+            attemptStartedAtRef.current = startDate.getTime();
             const elapsed = (Date.now() - startDate.getTime()) / 1000;
-            const remaining = Math.max(0, timing.duration * 60 - Math.floor(elapsed));
+            const durationRemaining = timing.duration * 60 - Math.floor(elapsed);
+            const closeRemaining = timing.endTime
+              ? Math.floor((new Date(timing.endTime).getTime() - Date.now()) / 1000)
+              : Number.POSITIVE_INFINITY;
+            const remaining = Math.max(0, Math.min(durationRemaining, closeRemaining));
             setRemainingSecondsOverride(remaining);
           }
+
+          activityLogRef.current = Array.isArray(data.activityLog) ? data.activityLog : [];
+          const storedTimings = Array.isArray(data.questionTimings)
+            ? (data.questionTimings as QuestionTimingStat[])
+            : [];
+          questionTimingsRef.current = new Map(storedTimings.map((item) => [item.questionId, item]));
+          lastInteractionAtSecondsRef.current = Number(data.lastInteractionAtSeconds ?? 0);
+          const restoredIndex = Math.min(
+            Math.max(0, Number(data.currentQuestionIndex ?? 0)),
+            Math.max(0, questions.length - 1)
+          );
+          currentIdxRef.current = restoredIndex;
+          setCurrentIdx(restoredIndex);
+          questionEnteredAtRef.current = Date.now();
 
           // Skip the Start screen — student is already mid-exam
           setManuallyStarted(true);
@@ -265,6 +303,127 @@ export default function QuizClient({
   useEffect(() => { p2AnsRef.current = p2Ans; }, [p2Ans]);
   useEffect(() => { p3AnsRef.current = p3Ans; }, [p3Ans]);
 
+  const elapsedSeconds = useCallback(() => {
+    if (!attemptStartedAtRef.current) return 0;
+    return Math.max(0, Math.round((Date.now() - attemptStartedAtRef.current) / 1000));
+  }, []);
+
+  const answerSummary = useCallback((question: ParsedQuestion): string => {
+    if (question.type === "multiple_choice") {
+      const selected = p1AnsRef.current[question.id];
+      return selected === undefined ? "Chưa trả lời" : String.fromCharCode(65 + selected);
+    }
+    if (question.type === "true_false") {
+      const answers = p2AnsRef.current[question.id] ?? [];
+      return answers
+        .map((value, index) => `${String.fromCharCode(97 + index)}:${value == null ? "—" : value ? "Đ" : "S"}`)
+        .join(", ");
+    }
+    return p3AnsRef.current[question.id]?.trim() || "Chưa trả lời";
+  }, []);
+
+  const recordAnswer = useCallback((questionId: number, answer: string) => {
+    const questionIndex = questions.findIndex((question) => question.id === questionId);
+    const atSeconds = elapsedSeconds();
+    lastInteractionAtSecondsRef.current = atSeconds;
+    const previous = questionTimingsRef.current.get(questionId);
+    if (previous) {
+      questionTimingsRef.current.set(questionId, { ...previous, lastAnsweredAtSeconds: atSeconds });
+    }
+    activityLogRef.current.push({
+      atSeconds,
+      questionId,
+      questionNumber: questionIndex + 1,
+      action: "answer",
+      answer,
+    });
+    if (activityLogRef.current.length > 500) activityLogRef.current.shift();
+  }, [elapsedSeconds, questions]);
+
+  const enterQuestion = useCallback((index: number) => {
+    const question = questions[index];
+    if (!question) return;
+    const atSeconds = elapsedSeconds();
+    const previous = questionTimingsRef.current.get(question.id);
+    questionTimingsRef.current.set(question.id, {
+      questionId: question.id,
+      questionNumber: index + 1,
+      totalSeconds: previous?.totalSeconds ?? 0,
+      visits: (previous?.visits ?? 0) + 1,
+      firstVisitedAtSeconds: previous?.firstVisitedAtSeconds ?? atSeconds,
+      ...(previous?.lastAnsweredAtSeconds !== undefined
+        ? { lastAnsweredAtSeconds: previous.lastAnsweredAtSeconds }
+        : {}),
+    });
+    currentIdxRef.current = index;
+    questionEnteredAtRef.current = Date.now();
+    lastInteractionAtSecondsRef.current = atSeconds;
+    activityLogRef.current.push({
+      atSeconds,
+      questionId: question.id,
+      questionNumber: index + 1,
+      action: "enter",
+    });
+    if (activityLogRef.current.length > 500) activityLogRef.current.shift();
+  }, [elapsedSeconds, questions]);
+
+  const finalizeCurrentQuestion = useCallback((action: "leave" | "submit") => {
+    const question = questions[currentIdxRef.current];
+    const enteredAt = questionEnteredAtRef.current;
+    if (!question || enteredAt === null) return;
+    const atSeconds = elapsedSeconds();
+    const spentSeconds = Math.max(0, Math.round((Date.now() - enteredAt) / 1000));
+    const previous = questionTimingsRef.current.get(question.id);
+    questionTimingsRef.current.set(question.id, {
+      questionId: question.id,
+      questionNumber: currentIdxRef.current + 1,
+      totalSeconds: (previous?.totalSeconds ?? 0) + spentSeconds,
+      visits: previous?.visits ?? 1,
+      firstVisitedAtSeconds: previous?.firstVisitedAtSeconds ?? 0,
+      ...(previous?.lastAnsweredAtSeconds !== undefined
+        ? { lastAnsweredAtSeconds: previous.lastAnsweredAtSeconds }
+        : {}),
+    });
+    activityLogRef.current.push({
+      atSeconds,
+      questionId: question.id,
+      questionNumber: currentIdxRef.current + 1,
+      action,
+      answer: answerSummary(question),
+      spentSeconds,
+    });
+    if (activityLogRef.current.length > 500) activityLogRef.current.shift();
+    questionEnteredAtRef.current = null;
+  }, [answerSummary, elapsedSeconds, questions]);
+
+  const getActivitySummary = useCallback((): ExamActivitySummary => {
+    const totalElapsedSeconds = elapsedSeconds();
+    const lastInteractionAtSeconds = lastInteractionAtSecondsRef.current;
+    return {
+      activityLog: activityLogRef.current.slice(-500),
+      questionTimings: Array.from(questionTimingsRef.current.values())
+        .sort((a, b) => a.questionNumber - b.questionNumber),
+      totalElapsedSeconds,
+      lastInteractionAtSeconds,
+      idleBeforeSubmitSeconds: Math.max(0, totalElapsedSeconds - lastInteractionAtSeconds),
+    };
+  }, [elapsedSeconds]);
+
+  const persistActivitySnapshot = useCallback((currentQuestionIndex: number) => {
+    if (!inProgressDocIdRef.current) return;
+    const summary = getActivitySummary();
+    void updateDoc(doc(db, "submissions", inProgressDocIdRef.current), {
+      ...summary,
+      currentQuestionIndex,
+      answersJson: JSON.stringify({
+        p1Ans: p1AnsRef.current,
+        p2Ans: p2AnsRef.current,
+        p3Ans: p3AnsRef.current,
+      }),
+      lastActivityAt: serverTimestamp(),
+    }).catch((error) => console.warn("Không thể lưu nhật ký làm bài:", error));
+  }, [getActivitySummary]);
+
   // saveDraftRef stays stable (empty-dep callbacks read it via ref).
   const saveDraftRef = useRef<(
     p1: Record<number, number>,
@@ -276,7 +435,7 @@ export default function QuizClient({
     const uid = user.uid;
     saveDraftRef.current = (p1, p2, p3) =>
       saveDraft(examId, uid, { p1Ans: p1, p2Ans: p2, p3Ans: p3 });
-  }, [user?.uid, examId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid, examId]);
 
   // ── handleStartExam: called when student clicks "Bắt đầu" ─────────────────
   // 1. Creates an IN_PROGRESS record in Firestore so a reload can find it.
@@ -284,6 +443,16 @@ export default function QuizClient({
   // 3. Transitions to the active quiz UI.
   const handleStartExam = useCallback(async () => {
     if (!user?.email || !user?.uid) return;
+    const now = Date.now();
+    attemptStartedAtRef.current = now;
+    activityLogRef.current = [];
+    questionTimingsRef.current = new Map();
+    lastInteractionAtSecondsRef.current = 0;
+    enterQuestion(0);
+    const closeRemaining = timing.endTime
+      ? Math.floor((new Date(timing.endTime).getTime() - now) / 1000)
+      : Number.POSITIVE_INFINITY;
+    setRemainingSecondsOverride(Math.max(0, Math.min(timing.duration * 60, closeRemaining)));
     // Always create an IN_PROGRESS record in Firestore.
     // If the teacher is in student-preview mode, tag the doc with isTeacherPreview: true
     // so it can be identified and filtered out of real statistics later.
@@ -296,6 +465,9 @@ export default function QuizClient({
         studentAvatar: user.photoURL ?? "",
         status: "IN_PROGRESS",
         examStartTime: serverTimestamp(),
+        activityLog: activityLogRef.current,
+        questionTimings: Array.from(questionTimingsRef.current.values()),
+        lastInteractionAtSeconds: 0,
         ...(isStudentMode ? { isTeacherPreview: true } : {}),
       });
       inProgressDocIdRef.current = docRef.id;
@@ -305,10 +477,9 @@ export default function QuizClient({
     }
     startSession(); // sessionStorage fallback for timer reference
     setManuallyStarted(true);
-  }, [isStudentMode, examId, title, user, userProfile, startSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isStudentMode, examId, title, user, userProfile, startSession, enterQuestion, timing]);
 
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
-  const [currentIdx, setCurrentIdx] = useState(0);
 
   // ── TASK 1: Wake Lock ─────────────────────────────────────────────────────
   //
@@ -340,7 +511,7 @@ export default function QuizClient({
       wakeLockRef.current?.release().catch(() => {});
       wakeLockRef.current = null;
     };
-  }, [started, isSubmitted, requestWakeLock]);
+  }, [started, isSubmitted, requestWakeLock, isStudentMode]);
 
   // ── Retry limit ───────────────────────────────────────────────────────────
   // In student-preview mode the teacher is not a real student — bypass the
@@ -523,6 +694,8 @@ export default function QuizClient({
       }
 
       setSubmitting(true);
+      finalizeCurrentQuestion("submit");
+      const activitySummary = getActivitySummary();
       const result = calculateScore();
 
       const part1Results = p1Qs.map((q) => p1Ans[q.id] === (q.correctAnswer as number));
@@ -557,6 +730,7 @@ export default function QuizClient({
           scores: result,
           answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
           cheatCount: cheatCountRef.current,
+          ...activitySummary,
           ...(isStudentMode ? { isTeacherPreview: true } : {}),
         };
 
@@ -639,7 +813,7 @@ export default function QuizClient({
       isStudentMode, isSubmitted, submitting, totalAnswered, totalQuestions,
       calculateScore, p1Qs, p2Qs, p3Qs,
       p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
-      clearSession,
+      clearSession, finalizeCurrentQuestion, getActivitySummary,
       // cheatCount intentionally OMITTED — read via cheatCountRef.current inside
     ]
   );
@@ -652,6 +826,9 @@ export default function QuizClient({
     if (!exitConfirmHref || isSavingExit) return;
     isExitingRef.current = true;
     setIsSavingExit(true);
+
+    finalizeCurrentQuestion("submit");
+    const activitySummary = getActivitySummary();
 
     const result = calculateScore();
     const part1Results = p1Qs.map((q) => p1Ans[q.id] === (q.correctAnswer as number));
@@ -681,6 +858,7 @@ export default function QuizClient({
         scores: result,
         answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
         cheatCount: cheatCountRef.current,
+        ...activitySummary,
         exitedEarly: true, // flag: student left before finishing all questions
         ...(isStudentMode ? { isTeacherPreview: true } : {}),
       };
@@ -704,8 +882,8 @@ export default function QuizClient({
     exitConfirmHref, isSavingExit, calculateScore,
     p1Qs, p2Qs, p3Qs, p1Ans, p2Ans, p3Ans,
     examId, title, user, userProfile,
-    clearSession, isStudentMode, router,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+    clearSession, isStudentMode, router, finalizeCurrentQuestion, getActivitySummary,
+  ]);
 
   // Keep a ref so CountdownTimer.onExpire always calls the latest handleSubmit
   const handleSubmitRef = useRef(handleSubmit);
@@ -720,38 +898,53 @@ export default function QuizClient({
   // Stable refs ensure React.memo on QuestionCard is not bypassed by handler
   // identity changes on every parent render.
   const onP1 = useCallback(
-    (qId: number, optIdx: number) =>
-      setP1Ans((prev) => {
-        const next = { ...prev, [qId]: optIdx };
-        saveDraftRef.current(next, p2AnsRef.current, p3AnsRef.current);
-        return next;
-      }),
-    []
+    (qId: number, optIdx: number) => {
+      const next = { ...p1AnsRef.current, [qId]: optIdx };
+      p1AnsRef.current = next;
+      setP1Ans(next);
+      saveDraftRef.current(next, p2AnsRef.current, p3AnsRef.current);
+      recordAnswer(qId, String.fromCharCode(65 + optIdx));
+    },
+    [recordAnswer]
   );
   const onP2 = useCallback(
-    (qId: number, stmtIdx: number, value: boolean) =>
-      setP2Ans((prev) => {
-        const cur = prev[qId] ?? new Array(4).fill(null);
-        const row = [...cur];
-        row[stmtIdx] = value;
-        const next = { ...prev, [qId]: row };
-        saveDraftRef.current(p1AnsRef.current, next, p3AnsRef.current);
-        return next;
-      }),
-    []
+    (qId: number, stmtIdx: number, value: boolean) => {
+      const current = p2AnsRef.current[qId] ?? new Array(4).fill(null);
+      const row = [...current];
+      row[stmtIdx] = value;
+      const next = { ...p2AnsRef.current, [qId]: row };
+      p2AnsRef.current = next;
+      setP2Ans(next);
+      saveDraftRef.current(p1AnsRef.current, next, p3AnsRef.current);
+      recordAnswer(qId, `${String.fromCharCode(97 + stmtIdx)}:${value ? "Đ" : "S"}`);
+    },
+    [recordAnswer]
   );
   const onP3 = useCallback(
-    (qId: number, val: string) =>
-      setP3Ans((prev) => {
-        const next = { ...prev, [qId]: val };
-        saveDraftRef.current(p1AnsRef.current, p2AnsRef.current, next);
-        return next;
-      }),
-    []
+    (qId: number, val: string) => {
+      const next = { ...p3AnsRef.current, [qId]: val };
+      p3AnsRef.current = next;
+      setP3Ans(next);
+      saveDraftRef.current(p1AnsRef.current, p2AnsRef.current, next);
+      lastInteractionAtSecondsRef.current = elapsedSeconds();
+      const previousTiming = questionTimingsRef.current.get(qId);
+      if (previousTiming) {
+        questionTimingsRef.current.set(qId, {
+          ...previousTiming,
+          lastAnsweredAtSeconds: lastInteractionAtSecondsRef.current,
+        });
+      }
+    },
+    [elapsedSeconds]
   );
 
-  // Stable navigate callback for QuestionPalette — empty deps, uses functional updater
-  const onNavigate = useCallback((i: number) => setCurrentIdx(i), []);
+  const onNavigate = useCallback((index: number) => {
+    if (index === currentIdxRef.current || index < 0 || index >= questions.length) return;
+    finalizeCurrentQuestion("leave");
+    setCurrentIdx(index);
+    enterQuestion(index);
+    persistActivitySnapshot(index);
+  }, [enterQuestion, finalizeCurrentQuestion, persistActivitySnapshot, questions.length, setCurrentIdx]);
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   if (!user) {
@@ -984,7 +1177,7 @@ export default function QuizClient({
       {/* ── Navigation ────────────────────────────────────────────────────── */}
       <div className="mt-6 flex items-center gap-3 justify-between">
         <button
-          onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
+          onClick={() => onNavigate(Math.max(0, currentIdx - 1))}
           disabled={currentIdx === 0}
           className={`px-5 py-3 rounded-xl font-bold text-sm transition-all ${
             currentIdx === 0
@@ -1007,7 +1200,7 @@ export default function QuizClient({
 
         {currentIdx < questions.length - 1 ? (
           <button
-            onClick={() => setCurrentIdx((i) => Math.min(questions.length - 1, i + 1))}
+            onClick={() => onNavigate(Math.min(questions.length - 1, currentIdx + 1))}
             className="px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm transition-all"
           >
             Tiếp →
