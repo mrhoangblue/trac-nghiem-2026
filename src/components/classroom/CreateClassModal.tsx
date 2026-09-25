@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import { createClass } from "@/lib/classroomService";
+import { useAuth } from "@/lib/AuthContext";
 
 interface Props {
-  teacherId: string;
-  teacherName: string;
   onClose: () => void;
   /** Called after the class is successfully created. */
   onCreated: (result: { classId: string; classCode: string; name: string }) => void;
 }
 
-export default function CreateClassModal({ teacherId, teacherName, onClose, onCreated }: Props) {
+export default function CreateClassModal({ onClose, onCreated }: Props) {
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [maxStudents, setMaxStudents] = useState("");
@@ -26,17 +26,31 @@ export default function CreateClassModal({ teacherId, teacherName, onClose, onCr
     setCreating(true);
     setError("");
     try {
+      if (!user) {
+        setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        return;
+      }
+
+      const idToken = await user.getIdToken();
       const result = await createClass({
         name: name.trim(),
         description: description.trim(),
-        teacherId,
-        teacherName,
         maxStudents: maxStudents ? parseInt(maxStudents, 10) : undefined,
-      });
-      const payload = { ...result, name: name.trim() };
-      setCreated(payload);
-      onCreated(payload);
-    } catch {
+      }, idToken);
+      if (!result.success) {
+        const errorMessages = {
+          INVALID_INPUT: "Thông tin lớp chưa hợp lệ. Vui lòng kiểm tra lại.",
+          FORBIDDEN: "Tài khoản của bạn chưa có quyền tạo lớp.",
+          UNAUTHENTICATED: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+          CREATE_FAILED: "Máy chủ chưa thể tạo lớp. Vui lòng thử lại.",
+        } as const;
+        setError(errorMessages[result.error]);
+        return;
+      }
+      setCreated(result);
+      onCreated(result);
+    } catch (error) {
+      console.error("Failed to create class:", error);
       setError("Có lỗi xảy ra khi tạo lớp. Vui lòng thử lại.");
     } finally {
       setCreating(false);

@@ -18,7 +18,6 @@ export default function TeacherClassesPage() {
         {user && userProfile && (
           <TeacherClassPanel
             teacherId={user.uid}
-            teacherName={userProfile.fullName}
           />
         )}
       </div>

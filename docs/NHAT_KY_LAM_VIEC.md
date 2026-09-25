@@ -107,6 +107,14 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm tra cục bộ: ESLint phần thay đổi không có lỗi, TypeScript và production build đạt; API mở đề không có token trả HTTP 401; hàm hash xác minh đúng mật khẩu và từ chối mật khẩu sai.
 - Giới hạn: chưa chạy end-to-end bằng hai tài khoản giáo viên/học sinh thật; cảnh báo không tương tác chỉ là tín hiệu hỗ trợ, không tự kết luận gian lận.
 
+### 25/09/2026 — Sửa chức năng tạo lớp
+
+- Tái hiện từ ảnh người dùng và kiểm tra mã: form tạo lớp vẫn ghi trực tiếp vào Firestore từ trình duyệt, nên phụ thuộc vào bộ rules đang triển khai và chỉ trả thông báo lỗi chung khi bị từ chối quyền.
+- Chuyển thao tác sang `POST /api/classes`. API xác minh Firebase ID token và vai trò `mod`/`admin`, tự lấy mã lớp duy nhất và danh tính giáo viên từ hồ sơ máy chủ, kiểm tra tên, mô tả và sĩ số trước khi ghi bằng Admin SDK.
+- Client không còn gửi hoặc tin cậy `teacherId`/`teacherName`; bổ sung thông báo riêng cho hết phiên, thiếu quyền, dữ liệu không hợp lệ và lỗi máy chủ.
+- Kiểm tra cục bộ: ESLint các file thay đổi đạt; TypeScript đạt; production build đạt và nhận route `/api/classes`; request tạo lớp không có token trả đúng HTTP 401 `UNAUTHENTICATED`.
+- Giới hạn: không tự tạo dữ liệu lớp thật khi chưa có phiên đăng nhập giáo viên trong trình duyệt kiểm thử; người dùng cần thử lại thao tác tạo lớp bằng tài khoản hiện tại.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

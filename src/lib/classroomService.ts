@@ -21,64 +21,57 @@ import type { ClassDoc, ClassGroupDoc } from "@/utils/classroomTypes";
 import type { UserProfile } from "@/lib/AuthContext";
 import { generateSearchKeywords, normalizeTeacherSearchInput } from "@/utils/searchKeywords";
 
-// ── Class code generation ─────────────────────────────────────────────────────
-// Charset excludes O (looks like 0) and I (looks like 1) for readability.
-const CLASS_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const CLASS_CODE_LENGTH = 6;
-
-function randomCode(): string {
-  let result = "";
-  for (let i = 0; i < CLASS_CODE_LENGTH; i++) {
-    result += CLASS_CODE_CHARS[Math.floor(Math.random() * CLASS_CODE_CHARS.length)];
-  }
-  return result;
-}
-
-/** Returns a collision-free 6-char class code verified against Firestore. */
-export async function generateClassCode(): Promise<string> {
-  const ref = collection(db, "classes");
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const code = randomCode();
-    const snap = await getDocs(query(ref, where("classCode", "==", code), limit(1)));
-    if (snap.empty) return code;
-  }
-  throw new Error("Không thể tạo mã lớp duy nhất — thử lại sau.");
-}
-
 // ── createClass ───────────────────────────────────────────────────────────────
 
 export interface CreateClassInput {
   name: string;
   description?: string;
-  teacherId: string;
-  teacherName: string;
-  groupId?: string;
   maxStudents?: number;
 }
 
-/** Creates a new class and returns both classId and the generated classCode. */
+export type CreateClassError =
+  | "INVALID_INPUT"
+  | "FORBIDDEN"
+  | "UNAUTHENTICATED"
+  | "CREATE_FAILED";
+
+export type CreateClassResult =
+  | { success: true; classId: string; classCode: string; name: string }
+  | { success: false; error: CreateClassError };
+
+/** Creates a class through the authenticated server API. */
 export async function createClass(
-  input: CreateClassInput
-): Promise<{ classId: string; classCode: string }> {
-  const classCode = await generateClassCode();
-  const payload: Omit<ClassDoc, "createdAt" | "updatedAt"> & {
-    createdAt: unknown;
-    updatedAt: unknown;
-  } = {
-    classCode,
-    name: input.name,
-    description: input.description ?? "",
-    teacherId: input.teacherId,
-    teacherName: input.teacherName,
-    studentIds: [],
-    isActive: true,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    ...(input.groupId && { groupId: input.groupId }),
-    ...(input.maxStudents !== undefined && { maxStudents: input.maxStudents }),
-  };
-  const docRef = await addDoc(collection(db, "classes"), payload);
-  return { classId: docRef.id, classCode };
+  input: CreateClassInput,
+  idToken: string
+): Promise<CreateClassResult> {
+  const response = await fetch("/api/classes", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | { classId?: string; classCode?: string; name?: string; error?: CreateClassError }
+    | null;
+
+  if (
+    response.ok &&
+    payload?.classId &&
+    payload.classCode &&
+    payload.name
+  ) {
+    return {
+      success: true,
+      classId: payload.classId,
+      classCode: payload.classCode,
+      name: payload.name,
+    };
+  }
+
+  return { success: false, error: payload?.error ?? "CREATE_FAILED" };
 }
 
 // ── joinClass ─────────────────────────────────────────────────────────────────

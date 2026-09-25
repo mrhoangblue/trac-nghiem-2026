@@ -20,7 +20,6 @@ interface ClassRow {
 
 interface Props {
   teacherId: string;
-  teacherName: string;
 }
 
 function ClassCardSkeleton() {
@@ -33,7 +32,7 @@ function ClassCardSkeleton() {
   );
 }
 
-export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
+export default function TeacherClassPanel({ teacherId }: Props) {
   const { user } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,8 +289,6 @@ export default function TeacherClassPanel({ teacherId, teacherName }: Props) {
 
       {showModal && (
         <CreateClassModal
-          teacherId={teacherId}
-          teacherName={teacherName}
           onClose={() => setShowModal(false)}
           onCreated={(result) => {
             handleCreated(result);
