@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import type {
+  ClassCourseLesson,
   ClassCourseResource,
   ClassExamStatus,
   ClassExamSummary,
@@ -15,7 +16,7 @@ interface CourseView {
   title: string;
   description: string;
   published: boolean;
-  resources: ClassCourseResource[];
+  lessons: ClassCourseLesson[];
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -36,11 +37,19 @@ interface CourseDraft {
 
 interface ResourceDraft {
   courseId: string;
+  lessonId: string;
   resourceId?: string;
   title: string;
   description: string;
   type: ClassResourceType;
   url: string;
+}
+
+interface LessonDraft {
+  courseId: string;
+  lessonId?: string;
+  title: string;
+  description: string;
 }
 
 interface Props {
@@ -74,9 +83,14 @@ function formatDate(value: string | null): string {
   });
 }
 
-function resourceToDraft(courseId: string, resource?: ClassCourseResource): ResourceDraft {
+function resourceToDraft(
+  courseId: string,
+  lessonId: string,
+  resource?: ClassCourseResource,
+): ResourceDraft {
   return {
     courseId,
+    lessonId,
     resourceId: resource?.id,
     title: resource?.title ?? "",
     description: resource?.description ?? "",
@@ -96,6 +110,7 @@ export default function ClassLearningContent({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courseDraft, setCourseDraft] = useState<CourseDraft | null>(null);
+  const [lessonDraft, setLessonDraft] = useState<LessonDraft | null>(null);
   const [resourceDraft, setResourceDraft] = useState<ResourceDraft | null>(null);
   const [examFilter, setExamFilter] = useState<"all" | ClassExamStatus>("all");
   const [examSort, setExamSort] = useState<"status" | "newest" | "oldest">("status");
@@ -144,7 +159,9 @@ export default function ClassLearningContent({
     if (!response.ok) {
       const messages: Record<string, string> = {
         INVALID_URL: "Liên kết không hợp lệ. Hãy dùng liên kết http hoặc https có quyền xem.",
-        RESOURCE_LIMIT: "Mỗi khóa học hỗ trợ tối đa 100 tài nguyên.",
+        RESOURCE_LIMIT: "Mỗi bài học hỗ trợ tối đa 100 tài nguyên.",
+        LESSON_LIMIT: "Mỗi khóa học hỗ trợ tối đa 100 bài học.",
+        LESSON_NOT_FOUND: "Không tìm thấy bài học. Vui lòng tải lại trang.",
         FORBIDDEN: "Bạn không có quyền thay đổi nội dung lớp này.",
         INVALID_INPUT: "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại.",
       };
@@ -191,6 +208,7 @@ export default function ClassLearningContent({
       await mutate("PATCH", {
         action: "save_resource",
         courseId: resourceDraft.courseId,
+        lessonId: resourceDraft.lessonId,
         resourceId: resourceDraft.resourceId,
         title: resourceDraft.title,
         description: resourceDraft.description,
@@ -201,6 +219,28 @@ export default function ClassLearningContent({
       await loadContent();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Không thể lưu tài nguyên.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveLesson = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!lessonDraft?.title.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await mutate("PATCH", {
+        action: "save_lesson",
+        courseId: lessonDraft.courseId,
+        lessonId: lessonDraft.lessonId,
+        title: lessonDraft.title,
+        description: lessonDraft.description,
+      });
+      setLessonDraft(null);
+      await loadContent();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Không thể lưu bài học.");
     } finally {
       setSaving(false);
     }
@@ -221,6 +261,7 @@ export default function ClassLearningContent({
 
   const resourceAction = async (
     courseId: string,
+    lessonId: string,
     resourceId: string,
     action: "delete_resource" | "move_resource",
     direction?: "up" | "down",
@@ -228,10 +269,31 @@ export default function ClassLearningContent({
     if (action === "delete_resource" && !window.confirm("Xóa tài nguyên này khỏi khóa học?")) return;
     setSaving(true);
     try {
-      await mutate("PATCH", { action, courseId, resourceId, direction });
+      await mutate("PATCH", { action, courseId, lessonId, resourceId, direction });
       await loadContent();
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Không thể cập nhật tài nguyên.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const lessonAction = async (
+    courseId: string,
+    lesson: ClassCourseLesson,
+    action: "delete_lesson" | "move_lesson",
+    direction?: "up" | "down",
+  ) => {
+    if (
+      action === "delete_lesson" &&
+      !window.confirm(`Xóa bài học “${lesson.title}” cùng ${lesson.resources.length} tài nguyên bên trong?`)
+    ) return;
+    setSaving(true);
+    try {
+      await mutate("PATCH", { action, courseId, lessonId: lesson.id, direction });
+      await loadContent();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Không thể cập nhật bài học.");
     } finally {
       setSaving(false);
     }
@@ -360,7 +422,9 @@ export default function ClassLearningContent({
                       )}
                     </div>
                     {course.description && <p className="mt-2 text-sm leading-6 text-gray-500">{course.description}</p>}
-                    <p className="mt-2 text-xs text-gray-400">{course.resources.length} tài nguyên · Tạo {formatDate(course.createdAt)}</p>
+                    <p className="mt-2 text-xs text-gray-400">
+                      {course.lessons.length} bài học · {course.lessons.reduce((sum, lesson) => sum + lesson.resources.length, 0)} tài nguyên · Tạo {formatDate(course.createdAt)}
+                    </p>
                   </div>
                   {canEdit && (
                     <div className="flex gap-2">
@@ -379,54 +443,80 @@ export default function ClassLearningContent({
                   )}
                 </div>
 
-                <div className="space-y-3 p-5 sm:p-6">
-                  {course.resources.map((resource, index) => (
-                    <details key={resource.id} className="group rounded-2xl border border-gray-200 bg-gray-50/50 open:bg-white">
-                      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-lg">{RESOURCE_META[resource.type].icon}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-bold text-gray-900">{resource.title}</span>
-                          <span className="mt-0.5 block text-xs text-gray-400">{RESOURCE_META[resource.type].label} · {resource.provider}</span>
-                        </span>
-                        <span className="text-gray-400 transition group-open:rotate-180">⌄</span>
-                      </summary>
-                      <div className="border-t border-gray-100 p-4">
-                        {resource.description && <p className="mb-4 text-sm leading-6 text-gray-600">{resource.description}</p>}
-                        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
-                          <iframe
-                            src={resource.embedUrl}
-                            title={resource.title}
-                            className="h-[420px] w-full sm:h-[520px]"
-                            loading="lazy"
-                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                            allowFullScreen
-                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
-                            referrerPolicy="strict-origin-when-cross-origin"
-                          />
+                <div className="space-y-4 p-5 sm:p-6">
+                  {course.lessons.map((lesson, lessonIndex) => (
+                    <section key={lesson.id} className="overflow-hidden rounded-2xl border border-brand-100 bg-brand-50/30">
+                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-brand-100 px-4 py-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600">Bài học {lessonIndex + 1}</p>
+                          <h4 className="mt-1 text-lg font-extrabold text-gray-900">{lesson.title}</h4>
+                          {lesson.description && <p className="mt-1 text-sm leading-6 text-gray-500">{lesson.description}</p>}
+                          <p className="mt-1 text-xs text-gray-400">{lesson.resources.length} tài nguyên</p>
                         </div>
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                          <a href={resource.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-brand-700 hover:underline">Mở liên kết gốc ↗</a>
-                          {canEdit && (
-                            <div className="flex flex-wrap gap-1.5">
-                              <button disabled={saving || index === 0} onClick={() => void resourceAction(course.id, resource.id, "move_resource", "up")} className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↑</button>
-                              <button disabled={saving || index === course.resources.length - 1} onClick={() => void resourceAction(course.id, resource.id, "move_resource", "down")} className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↓</button>
-                              <button onClick={() => setResourceDraft(resourceToDraft(course.id, resource))} className="rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700">Sửa</button>
-                              <button onClick={() => void resourceAction(course.id, resource.id, "delete_resource")} className="rounded-lg bg-danger-50 px-3 py-1.5 text-xs font-bold text-danger-600">Xóa</button>
-                            </div>
-                          )}
-                        </div>
+                        {canEdit && (
+                          <div className="flex flex-wrap gap-1.5">
+                            <button disabled={saving || lessonIndex === 0} onClick={() => void lessonAction(course.id, lesson, "move_lesson", "up")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↑</button>
+                            <button disabled={saving || lessonIndex === course.lessons.length - 1} onClick={() => void lessonAction(course.id, lesson, "move_lesson", "down")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↓</button>
+                            <button onClick={() => setLessonDraft({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: lesson.description ?? "" })} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700">Sửa</button>
+                            <button onClick={() => void lessonAction(course.id, lesson, "delete_lesson")} className="rounded-lg bg-danger-50 px-3 py-1.5 text-xs font-bold text-danger-600">Xóa</button>
+                          </div>
+                        )}
                       </div>
-                    </details>
+
+                      <div className="space-y-3 p-4">
+                        {lesson.resources.map((resource, index) => (
+                          <details key={resource.id} className="group rounded-2xl border border-gray-200 bg-white open:shadow-sm">
+                            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4">
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-lg">{RESOURCE_META[resource.type].icon}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-bold text-gray-900">{resource.title}</span>
+                                <span className="mt-0.5 block text-xs text-gray-400">{RESOURCE_META[resource.type].label} · {resource.provider}</span>
+                              </span>
+                              <span className="text-gray-400 transition group-open:rotate-180">⌄</span>
+                            </summary>
+                            <div className="border-t border-gray-100 p-4">
+                              {resource.description && <p className="mb-4 text-sm leading-6 text-gray-600">{resource.description}</p>}
+                              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
+                                <iframe
+                                  src={resource.embedUrl}
+                                  title={resource.title}
+                                  className="h-[420px] w-full sm:h-[520px]"
+                                  loading="lazy"
+                                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                  allowFullScreen
+                                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
+                                  referrerPolicy="strict-origin-when-cross-origin"
+                                />
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                <a href={resource.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-brand-700 hover:underline">Mở liên kết gốc ↗</a>
+                                {canEdit && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <button disabled={saving || index === 0} onClick={() => void resourceAction(course.id, lesson.id, resource.id, "move_resource", "up")} className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↑</button>
+                                    <button disabled={saving || index === lesson.resources.length - 1} onClick={() => void resourceAction(course.id, lesson.id, resource.id, "move_resource", "down")} className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↓</button>
+                                    <button onClick={() => setResourceDraft(resourceToDraft(course.id, lesson.id, resource))} className="rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700">Sửa</button>
+                                    <button onClick={() => void resourceAction(course.id, lesson.id, resource.id, "delete_resource")} className="rounded-lg bg-danger-50 px-3 py-1.5 text-xs font-bold text-danger-600">Xóa</button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </details>
+                        ))}
+
+                        {lesson.resources.length === 0 && <p className="py-3 text-center text-sm text-gray-400">Bài học chưa có tài nguyên.</p>}
+                        {canEdit && (
+                          <button type="button" onClick={() => setResourceDraft(resourceToDraft(course.id, lesson.id))} className="w-full rounded-xl border-2 border-dashed border-brand-200 bg-white py-3 text-sm font-bold text-brand-700 transition hover:bg-brand-50">
+                            + Thêm PDF, video hoặc PPTX vào bài học
+                          </button>
+                        )}
+                      </div>
+                    </section>
                   ))}
 
-                  {course.resources.length === 0 && <p className="py-4 text-center text-sm text-gray-400">Khóa học chưa có tài nguyên.</p>}
+                  {course.lessons.length === 0 && <p className="py-5 text-center text-sm text-gray-400">Khóa học chưa có bài học.</p>}
                   {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => setResourceDraft(resourceToDraft(course.id))}
-                      className="w-full rounded-xl border-2 border-dashed border-brand-200 py-3 text-sm font-bold text-brand-700 transition hover:bg-brand-50"
-                    >
-                      + Thêm PDF, video hoặc PPTX
+                    <button type="button" onClick={() => setLessonDraft({ courseId: course.id, title: "", description: "" })} className="w-full rounded-xl border-2 border-dashed border-brand-300 py-3 text-sm font-bold text-brand-800 transition hover:bg-brand-50">
+                      + Tạo bài học mới
                     </button>
                   )}
                 </div>
@@ -435,8 +525,46 @@ export default function ClassLearningContent({
           </div>
         )}
 
+        {lessonDraft && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Biểu mẫu bài học">
+          <form onSubmit={saveLesson} className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-extrabold text-gray-900">{lessonDraft.lessonId ? "Chỉnh sửa bài học" : "Bài học mới"}</h3>
+              <button type="button" onClick={() => setLessonDraft(null)} className="text-sm font-bold text-gray-500">Đóng</button>
+            </div>
+            <label className="block text-sm font-bold text-gray-700">
+              Tên bài học
+              <input
+                value={lessonDraft.title}
+                onChange={(event) => setLessonDraft({ ...lessonDraft, title: event.target.value })}
+                maxLength={160}
+                required
+                placeholder="Ví dụ: Bài 1 – Sự đồng biến và nghịch biến"
+                className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500"
+              />
+            </label>
+            <label className="block text-sm font-bold text-gray-700">
+              Mô tả bài học
+              <textarea
+                value={lessonDraft.description}
+                onChange={(event) => setLessonDraft({ ...lessonDraft, description: event.target.value })}
+                maxLength={1000}
+                rows={3}
+                placeholder="Mục tiêu, nội dung hoặc hướng dẫn học…"
+                className="mt-1.5 w-full resize-none rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setLessonDraft(null)} className="rounded-xl px-4 py-2.5 text-sm font-bold text-gray-600">Hủy</button>
+              <button disabled={saving} className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu bài học"}</button>
+            </div>
+          </form>
+          </div>
+        )}
+
         {resourceDraft && (
-          <form onSubmit={saveResource} className="space-y-4 rounded-3xl border-2 border-brand-200 bg-white p-5 shadow-lg">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Biểu mẫu tài nguyên">
+          <form onSubmit={saveResource} className="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-white p-5 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-extrabold text-gray-900">{resourceDraft.resourceId ? "Chỉnh sửa tài nguyên" : "Thêm tài nguyên"}</h3>
               <button type="button" onClick={() => setResourceDraft(null)} className="text-sm font-bold text-gray-500">Đóng</button>
@@ -465,6 +593,7 @@ export default function ClassLearningContent({
               <button disabled={saving} className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu tài nguyên"}</button>
             </div>
           </form>
+          </div>
         )}
       </section>
 

@@ -5,6 +5,7 @@ import { verifyAuth, type AuthContextData } from "@/lib/verifyAuth";
 import { parseExamDateTime } from "@/lib/examAccess";
 import { normalizeResourceLink } from "@/utils/classResourceLinks";
 import type {
+  ClassCourseLesson,
   ClassCourseResource,
   ClassExamStatus,
   ClassResourceType,
@@ -17,6 +18,7 @@ interface RouteParams {
 interface RequestBody {
   action?: unknown;
   courseId?: unknown;
+  lessonId?: unknown;
   resourceId?: unknown;
   direction?: unknown;
   title?: unknown;
@@ -92,10 +94,36 @@ function serializeCourse(document: FirebaseFirestore.QueryDocumentSnapshot) {
     title: String(data.title ?? "Khóa học chưa đặt tên"),
     description: String(data.description ?? ""),
     published: Boolean(data.published),
-    resources: Array.isArray(data.resources) ? data.resources : [],
+    lessons: normalizeLessons(data),
     createdAt: toIso(data.createdAt),
     updatedAt: toIso(data.updatedAt),
   };
+}
+
+function normalizeLessons(data: FirebaseFirestore.DocumentData): ClassCourseLesson[] {
+  const lessons = Array.isArray(data.lessons)
+    ? data.lessons.map((lesson: Partial<ClassCourseLesson>) => ({
+        id: String(lesson.id ?? ""),
+        title: String(lesson.title ?? "Bài học chưa đặt tên"),
+        description: String(lesson.description ?? ""),
+        resources: Array.isArray(lesson.resources) ? lesson.resources : [],
+        createdAt: typeof lesson.createdAt === "string" ? lesson.createdAt : new Date(0).toISOString(),
+      }))
+    : [];
+
+  const legacyResources = Array.isArray(data.resources)
+    ? data.resources as ClassCourseResource[]
+    : [];
+  if (legacyResources.length > 0) {
+    lessons.unshift({
+      id: "legacy-resources",
+      title: "Tài liệu khóa học",
+      description: "Các tài nguyên đã được thêm trước khi khóa học hỗ trợ bài học.",
+      resources: legacyResources,
+      createdAt: new Date(0).toISOString(),
+    });
+  }
+  return lessons;
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -202,7 +230,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       title,
       description,
       published: body.published,
-      resources: [],
+      lessons: [],
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -232,9 +260,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!course) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
     const data = course.courseSnapshot.data() ?? {};
-    const resources = Array.isArray(data.resources)
-      ? [...data.resources] as ClassCourseResource[]
-      : [];
+    const lessons = normalizeLessons(data);
 
     if (body?.action === "update_course") {
       const title = textValue(body.title, 120);
@@ -246,6 +272,62 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         title,
         description,
         published: body.published,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    if (body?.action === "save_lesson") {
+      const title = textValue(body.title, 160);
+      const description = textValue(body.description ?? "", 1000);
+      if (!title || description === null) {
+        return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      }
+      const lessonId = textValue(body.lessonId, 200);
+      const existingIndex = lessonId ? lessons.findIndex((item) => item.id === lessonId) : -1;
+      if (existingIndex < 0 && lessons.length >= 100) {
+        return NextResponse.json({ error: "LESSON_LIMIT" }, { status: 400 });
+      }
+      const lesson: ClassCourseLesson = {
+        id: existingIndex >= 0 ? lessons[existingIndex].id : adminDb.collection("class_courses").doc().id,
+        title,
+        description,
+        resources: existingIndex >= 0 ? lessons[existingIndex].resources : [],
+        createdAt: existingIndex >= 0 ? lessons[existingIndex].createdAt : new Date().toISOString(),
+      };
+      if (existingIndex >= 0) lessons[existingIndex] = lesson;
+      else lessons.push(lesson);
+      await course.courseRef.update({
+        lessons,
+        resources: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return NextResponse.json({ success: true, lesson });
+    }
+
+    if (body?.action === "delete_lesson") {
+      const lessonId = textValue(body.lessonId, 200);
+      if (!lessonId) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      await course.courseRef.update({
+        lessons: lessons.filter((item) => item.id !== lessonId),
+        resources: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    if (body?.action === "move_lesson") {
+      const lessonId = textValue(body.lessonId, 200);
+      const direction = body.direction === "up" ? -1 : body.direction === "down" ? 1 : 0;
+      const index = lessonId ? lessons.findIndex((item) => item.id === lessonId) : -1;
+      const nextIndex = index + direction;
+      if (!direction || index < 0 || nextIndex < 0 || nextIndex >= lessons.length) {
+        return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      }
+      [lessons[index], lessons[nextIndex]] = [lessons[nextIndex], lessons[index]];
+      await course.courseRef.update({
+        lessons,
+        resources: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       return NextResponse.json({ success: true });
@@ -263,6 +345,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: "INVALID_URL" }, { status: 400 });
       }
 
+      const lessonId = textValue(body.lessonId, 200);
+      const lessonIndex = lessonId ? lessons.findIndex((item) => item.id === lessonId) : -1;
+      if (lessonIndex < 0) {
+        return NextResponse.json({ error: "LESSON_NOT_FOUND" }, { status: 404 });
+      }
+      const resources = [...lessons[lessonIndex].resources];
       const resourceId = textValue(body.resourceId, 200);
       const existingIndex = resourceId ? resources.findIndex((item) => item.id === resourceId) : -1;
       if (existingIndex < 0 && resources.length >= 100) {
@@ -278,31 +366,52 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       };
       if (existingIndex >= 0) resources[existingIndex] = resource;
       else resources.push(resource);
+      lessons[lessonIndex] = { ...lessons[lessonIndex], resources };
 
-      await course.courseRef.update({ resources, updatedAt: FieldValue.serverTimestamp() });
+      await course.courseRef.update({
+        lessons,
+        resources: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       return NextResponse.json({ success: true, resource });
     }
 
     if (body?.action === "delete_resource") {
+      const lessonId = textValue(body.lessonId, 200);
+      const lessonIndex = lessonId ? lessons.findIndex((item) => item.id === lessonId) : -1;
       const resourceId = textValue(body.resourceId, 200);
-      if (!resourceId) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      if (!resourceId || lessonIndex < 0) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      lessons[lessonIndex] = {
+        ...lessons[lessonIndex],
+        resources: lessons[lessonIndex].resources.filter((item) => item.id !== resourceId),
+      };
       await course.courseRef.update({
-        resources: resources.filter((item) => item.id !== resourceId),
+        lessons,
+        resources: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       return NextResponse.json({ success: true });
     }
 
     if (body?.action === "move_resource") {
+      const lessonId = textValue(body.lessonId, 200);
+      const lessonIndex = lessonId ? lessons.findIndex((item) => item.id === lessonId) : -1;
       const resourceId = textValue(body.resourceId, 200);
       const direction = body.direction === "up" ? -1 : body.direction === "down" ? 1 : 0;
+      if (lessonIndex < 0) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      const resources = [...lessons[lessonIndex].resources];
       const index = resourceId ? resources.findIndex((item) => item.id === resourceId) : -1;
       const nextIndex = index + direction;
       if (!direction || index < 0 || nextIndex < 0 || nextIndex >= resources.length) {
         return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
       }
       [resources[index], resources[nextIndex]] = [resources[nextIndex], resources[index]];
-      await course.courseRef.update({ resources, updatedAt: FieldValue.serverTimestamp() });
+      lessons[lessonIndex] = { ...lessons[lessonIndex], resources };
+      await course.courseRef.update({
+        lessons,
+        resources: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       return NextResponse.json({ success: true });
     }
 

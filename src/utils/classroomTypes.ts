@@ -55,6 +55,14 @@ export interface ClassCourseResource {
   createdAt: string;
 }
 
+export interface ClassCourseLesson {
+  id: string;
+  title: string;
+  description?: string;
+  resources: ClassCourseResource[];
+  createdAt: string;
+}
+
 /** Firestore: `class_courses/{courseId}` */
 export interface ClassCourseDoc {
   classId: string;
@@ -62,7 +70,9 @@ export interface ClassCourseDoc {
   title: string;
   description?: string;
   published: boolean;
-  resources: ClassCourseResource[];
+  lessons: ClassCourseLesson[];
+  /** Dữ liệu phiên bản cũ, được API tự chuyển thành một bài học. */
+  resources?: ClassCourseResource[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

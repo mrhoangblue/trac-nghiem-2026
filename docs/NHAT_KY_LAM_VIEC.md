@@ -125,6 +125,14 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm tra cục bộ: ESLint phần thay đổi đạt; TypeScript đạt; production build đạt và nhận hai route động mới; 5 trường hợp chuẩn hóa liên kết Drive/YouTube/Vimeo/Slides và chặn protocol nguy hiểm đều đạt; API nội dung không có token trả đúng HTTP 401; trang chi tiết lớp khi chưa đăng nhập hiển thị đúng trạng thái yêu cầu đăng nhập.
 - Giới hạn: chưa tạo dữ liệu khóa học thật vì trình duyệt kiểm thử không có phiên giáo viên; khả năng xem nhúng của nguồn lưu trữ ngoài phụ thuộc việc nguồn đó cho phép iframe và quyền chia sẻ công khai.
 
+### 25/09/2026 — Bài học riêng trong từng khóa học
+
+- Mở rộng cấu trúc thành `lớp → khóa học → bài học → tài nguyên`. Mỗi bài học có tên và mô tả riêng; giáo viên có thể tạo, sửa, xóa và đổi thứ tự bài học.
+- PDF, video và PPTX/Slides được thêm vào từng bài học cụ thể; thứ tự tài nguyên được quản lý độc lập trong mỗi bài.
+- Dữ liệu khóa học phiên bản cũ có tài nguyên trực tiếp được hiển thị dưới bài “Tài liệu khóa học” và tự chuyển sang cấu trúc mới khi giáo viên chỉnh sửa.
+- Biểu mẫu bài học và tài nguyên dùng hộp thoại nổi để luôn nhìn thấy khi khóa học có nội dung dài.
+- Kiểm tra cục bộ: ESLint phần thay đổi đạt; TypeScript đạt; production build đạt và giữ đủ các route lớp học.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.
