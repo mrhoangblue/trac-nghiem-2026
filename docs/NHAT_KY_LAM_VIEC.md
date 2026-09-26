@@ -190,6 +190,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Tăng kiểm tra trước khi lưu: bắt buộc tên đề, ít nhất một câu hợp lệ và ít nhất một lớp khi chọn phạm vi lớp cụ thể.
 - Kiểm tra parser tổng hợp: TEX có preamble/comment được rút còn đúng một câu `ex`, nhận đúng đáp án B và hai biểu thức; DOCX/OMML/SVG và PDF mẫu tiếp tục đạt.
 
+### 26/09/2026 — Quản lý lớp, duyệt học sinh và menu theo vai trò
+
+- Thiết kế lại thẻ lớp giáo viên theo lưới màu nâu đất, xanh teal, tím và olive; mã lớp không còn hiển thị ở trang danh sách. Mã và link mời chỉ xuất hiện sau khi giáo viên mở trang chi tiết lớp.
+- Thiết kế lại trang lớp của học sinh: thẻ lớp nhấn mạnh tên giáo viên, số thành viên và lối vào lớp; bỏ mã lớp khỏi thẻ. Bổ sung khu riêng hiển thị các yêu cầu đang chờ duyệt.
+- Chuyển tham gia bằng mã hoặc link sang API máy chủ. Yêu cầu mới được ghi `pending`, không thêm học sinh vào `classes.studentIds`; chỉ sau khi giáo viên nhấn duyệt trong trang chi tiết thì transaction mới đồng thời kích hoạt membership và thêm UID vào lớp. Giáo viên có thể từ chối; số lượng tối đa được kiểm tra lại lúc duyệt.
+- Siết Firestore Rules để học sinh không thể tự thêm UID, tự tạo membership `active` hoặc tự sửa trạng thái duyệt từ client. API danh sách lớp giữ tương thích với dữ liệu cũ chỉ có `studentIds`.
+- Tổ chức lại sidebar giáo viên theo Tổng quan, Giảng dạy, Ngân hàng đề, Quản trị và Cá nhân; sidebar học sinh theo Học tập và Ôn luyện theo khối. Thay emoji bằng icon nhất quán, thêm thẻ nhận diện người dùng và trạng thái active rõ hơn.
+- Kiểm tra cục bộ: ESLint toàn bộ file thay đổi đạt; TypeScript đạt; production build Next.js 16.3.6 đạt và nhận ba route mới. Bản production đang chạy tại `http://localhost:3000`. Trình duyệt kiểm thử không có phiên đăng nhập nên chỉ xác nhận được route bảo vệ và bố cục công khai; luồng duyệt cần thử thêm bằng hai tài khoản thật sau khi triển khai Firestore Rules.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

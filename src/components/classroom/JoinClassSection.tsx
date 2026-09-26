@@ -9,11 +9,10 @@ const VALID_CLASS_CODE_RE = /[^A-Z2-9]/g;
 
 interface Props {
   user: User;
-  /** Student's display name — falls back to displayName then email. */
-  fullName: string;
+  onRequested?: () => void;
 }
 
-export default function JoinClassSection({ user, fullName }: Props) {
+export default function JoinClassSection({ user, onRequested }: Props) {
   const [code, setCode] = useState("");
   const [joining, setJoining] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -29,23 +28,23 @@ export default function JoinClassSection({ user, fullName }: Props) {
     setJoining(true);
     setResult(null);
     try {
-      const res = await joinClass(code, {
-        uid: user.uid,
-        fullName,
-        email: user.email ?? "",
-      });
+      const res = await joinClass(code, await user.getIdToken());
       if (res.success) {
         setResult({
           success: true,
-          message: `Đã tham gia lớp "${res.className}" thành công! 🎉`,
+          message: `Đã gửi yêu cầu vào lớp “${res.className}”. Giáo viên sẽ duyệt trước khi bạn có thể truy cập.`,
         });
         setCode("");
+        onRequested?.();
       } else {
         const errorMessages: Record<string, string> = {
           NOT_FOUND: "Mã lớp không tồn tại. Kiểm tra lại mã và thử lại.",
           INACTIVE: "Lớp này đã đóng. Liên hệ giáo viên để biết thêm.",
           FULL: "Lớp đã đầy. Liên hệ giáo viên để được xét duyệt.",
           ALREADY_JOINED: "Bạn đã là thành viên của lớp này rồi.",
+          ALREADY_PENDING: "Yêu cầu của bạn đang chờ giáo viên duyệt.",
+          SUSPENDED: "Tài khoản của bạn đang bị tạm dừng trong lớp này.",
+          STUDENT_ONLY: "Hãy chuyển sang tài khoản học sinh để tham gia lớp.",
         };
         setResult({
           success: false,
@@ -64,11 +63,11 @@ export default function JoinClassSection({ user, fullName }: Props) {
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
         <div className="w-10 h-10 bg-brand-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
-          🏫
+          <span aria-hidden="true">＋</span>
         </div>
         <div>
-          <h2 className="font-extrabold text-gray-900">Tham gia lớp học</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Nhập mã 6 ký tự do giáo viên cung cấp</p>
+          <h2 className="font-extrabold text-gray-900">Gửi yêu cầu tham gia</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Nhập mã 6 ký tự, sau đó chờ giáo viên duyệt</p>
         </div>
       </div>
 
@@ -112,7 +111,7 @@ export default function JoinClassSection({ user, fullName }: Props) {
               Đang xử lý…
             </span>
           ) : (
-            "Tham gia →"
+            "Gửi yêu cầu"
           )}
         </button>
       </div>

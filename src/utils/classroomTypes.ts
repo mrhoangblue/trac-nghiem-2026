@@ -38,8 +38,11 @@ export interface ClassMemberDoc {
   studentId: string;
   studentName: string;
   studentEmail: string;
-  joinedAt: Timestamp;
-  status: "active" | "suspended";
+  joinedAt?: Timestamp;
+  requestedAt?: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  status: "pending" | "active" | "suspended" | "rejected";
 }
 
 export type ClassResourceType = "pdf" | "video" | "slides";

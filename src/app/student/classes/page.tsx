@@ -1,137 +1,131 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { db, auth } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { ArrowRight, BookOpen, Clock3, GraduationCap, UserRound } from "lucide-react";
 import JoinClassSection from "@/components/classroom/JoinClassSection";
 import FindTeacherSection from "@/components/classroom/FindTeacherSection";
-import type { ClassDoc } from "@/utils/classroomTypes";
+import { useAuth } from "@/lib/AuthContext";
 
-interface JoinedClass {
+interface MembershipClass {
   id: string;
   name: string;
-  classCode: string;
+  description: string;
   teacherName: string;
   studentCount: number;
+  isActive: boolean;
+  status: "pending" | "active" | "suspended" | "rejected";
+  requestedAt: string | null;
 }
 
+const CARD_THEMES = [
+  "from-[#9f4f22] to-[#c87532]",
+  "from-[#235d66] to-[#398592]",
+  "from-[#5b547d] to-[#8179a7]",
+  "from-[#68733b] to-[#929b56]",
+];
+
 function Spinner() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-4">
-      <div className="relative w-10 h-10">
-        <div className="absolute inset-0 rounded-full border-4 border-brand-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-brand-500 border-t-transparent animate-spin" />
-      </div>
-      <p className="text-gray-500 text-sm animate-pulse">Đang tải lớp học…</p>
-    </div>
-  );
+  return <div className="mx-auto my-14 h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600" />;
 }
 
 export default function StudentClassesPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [classes, setClasses] = useState<JoinedClass[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const [memberships, setMemberships] = useState<MembershipClass[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setAuthLoading(false);
-    });
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    const fetchClasses = async () => {
-      try {
-        const snap = await getDocs(
-          query(
-            collection(db, "classes"),
-            where("studentIds", "array-contains", user.uid),
-            where("isActive", "==", true)
-          )
-        );
-        setClasses(
-          snap.docs.map((d) => {
-            const data = d.data() as ClassDoc;
-            return {
-              id: d.id,
-              name: data.name,
-              classCode: data.classCode,
-              teacherName: data.teacherName ?? "",
-              studentCount: data.studentIds.length,
-            };
-          })
-        );
-      } catch (err) {
-        console.error("Failed to fetch classes:", err);
-      } finally {
-        setClassesLoading(false);
-      }
-    };
-    fetchClasses();
+  const fetchMemberships = useCallback(async () => {
+    if (!user) return;
+    setClassesLoading(true);
+    setLoadError(false);
+    try {
+      const response = await fetch("/api/classes/memberships", {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      if (!response.ok) throw new Error("Could not load memberships");
+      const payload = (await response.json()) as { memberships?: MembershipClass[] };
+      setMemberships(payload.memberships ?? []);
+    } catch (error) {
+      console.error("Failed to fetch classes:", error);
+      setLoadError(true);
+    } finally {
+      setClassesLoading(false);
+    }
   }, [user]);
 
-  if (authLoading) return <Spinner />;
+  useEffect(() => {
+    queueMicrotask(() => void fetchMemberships());
+  }, [fetchMemberships]);
 
+  if (authLoading) return <Spinner />;
   if (!user) {
     return (
-      <div className="max-w-md mx-auto px-4 py-24 text-center">
-        <div className="text-6xl mb-6">🔐</div>
-        <h2 className="text-2xl font-extrabold text-gray-800 mb-3">Cần đăng nhập</h2>
-        <p className="text-gray-500 mb-8">Vui lòng đăng nhập để xem lớp học của bạn.</p>
-        <Link
-          href="/"
-          className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
-        >
-          Về trang chủ
-        </Link>
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <h2 className="text-2xl font-extrabold text-gray-800">Cần đăng nhập</h2>
+        <p className="mt-3 text-gray-500">Vui lòng đăng nhập để xem lớp học của bạn.</p>
+        <Link href="/" className="mt-7 inline-flex rounded-xl bg-brand-600 px-8 py-3 font-bold text-white">Về trang chủ</Link>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-10 w-full space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-gray-900">Lớp học của tôi</h1>
-        <p className="text-gray-500 mt-1">Xem các lớp bạn đã tham gia hoặc tìm và tham gia lớp mới.</p>
-      </div>
+  const activeClasses = memberships.filter((item) => item.status === "active" && item.isActive);
+  const pendingClasses = memberships.filter((item) => item.status === "pending");
 
-      {/* Joined classes */}
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-9 px-4 py-8 sm:py-10">
+      <header className="relative overflow-hidden rounded-[2rem] bg-[#2f241d] px-6 py-8 text-white shadow-xl sm:px-9">
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#d58a50]/25 blur-2xl" />
+        <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#efc49f]">Không gian học tập</p>
+            <h1 className="mt-2 text-3xl font-black sm:text-4xl">Lớp học của tôi</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/70">Theo dõi lớp đang học, giáo viên phụ trách và các yêu cầu đang chờ duyệt.</p>
+          </div>
+          <div className="flex gap-3">
+            <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><strong className="text-xl">{activeClasses.length}</strong><span className="ml-2 text-xs text-white/65">đang học</span></div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><strong className="text-xl">{pendingClasses.length}</strong><span className="ml-2 text-xs text-white/65">chờ duyệt</span></div>
+          </div>
+        </div>
+      </header>
+
+      {pendingClasses.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center gap-2"><Clock3 className="h-5 w-5 text-amber-600" /><h2 className="text-lg font-extrabold text-gray-900">Đang chờ giáo viên duyệt</h2></div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pendingClasses.map((cls) => (
+              <article key={cls.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
+                <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">Chờ duyệt</span>
+                <h3 className="mt-3 font-extrabold text-gray-900">{cls.name}</h3>
+                <p className="mt-2 flex items-center gap-2 text-sm text-gray-600"><UserRound className="h-4 w-4" />GV: {cls.teacherName}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section>
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Lớp đang tham gia</h2>
-        {classesLoading ? (
-          <Spinner />
-        ) : classes.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm text-center py-14 px-6">
-            <div className="text-5xl mb-4">🏫</div>
-            <p className="font-bold text-gray-700 text-lg mb-1">Bạn chưa tham gia lớp nào</p>
-            <p className="text-gray-400 text-sm">Nhập mã lớp bên dưới để tham gia lớp học của giáo viên.</p>
+        <div className="mb-4 flex items-center gap-2"><BookOpen className="h-5 w-5 text-brand-700" /><h2 className="text-lg font-extrabold text-gray-900">Lớp đang tham gia</h2></div>
+        {classesLoading ? <Spinner /> : loadError ? (
+          <div className="rounded-2xl border border-danger-200 bg-danger-50 p-5 text-sm text-danger-700">Không thể tải danh sách lớp. Vui lòng thử lại.</div>
+        ) : activeClasses.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-gray-200 bg-white py-14 text-center">
+            <GraduationCap className="mx-auto h-12 w-12 text-brand-400" />
+            <p className="mt-4 text-lg font-bold text-gray-800">Chưa có lớp đã được duyệt</p>
+            <p className="mt-1 text-sm text-gray-500">Gửi mã lớp bên dưới và chờ giáo viên xác nhận.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {classes.map((cls) => (
-              <Link
-                key={cls.id}
-                href={`/student/classes/${cls.id}`}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center justify-between gap-4"
-              >
-                <div className="min-w-0">
-                  <p className="font-bold text-gray-900 truncate">{cls.name}</p>
-                  {cls.teacherName && (
-                    <p className="text-sm text-gray-500 mt-0.5 truncate">GV: {cls.teacherName}</p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">👨‍🎓 {cls.studentCount} học sinh</p>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {activeClasses.map((cls, index) => (
+              <Link key={cls.id} href={`/student/classes/${cls.id}`} className="group overflow-hidden rounded-[1.6rem] border border-gray-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+                <div className={`relative min-h-32 bg-gradient-to-br ${CARD_THEMES[index % CARD_THEMES.length]} p-5 text-white`}>
+                  <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full border-[18px] border-white/10" />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/65">Lớp học</p>
+                  <h3 className="mt-3 line-clamp-2 text-xl font-black leading-snug">{cls.name}</h3>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-black text-brand-700 text-2xl font-mono tracking-widest leading-none">
-                    {cls.classCode}
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Vào lớp →</p>
+                <div className="p-5">
+                  <p className="flex items-center gap-2 text-sm font-bold text-gray-800"><UserRound className="h-4 w-4 text-brand-600" />Giáo viên: {cls.teacherName}</p>
+                  <div className="mt-5 flex items-center justify-between text-xs text-gray-500"><span>{cls.studentCount} học sinh</span><span className="flex items-center gap-1 font-bold text-brand-700">Vào lớp <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span></div>
                 </div>
               </Link>
             ))}
@@ -139,21 +133,9 @@ export default function StudentClassesPage() {
         )}
       </section>
 
-      {/* Divider */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 border-t border-gray-200" />
-        <span className="text-sm font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-          Tham gia lớp mới
-        </span>
-        <div className="flex-1 border-t border-gray-200" />
-      </div>
-
-      {/* Join + Find teacher */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <JoinClassSection
-          user={user}
-          fullName={user.displayName ?? user.email ?? "Học sinh"}
-        />
+      <div className="flex items-center gap-4"><div className="h-px flex-1 bg-gray-200" /><span className="text-xs font-extrabold uppercase tracking-[0.18em] text-gray-400">Tham gia lớp mới</span><div className="h-px flex-1 bg-gray-200" /></div>
+      <div className="grid gap-5 md:grid-cols-2">
+        <JoinClassSection user={user} onRequested={fetchMemberships} />
         <FindTeacherSection />
       </div>
     </div>

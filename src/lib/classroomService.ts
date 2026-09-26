@@ -6,14 +6,11 @@ import {
   collection,
   doc,
   addDoc,
-  setDoc,
   getDoc,
-  updateDoc,
   getDocs,
   query,
   where,
   limit,
-  arrayUnion,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -76,7 +73,16 @@ export async function createClass(
 
 // ── joinClass ─────────────────────────────────────────────────────────────────
 
-export type JoinClassError = "NOT_FOUND" | "INACTIVE" | "FULL" | "ALREADY_JOINED";
+export type JoinClassError =
+  | "NOT_FOUND"
+  | "INACTIVE"
+  | "FULL"
+  | "ALREADY_JOINED"
+  | "ALREADY_PENDING"
+  | "SUSPENDED"
+  | "STUDENT_ONLY"
+  | "UNAUTHENTICATED"
+  | "JOIN_FAILED";
 
 export interface JoinClassResult {
   success: boolean;
@@ -86,47 +92,13 @@ export interface JoinClassResult {
 }
 
 /**
- * Enrolls a student in a class by classCode.
- * Atomically updates `classes.studentIds` and mirrors to `class_members`.
+ * Submits a join request by class code. The teacher must approve it.
  */
 export async function joinClass(
   classCode: string,
-  student: Pick<UserProfile, "uid" | "fullName" | "email">
+  idToken: string
 ): Promise<JoinClassResult> {
-  const normalised = classCode.toUpperCase().trim();
-  const snap = await getDocs(
-    query(collection(db, "classes"), where("classCode", "==", normalised), limit(1))
-  );
-  if (snap.empty) return { success: false, error: "NOT_FOUND" };
-
-  const classDocSnap = snap.docs[0];
-  const data = classDocSnap.data() as ClassDoc;
-
-  if (!data.isActive) return { success: false, error: "INACTIVE" };
-  if (data.studentIds.includes(student.uid)) return { success: false, error: "ALREADY_JOINED" };
-  if (data.maxStudents !== undefined && data.studentIds.length >= data.maxStudents) {
-    return { success: false, error: "FULL" };
-  }
-
-  await updateDoc(classDocSnap.ref, {
-    studentIds: arrayUnion(student.uid),
-    updatedAt: serverTimestamp(),
-  });
-
-  await setDoc(
-    doc(db, "class_members", `${classDocSnap.id}_${student.uid}`),
-    {
-      classId: classDocSnap.id,
-      studentId: student.uid,
-      studentName: student.fullName,
-      studentEmail: student.email,
-      joinedAt: serverTimestamp(),
-      status: "active",
-    },
-    { merge: true }
-  );
-
-  return { success: true, classId: classDocSnap.id, className: data.name };
+  return requestClassMembership({ classCode: classCode.toUpperCase().trim() }, idToken);
 }
 
 // ── getClassById ──────────────────────────────────────────────────────────────
@@ -169,44 +141,34 @@ export async function deleteClass(
 // ── joinClassById ─────────────────────────────────────────────────────────────
 
 /**
- * Enrolls a student via the class-specific link flow.
- * Verifies that the supplied code matches the class at classId.
+ * Submits a join request from a class-specific link.
  */
 export async function joinClassById(
   classId: string,
-  classCode: string,
-  student: Pick<UserProfile, "uid" | "fullName" | "email">
+  idToken: string
 ): Promise<JoinClassResult> {
-  const snap = await getDoc(doc(db, "classes", classId));
-  if (!snap.exists()) return { success: false, error: "NOT_FOUND" };
+  return requestClassMembership({ classId }, idToken);
+}
 
-  const data = snap.data() as ClassDoc;
-  if (data.classCode !== classCode.toUpperCase().trim()) return { success: false, error: "NOT_FOUND" };
-  if (!data.isActive) return { success: false, error: "INACTIVE" };
-  if (data.studentIds.includes(student.uid)) return { success: false, error: "ALREADY_JOINED" };
-  if (data.maxStudents !== undefined && data.studentIds.length >= data.maxStudents) {
-    return { success: false, error: "FULL" };
-  }
-
-  await updateDoc(snap.ref, {
-    studentIds: arrayUnion(student.uid),
-    updatedAt: serverTimestamp(),
-  });
-
-  await setDoc(
-    doc(db, "class_members", `${classId}_${student.uid}`),
-    {
-      classId,
-      studentId: student.uid,
-      studentName: student.fullName,
-      studentEmail: student.email,
-      joinedAt: serverTimestamp(),
-      status: "active",
+async function requestClassMembership(
+  input: { classCode?: string; classId?: string },
+  idToken: string
+): Promise<JoinClassResult> {
+  const response = await fetch("/api/classes/join", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
     },
-    { merge: true }
-  );
-
-  return { success: true, classId, className: data.name };
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { classId?: string; className?: string; error?: JoinClassError }
+    | null;
+  if (response.ok) {
+    return { success: true, classId: payload?.classId, className: payload?.className };
+  }
+  return { success: false, error: payload?.error ?? "JOIN_FAILED" };
 }
 
 // ── searchTeachers ────────────────────────────────────────────────────────────

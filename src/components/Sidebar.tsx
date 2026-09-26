@@ -2,19 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
+import {
+  BookOpen, ChevronRight, CirclePlus, FileStack, Gauge,
+  GraduationCap, History, Home, LibraryBig, School, ShieldCheck, Sparkles,
+  Target, UserRound, UsersRound,
+} from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useStudentMode } from "@/lib/StudentModeContext";
 import { useState } from "react";
 
-// ── Shared constants (used in create/edit forms and home page filtering) ──────
-
-export const GRADE_LEVELS = [
-  "Lớp 10",
-  "Lớp 11",
-  "Lớp 12",
-  "Thi Thử TN THPT",
-] as const;
-
+export const GRADE_LEVELS = ["Lớp 10", "Lớp 11", "Lớp 12", "Thi Thử TN THPT"] as const;
 export const EXAM_TYPES = [
   "Đề kiểm tra thường xuyên",
   "Kiểm tra giữa HK1",
@@ -22,47 +20,44 @@ export const EXAM_TYPES = [
   "Kiểm tra giữa HK2",
   "Kiểm tra cuối HK2",
 ] as const;
-
 export type GradeLevel = (typeof GRADE_LEVELS)[number];
 export type ExamType = (typeof EXAM_TYPES)[number];
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function SideLink({
-  href,
-  icon,
-  children,
-  active,
-}: {
+function SideLink({ href, icon: Icon, children, active, badge }: {
   href: string;
-  icon?: string;
+  icon: LucideIcon;
   children: React.ReactNode;
   active?: boolean;
+  badge?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-        active
-          ? "bg-brand-100/60 text-brand-900"
-          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-      }`}
-    >
-      {icon && <span className="text-base shrink-0">{icon}</span>}
-      <span className="truncate">{children}</span>
+    <Link href={href} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-all ${active ? "bg-brand-600 text-white shadow-md shadow-brand-900/10" : "text-[#645a52] hover:bg-[#f5eee7] hover:text-[#6f351b]"}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${active ? "bg-white/15" : "bg-[#f4ece4] text-brand-700 group-hover:bg-white"}`}><Icon className="h-[17px] w-[17px]" /></span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {badge && <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${active ? "bg-white/20 text-white" : "bg-brand-100 text-brand-800"}`}>{badge}</span>}
     </Link>
   );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest px-3 pt-5 pb-1.5">
-      {children}
-    </p>
-  );
+  return <p className="px-3 pb-2 pt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#a4978d]">{children}</p>;
 }
 
-// ── Main Sidebar ───────────────────────────────────────────────────────────────
+function ProfileCard({ name, teacher }: { name: string; teacher: boolean }) {
+  const initial = name.trim().charAt(0).toUpperCase() || (teacher ? "G" : "H");
+  return (
+    <div className={`relative mb-3 overflow-hidden rounded-2xl p-4 text-white ${teacher ? "bg-gradient-to-br from-[#3a281f] to-[#81502f]" : "bg-gradient-to-br from-[#244f58] to-[#3d7d86]"}`}>
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full border-[16px] border-white/10" />
+      <div className="relative flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-lg font-black ring-1 ring-white/20">{initial}</div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-extrabold">{name}</p>
+          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-white/60">{teacher ? "Không gian giáo viên" : "Không gian học sinh"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Sidebar() {
   const { user, userProfile, isMod, isAdmin, loading } = useAuth();
@@ -70,176 +65,76 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [expandedGrade, setExpandedGrade] = useState<string | null>(null);
 
-  // No sidebar on quiz pages — keep focus on the exam
-  if (pathname.startsWith("/quiz/")) return null;
+  if (pathname.startsWith("/quiz/") || loading || !user || !userProfile) return null;
+  const teacherView = isMod && !isStudentMode;
 
-  // No sidebar while auth is resolving or not logged in
-  if (loading || !user || !userProfile) return null;
-
-  // ── Admin / Mod sidebar — hidden when teacher has switched to student mode ───
-  if (isMod && !isStudentMode) {
-    return (
-      <aside className="hidden md:block w-60 shrink-0 site-sidebar sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
-        <nav className="p-3">
-          <SectionLabel>Quản lý</SectionLabel>
-          <SideLink
-            href="/admin/dashboard"
-            icon="📊"
-            active={pathname === "/admin/dashboard"}
-          >
-            Dashboard
-          </SideLink>
-          <SideLink
-            href="/admin/create-exam"
-            icon="➕"
-            active={pathname === "/admin/create-exam"}
-          >
-            Tạo đề mới
-          </SideLink>
-
-          <SectionLabel>Kho đề thi</SectionLabel>
-          <SideLink href="/admin/exam-list?tab=mine" icon="📁">
-            Đề của tôi
-          </SideLink>
-          <SideLink href="/admin/exam-list?tab=shared" icon="🌐">
-            Đề được chia sẻ
-          </SideLink>
-
-          {isAdmin && (
-            <>
-              <SectionLabel>Admin</SectionLabel>
-              <SideLink
-                href="/admin/exam-list"
-                icon="📋"
-                active={pathname === "/admin/exam-list"}
-              >
-                Tất cả đề thi
-              </SideLink>
-              <SideLink
-                href="/admin/users"
-                icon="👥"
-                active={pathname === "/admin/users"}
-              >
-                Người dùng
-              </SideLink>
-            </>
-          )}
-
-          <SectionLabel>Lớp học</SectionLabel>
-          <SideLink
-            href="/teacher/classes"
-            icon="🏫"
-            active={pathname.startsWith("/teacher/classes")}
-          >
-            Quản lý lớp học
-          </SideLink>
-
-          <SectionLabel>Cá nhân</SectionLabel>
-          <SideLink
-            href="/teacher/profile"
-            icon="👤"
-            active={pathname === "/teacher/profile"}
-          >
-            Hồ sơ giáo viên
-          </SideLink>
-          <SideLink
-            href="/student/history"
-            icon="📜"
-            active={pathname === "/student/history"}
-          >
-            Lịch sử làm bài
-          </SideLink>
-        </nav>
-      </aside>
-    );
-  }
-
-  // ── Student sidebar: exam category tree ──────────────────────────────────────
   return (
-    <aside className="hidden md:block w-60 shrink-0 site-sidebar sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
-      <nav className="p-3">
-        <SideLink href="/" icon="🏠" active={pathname === "/"}>
-          Tất cả đề thi
-        </SideLink>
+    <aside className="site-sidebar sticky top-16 hidden h-[calc(100vh-4rem)] w-[17rem] shrink-0 overflow-y-auto border-r border-[#eee6de] bg-[#fffdfb] md:block">
+      <nav className="p-3.5">
+        <ProfileCard name={userProfile.fullName || user.email || "Người dùng"} teacher={teacherView} />
 
-        <SectionLabel>Danh mục đề</SectionLabel>
+        {teacherView ? (
+          <>
+            <SectionLabel>Tổng quan</SectionLabel>
+            <SideLink href="/admin/dashboard" icon={Gauge} active={pathname === "/admin/dashboard"}>Bảng điều khiển</SideLink>
 
-        {GRADE_LEVELS.map((grade) => {
-          const isExpanded = expandedGrade === grade;
-          const isThiThu = grade === "Thi Thử TN THPT";
+            <SectionLabel>Giảng dạy</SectionLabel>
+            <SideLink href="/teacher/classes" icon={School} active={pathname.startsWith("/teacher/classes")}>Quản lý lớp học</SideLink>
+            <SideLink href="/admin/create-exam" icon={CirclePlus} active={pathname === "/admin/create-exam"} badge="Tạo">Tạo bài thi mới</SideLink>
 
-          if (isThiThu) {
-            return (
-              <SideLink
-                key={grade}
-                href={`/?grade=${encodeURIComponent(grade)}`}
-                icon="🎯"
-              >
-                {grade}
-              </SideLink>
-            );
-          }
+            <SectionLabel>Ngân hàng đề</SectionLabel>
+            <SideLink href="/admin/exam-list?tab=mine" icon={FileStack} active={pathname === "/admin/exam-list"}>Đề của tôi</SideLink>
+            <SideLink href="/admin/exam-list?tab=shared" icon={LibraryBig}>Đề được chia sẻ</SideLink>
 
-          return (
-            <div key={grade}>
-              <button
-                onClick={() =>
-                  setExpandedGrade(isExpanded ? null : grade)
-                }
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-              >
-                <span className="flex items-center gap-2.5">
-                  <span className="text-base">📚</span>
-                  {grade}
-                </span>
-                <span
-                  className={`text-gray-400 text-xs transition-transform duration-200 ${
-                    isExpanded ? "rotate-90" : ""
-                  }`}
-                >
-                  ›
-                </span>
-              </button>
+            {isAdmin && (
+              <>
+                <SectionLabel>Quản trị hệ thống</SectionLabel>
+                <SideLink href="/admin/users" icon={UsersRound} active={pathname === "/admin/users"}>Người dùng</SideLink>
+                <SideLink href="/admin/exam-list" icon={ShieldCheck}>Toàn bộ đề thi</SideLink>
+              </>
+            )}
 
-              {isExpanded && (
-                <div className="ml-5 mt-0.5 mb-1 space-y-0.5 border-l-2 border-gray-100 pl-2">
-                  <Link
-                    href={`/?grade=${encodeURIComponent(grade)}`}
-                    className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition-all"
-                  >
-                    — Tất cả
-                  </Link>
-                  {EXAM_TYPES.map((type) => (
-                    <Link
-                      key={type}
-                      href={`/?grade=${encodeURIComponent(grade)}&type=${encodeURIComponent(type)}`}
-                      className="block px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition-all"
-                    >
-                      {type}
-                    </Link>
-                  ))}
+            <SectionLabel>Cá nhân</SectionLabel>
+            <SideLink href="/teacher/profile" icon={UserRound} active={pathname === "/teacher/profile"}>Hồ sơ giáo viên</SideLink>
+            <SideLink href="/student/history" icon={History} active={pathname === "/student/history"}>Lịch sử làm bài</SideLink>
+          </>
+        ) : (
+          <>
+            <SectionLabel>Học tập</SectionLabel>
+            <SideLink href="/" icon={Home} active={pathname === "/"}>Trang chủ & kho đề</SideLink>
+            <SideLink href="/student/classes" icon={GraduationCap} active={pathname.startsWith("/student/classes")} badge="Lớp">Lớp học của tôi</SideLink>
+            <SideLink href="/student/history" icon={History} active={pathname === "/student/history"}>Lịch sử làm bài</SideLink>
+
+            <SectionLabel>Ôn luyện theo khối</SectionLabel>
+            {GRADE_LEVELS.map((grade) => {
+              if (grade === "Thi Thử TN THPT") {
+                return <SideLink key={grade} href={`/?grade=${encodeURIComponent(grade)}`} icon={Target}>{grade}</SideLink>;
+              }
+              const expanded = expandedGrade === grade;
+              return (
+                <div key={grade} className="mb-1">
+                  <button onClick={() => setExpandedGrade(expanded ? null : grade)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition ${expanded ? "bg-[#f5eee7] text-brand-800" : "text-[#645a52] hover:bg-[#f8f3ee]"}`}>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f4ece4] text-brand-700"><BookOpen className="h-[17px] w-[17px]" /></span>
+                    <span className="flex-1 text-left">{grade}</span>
+                    <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`} />
+                  </button>
+                  {expanded && (
+                    <div className="ml-7 mt-1 space-y-0.5 border-l border-[#e9ddd2] pl-3">
+                      <Link href={`/?grade=${encodeURIComponent(grade)}`} className="block rounded-lg px-3 py-2 text-xs font-bold text-brand-700 hover:bg-brand-50">Tất cả đề</Link>
+                      {EXAM_TYPES.map((type) => <Link key={type} href={`/?grade=${encodeURIComponent(grade)}&type=${encodeURIComponent(type)}`} className="block rounded-lg px-3 py-2 text-xs leading-4 text-gray-500 hover:bg-brand-50 hover:text-brand-700">{type}</Link>)}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
 
-        <div className="pt-2 space-y-0.5">
-          <SideLink
-            href="/student/classes"
-            icon="🏫"
-            active={pathname.startsWith("/student/classes")}
-          >
-            Lớp học của tôi
-          </SideLink>
-          <SideLink
-            href="/student/history"
-            icon="📜"
-            active={pathname === "/student/history"}
-          >
-            Lịch sử làm bài
-          </SideLink>
-        </div>
+            <div className="mt-5 rounded-2xl border border-[#eadfd5] bg-gradient-to-br from-[#fff8f1] to-white p-4">
+              <Sparkles className="h-5 w-5 text-brand-600" />
+              <p className="mt-2 text-xs font-extrabold text-gray-800">Học đều mỗi ngày</p>
+              <p className="mt-1 text-[11px] leading-4 text-gray-500">Xem lịch sử để nhận biết phần kiến thức cần ôn lại.</p>
+            </div>
+          </>
+        )}
       </nav>
     </aside>
   );

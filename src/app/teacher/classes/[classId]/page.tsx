@@ -48,6 +48,14 @@ interface StudentRow {
   school?: string;
 }
 
+interface PendingStudent {
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  status: "pending";
+  requestedAt: string | null;
+}
+
 interface ExamOption {
   id: string;
   title: string;
@@ -403,6 +411,9 @@ export default function TeacherClassDetailPage() {
 
   const [classData, setClassData] = useState<(ClassDoc & { id: string }) | null>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [pendingStudents, setPendingStudents] = useState<PendingStudent[]>([]);
+  const [reviewingStudentId, setReviewingStudentId] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -464,6 +475,14 @@ export default function TeacherClassDetailPage() {
         }
         if (!cancelled) setStudents(rows);
 
+        const membersResponse = await fetch(`/api/classes/${encodeURIComponent(classId)}/members`, {
+          headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        });
+        if (membersResponse.ok) {
+          const payload = (await membersResponse.json()) as { members?: PendingStudent[] };
+          if (!cancelled) setPendingStudents((payload.members ?? []).filter((member) => member.status === "pending"));
+        }
+
         // Load teacher's exams for score export
         const examSnap = await getDocs(
           query(collection(db, "exams"), where("authorEmail", "==", user.email ?? ""))
@@ -481,7 +500,7 @@ export default function TeacherClassDetailPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [classId, user?.uid, user?.email, isAdmin]);
+  }, [classId, user, user?.uid, user?.email, isAdmin]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Add student callback (called from modal on success)
@@ -518,6 +537,35 @@ export default function TeacherClassDetailPage() {
     setScoreRows(null);
     setDeletingStudent(null);
   }, []);
+
+  const reviewJoinRequest = async (student: PendingStudent, action: "approve" | "reject") => {
+    if (!user || reviewingStudentId) return;
+    setReviewingStudentId(student.studentId);
+    setReviewError(null);
+    try {
+      const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/members`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ studentId: student.studentId, action }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setReviewError(payload?.error === "FULL" ? "Lớp đã đủ số lượng học sinh tối đa." : "Không thể cập nhật yêu cầu. Vui lòng thử lại.");
+        return;
+      }
+      setPendingStudents((current) => current.filter((item) => item.studentId !== student.studentId));
+      if (action === "approve") {
+        handleStudentAdded({ uid: student.studentId, fullName: student.studentName, email: student.studentEmail });
+      }
+    } catch {
+      setReviewError("Không thể kết nối máy chủ. Vui lòng thử lại.");
+    } finally {
+      setReviewingStudentId(null);
+    }
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Score loading
@@ -729,20 +777,49 @@ export default function TeacherClassDetailPage() {
                     }}
                     className="underline text-white hover:text-brand-200 transition-colors"
                   >
-                    {typeof window !== "undefined"
-                      ? `${window.location.origin}/join/${classId}`
-                      : `/join/${classId}`}
+                    Sao chép link tham gia
                   </button>
                 </span>
                 <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
                   {students.length} học sinh đã vào lớp
                 </span>
+                {pendingStudents.length > 0 && (
+                  <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-bold text-amber-950">
+                    {pendingStudents.length} chờ duyệt
+                  </span>
+                )}
               </div>
             </header>
 
             <div className="mb-8 rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
               <ClassLearningContent classId={classId} teacherMode />
             </div>
+
+            {pendingStudents.length > 0 && (
+              <section className="mb-8 overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
+                <div className="border-b border-amber-100 bg-amber-50/70 px-6 py-4">
+                  <h2 className="font-extrabold text-gray-900">Yêu cầu tham gia</h2>
+                  <p className="mt-0.5 text-sm text-gray-500">Chỉ học sinh được duyệt mới có thể truy cập lớp và học liệu.</p>
+                </div>
+                {reviewError && <p className="mx-6 mt-4 rounded-xl bg-danger-50 px-4 py-3 text-sm text-danger-700">{reviewError}</p>}
+                <div className="divide-y divide-gray-100">
+                  {pendingStudents.map((student) => (
+                    <div key={student.studentId} className="flex flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900">{student.studentName}</p>
+                        <p className="truncate text-sm text-gray-500">{student.studentEmail}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button disabled={reviewingStudentId !== null} onClick={() => reviewJoinRequest(student, "reject")} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition hover:border-danger-200 hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50">Từ chối</button>
+                        <button disabled={reviewingStudentId !== null} onClick={() => reviewJoinRequest(student, "approve")} className="rounded-xl bg-success-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-success-700 disabled:opacity-50">
+                          {reviewingStudentId === student.studentId ? "Đang duyệt…" : "✓ Duyệt vào lớp"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* ── Students table ────────────────────────────────────────── */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-8">
