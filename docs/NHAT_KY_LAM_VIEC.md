@@ -199,6 +199,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Tổ chức lại sidebar giáo viên theo Tổng quan, Giảng dạy, Ngân hàng đề, Quản trị và Cá nhân; sidebar học sinh theo Học tập và Ôn luyện theo khối. Thay emoji bằng icon nhất quán, thêm thẻ nhận diện người dùng và trạng thái active rõ hơn.
 - Kiểm tra cục bộ: ESLint toàn bộ file thay đổi đạt; TypeScript đạt; production build Next.js 16.3.6 đạt và nhận ba route mới. Bản production đang chạy tại `http://localhost:3000`. Trình duyệt kiểm thử không có phiên đăng nhập nên chỉ xác nhận được route bảo vệ và bố cục công khai; luồng duyệt cần thử thêm bằng hai tài khoản thật sau khi triển khai Firestore Rules.
 
+### 27/09/2026 — Kiểm thử nhập Word MathType và BlueMath
+
+- Render và kiểm tra trực quan toàn bộ hai DOCX mẫu: Đề 04 dùng MathType OLE/MTEF cũ (22 trang) và Đề 10 dùng BlueMath SVG có metadata (20 trang). Nội dung tài liệu chỉ được dùng làm dữ liệu đề, không được coi là chỉ dẫn thực thi.
+- Sửa bộ nhập DOCX để tách phần đề khỏi đáp án/lời giải, tránh tạo trùng 44 câu; nhận lựa chọn cùng dòng, nhận `Lời giải` không có dấu hai chấm và ghép lời giải với câu tương ứng.
+- Bổ sung giải mã thuộc tính `BlueMathLatex:` Base64 thành LaTeX, đọc ba bảng đáp án và bỏ các ảnh công thức PNG/SVG trùng khỏi danh sách tài nguyên.
+- Bổ sung đọc đáp án tô sáng và bảng đúng/sai cho mẫu MathType; chỉ lưu hình minh họa được tham chiếu thật sự thay vì toàn bộ media trong DOCX.
+- Kiểm thử cục bộ không dùng R2: cả hai mẫu tách đúng 22 câu theo cơ cấu 12 nhiều lựa chọn, 4 đúng/sai, 6 trả lời ngắn. BlueMath đọc đủ công thức và toàn bộ đáp án; MathType đọc đủ đáp án nhiều lựa chọn/đúng-sai nhưng chưa chuyển được 499 công thức OLE và 6 đáp án ngắn nằm trong MathType.
+- ESLint phần thay đổi và TypeScript đạt. Production build Next.js 16.3.6 bằng Webpack đạt đủ 23 trang; Turbopack trong sandbox không thể tạo tiến trình PostCSS vì bị chặn bind cổng, không phải lỗi mã ứng dụng. Báo cáo chi tiết và đường dẫn dữ liệu tạm được ghi tại `docs/KIEM_THU_NHAP_WORD_MATHTYPE_BLUEMATH.md`.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

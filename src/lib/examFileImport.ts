@@ -1,4 +1,4 @@
-import { DOMParser, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom";
+import { DOMParser, type Document as XmlDocument, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom";
 import { unzipSync } from "fflate";
 import { parseLatexExam, type ParsedQuestion } from "@/utils/latexParser";
 
@@ -42,6 +42,57 @@ function firstChild(node: XmlNode, name: string): XmlElement | null {
 
 function childrenNamed(node: XmlNode, name: string): XmlElement[] {
   return elementChildren(node).filter((child) => localName(child) === name);
+}
+
+function descendantsNamed(node: XmlNode, name: string): XmlElement[] {
+  const result: XmlElement[] = [];
+  const visit = (current: XmlNode) => {
+    for (const child of elementChildren(current)) {
+      if (localName(child) === name) result.push(child);
+      visit(child);
+    }
+  };
+  visit(node);
+  return result;
+}
+
+function hasAncestorNamed(node: XmlNode, name: string): boolean {
+  let current = node.parentNode;
+  while (current) {
+    if (localName(current) === name) return true;
+    current = current.parentNode;
+  }
+  return false;
+}
+
+function blueMathLatex(node: XmlNode): string | null {
+  const candidates = [node, ...descendantsNamed(node, "docPr"), ...descendantsNamed(node, "cNvPr")];
+  for (const candidate of candidates) {
+    if (candidate.nodeType !== 1) continue;
+    const element = candidate as XmlElement;
+    for (let index = 0; index < element.attributes.length; index += 1) {
+      const value = element.attributes.item(index)?.value ?? "";
+      if (!value.startsWith("BlueMathLatex:")) continue;
+      try {
+        return Buffer.from(value.slice("BlueMathLatex:".length), "base64").toString("utf8").trim();
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function blueMathLatexFromAncestors(node: XmlNode): string | null {
+  let current: XmlNode | null = node;
+  while (current) {
+    if (["inline", "anchor"].includes(localName(current))) {
+      const latex = blueMathLatex(current);
+      if (latex) return latex;
+    }
+    current = current.parentNode;
+  }
+  return null;
 }
 
 function textContent(node: XmlNode | null): string {
@@ -137,6 +188,8 @@ function contentTypeFor(fileName: string): string {
     gif: "image/gif",
     webp: "image/webp",
     svg: "image/svg+xml",
+    tif: "image/tiff",
+    tiff: "image/tiff",
     emf: "image/emf",
     wmf: "image/wmf",
   } as Record<string, string>)[ext ?? ""] ?? "application/octet-stream";
@@ -173,11 +226,12 @@ function parseQuestionBlocks(text: string, warnings: string[]): ParsedQuestion[]
     const start = (match.index ?? 0) + match[0].length;
     const end = matches[index + 1]?.index ?? normalized.length;
     let block = normalized.slice(start, end).trim();
+    block = block.replace(/\n\s*PHẦN\s+(?:I|II|III)\b[\s\S]*$/i, "").trim();
 
     const images = Array.from(block.matchAll(IMAGE_TOKEN_RE), (item) => item[1]);
     block = block.replace(IMAGE_TOKEN_RE, "").trim();
 
-    const explanationMatch = /(?:^|\n)\s*(?:Lời giải|Giải)\s*:\s*([\s\S]*)$/i.exec(block);
+    const explanationMatch = /(?:^|\n)\s*(?:Lời giải|Giải)\s*:?[ \t]*\n?([\s\S]*)$/i.exec(block);
     const explanation = explanationMatch?.[1]?.trim() ?? "";
     if (explanationMatch?.index !== undefined) block = block.slice(0, explanationMatch.index).trim();
 
@@ -187,8 +241,12 @@ function parseQuestionBlocks(text: string, warnings: string[]): ParsedQuestion[]
       block = `${block.slice(0, answerMatch.index)}\n${block.slice(answerMatch.index + answerMatch[0].length)}`.trim();
     }
 
-    const choiceMatches = Array.from(block.matchAll(/^\s*([A-D])\s*[.):]\s*(.+)$/gim));
-    const statementMatches = Array.from(block.matchAll(/^\s*([a-d])\s*[.):]\s*(.+)$/gm));
+    const choiceMarkers = Array.from(block.matchAll(/(?:^|\n|\s)([A-D])\s*(?:[.):]\s*|(?=\$))/g));
+    const choiceMatches = choiceMarkers.map((item, itemIndex) => ({
+      index: item.index ?? 0,
+      value: block.slice((item.index ?? 0) + item[0].length, choiceMarkers[itemIndex + 1]?.index ?? block.length).trim(),
+    }));
+    const statementMatches = Array.from(block.matchAll(/(?:^|\n)\s*([a-d])\s*[.):]\s*([\s\S]*?)(?=(?:\n\s*[a-d]\s*[.):])|$)/g));
     let type = "short_answer";
     let options: string[] | undefined;
     let correctAnswer: string | number | boolean[] = rawAnswer;
@@ -196,20 +254,16 @@ function parseQuestionBlocks(text: string, warnings: string[]): ParsedQuestion[]
 
     if (choiceMatches.length >= 2) {
       type = "multiple_choice";
-      options = choiceMatches.map((item) => item[2].trim());
+      options = choiceMatches.map((item) => item.value);
       questionText = block.slice(0, choiceMatches[0].index).trim();
       const letter = rawAnswer.match(/[A-D]/i)?.[0]?.toUpperCase();
       correctAnswer = letter ? letter.charCodeAt(0) - 65 : -1;
-      if (!letter) warnings.push(`Câu ${index + 1}: chưa nhận diện được đáp án A/B/C/D.`);
     } else if (statementMatches.length >= 2) {
       type = "true_false";
       options = statementMatches.map((item) => item[2].trim());
       questionText = block.slice(0, statementMatches[0].index).trim();
       const keys = rawAnswer.toUpperCase().match(/[ĐDSSTF]/g) ?? [];
       correctAnswer = options.map((_, optionIndex) => ["Đ", "D", "T"].includes(keys[optionIndex] ?? ""));
-      if (keys.length < options.length) warnings.push(`Câu ${index + 1}: đáp án Đúng/Sai chưa đủ ${options.length} ý.`);
-    } else if (!rawAnswer) {
-      warnings.push(`Câu ${index + 1}: chưa tìm thấy dòng “Đáp án: …”.`);
     }
 
     return {
@@ -222,6 +276,95 @@ function parseQuestionBlocks(text: string, warnings: string[]): ParsedQuestion[]
       ...(images.length > 0 ? { imageUrls: images } : {}),
     };
   });
+}
+
+interface AnswerKey {
+  multipleChoice: string[];
+  trueFalse: boolean[][];
+  shortAnswer: string[];
+}
+
+function cellText(cell: XmlElement): string {
+  return descendantsNamed(cell, "t").map((item) => textContent(item)).join("").trim();
+}
+
+function extractAnswerKey(document: XmlDocument): AnswerKey {
+  const key: AnswerKey = { multipleChoice: [], trueFalse: [], shortAnswer: [] };
+  const standaloneTrueFalse: boolean[][] = [];
+  const tables = document.getElementsByTagName("w:tbl");
+  for (let tableIndex = 0; tableIndex < tables.length; tableIndex += 1) {
+    const table = tables.item(tableIndex);
+    if (!table) continue;
+    const rows = descendantsNamed(table, "tr").map((row) => childrenNamed(row, "tc").map(cellText));
+    const labeledAnswers = rows.flat().map((value) => value.match(/^\s*([a-d])\)\s*([ĐS])/i)).filter(Boolean);
+    if (labeledAnswers.length === 4 && new Set(labeledAnswers.map((item) => item?.[1].toLowerCase())).size === 4) {
+      standaloneTrueFalse.push(labeledAnswers.map((item) => item?.[2].toUpperCase() === "Đ"));
+    }
+    if (rows.length < 2) continue;
+    if (rows[0]?.[0]?.trim().toLowerCase() === "câu" && rows[1]?.[0]?.trim().toLowerCase() === "chọn") {
+      const answers = rows[1].slice(1).map((value) => value.trim()).filter(Boolean);
+      if (answers.length >= 10 && answers.every((value) => /^[A-D]$/i.test(value))) {
+        key.multipleChoice = answers.map((value) => value.toUpperCase());
+      } else if (answers.length > 0) {
+        key.shortAnswer = answers;
+      }
+      continue;
+    }
+    if (rows[0].length === 4 && rows[0].every((value) => /^Câu\s+\d+$/i.test(value))) {
+      key.trueFalse = rows[0].map((_, column) => rows.slice(1).map((row) => {
+        const answer = (row[column] ?? "").match(/[a-d]\)\s*([ĐS])/i)?.[1];
+        return answer?.toUpperCase() === "Đ";
+      }));
+      continue;
+    }
+  }
+  if (key.trueFalse.length === 0 && standaloneTrueFalse.length >= 4) key.trueFalse = standaloneTrueFalse.slice(0, 4);
+  return key;
+}
+
+function extractHighlightedAnswerKey(solutionText: string): AnswerKey {
+  const key: AnswerKey = { multipleChoice: [], trueFalse: [], shortAnswer: [] };
+  const matches = Array.from(solutionText.matchAll(/^\s*Câu\s+(\d+)\s*[.:)]\s*/gim));
+  const blocks = matches.map((match, index) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? solutionText.length;
+    return solutionText.slice(start, end);
+  });
+  for (const block of blocks.slice(0, 12)) {
+    const answer = block.match(/\[\[CORRECT:([A-D])\]\]/)?.[1];
+    if (answer) key.multipleChoice.push(answer);
+  }
+  for (const block of blocks.slice(12, 16)) {
+    const trueLabels = new Set(Array.from(block.matchAll(/\[\[TRUE:([a-d])\]\]/g), (item) => item[1]));
+    if (trueLabels.size > 0) key.trueFalse.push(["a", "b", "c", "d"].map((label) => trueLabels.has(label)));
+  }
+  return key;
+}
+
+function mergeAnswerKeys(primary: AnswerKey, fallback: AnswerKey): AnswerKey {
+  return {
+    multipleChoice: primary.multipleChoice.length >= 12 ? primary.multipleChoice : fallback.multipleChoice,
+    trueFalse: primary.trueFalse.length >= 4 ? primary.trueFalse : fallback.trueFalse,
+    shortAnswer: primary.shortAnswer.length >= 6 ? primary.shortAnswer : fallback.shortAnswer,
+  };
+}
+
+function applyAnswerKey(questions: ParsedQuestion[], key: AnswerKey): void {
+  let multipleChoiceIndex = 0;
+  let trueFalseIndex = 0;
+  let shortAnswerIndex = 0;
+  for (const question of questions) {
+    if (question.type === "multiple_choice") {
+      const answer = key.multipleChoice[multipleChoiceIndex++];
+      if (answer) question.correctAnswer = answer.charCodeAt(0) - 65;
+    } else if (question.type === "true_false") {
+      const answer = key.trueFalse[trueFalseIndex++];
+      if (answer) question.correctAnswer = answer;
+    } else {
+      const answer = key.shortAnswer[shortAnswerIndex++];
+      if (answer) question.correctAnswer = answer;
+    }
+  }
 }
 
 function escapeLatexBlock(value: string): string {
@@ -258,24 +401,39 @@ export async function importDocx(
   const relationships = relationshipsBytes
     ? parseRelationships(decoder.decode(relationshipsBytes))
     : new Map<string, string>();
+  const document = new DOMParser().parseFromString(decoder.decode(documentBytes), "application/xml");
   const imageUrls = new Map<string, string>();
+  const referencedAssetPaths = new Set<string>();
+
+  const allElements = document.getElementsByTagName("*");
+  for (let index = 0; index < allElements.length; index += 1) {
+    const element = allElements.item(index);
+    if (!element || blueMathLatexFromAncestors(element) || hasAncestorNamed(element, "object")) continue;
+    const name = localName(element);
+    if (name !== "blip" && name !== "imagedata") continue;
+    const relationshipId = element.getAttribute("r:embed") || element.getAttribute("r:id");
+    const target = relationshipId ? relationships.get(relationshipId) : null;
+    if (target) referencedAssetPaths.add(target);
+  }
 
   if (uploadAsset) {
-    for (const [path, mediaBytes] of Object.entries(zip)) {
-      if (!path.startsWith("word/media/")) continue;
+    let legacyVectorCount = 0;
+    for (const path of referencedAssetPaths) {
+      const mediaBytes = zip[path];
+      if (!mediaBytes) continue;
       const mediaName = path.split("/").pop() ?? "image";
       const type = contentTypeFor(mediaName);
-      if (["image/emf", "image/wmf"].includes(type)) {
-        warnings.push(`Ảnh ${mediaName} là ${type.split("/")[1].toUpperCase()}; trình duyệt có thể không hiển thị, nên đổi sang SVG hoặc PNG.`);
-      }
+      if (["image/emf", "image/wmf"].includes(type)) legacyVectorCount += 1;
       const url = await uploadAsset({ bytes: mediaBytes, fileName: mediaName, contentType: type });
       if (url) imageUrls.set(path, url);
     }
-  } else if (Object.keys(zip).some((path) => path.startsWith("word/media/"))) {
-    warnings.push("Tài liệu có hình ảnh nhưng R2 public chưa sẵn sàng; ảnh chưa được đưa vào đề.");
+    if (legacyVectorCount > 0) {
+      warnings.push(`${legacyVectorCount} hình minh họa là WMF/EMF; trình duyệt có thể không hiển thị, nên đổi sang SVG hoặc PNG.`);
+    }
+  } else if (referencedAssetPaths.size > 0) {
+    warnings.push(`Tài liệu có ${referencedAssetPaths.size} hình minh họa nhưng chưa cấu hình nơi lưu; ảnh chưa được đưa vào đề.`);
   }
 
-  const document = new DOMParser().parseFromString(decoder.decode(documentBytes), "application/xml");
   const paragraphs = document.getElementsByTagName("w:p");
   const lines: string[] = [];
   let equationCount = 0;
@@ -291,11 +449,19 @@ export async function importDocx(
       const latex = mathText(element).trim();
       return latex ? `$${latex}$` : "";
     }
+    if (name === "inline" || name === "anchor") {
+      const latex = blueMathLatex(element);
+      if (latex) {
+        equationCount += 1;
+        return `$${latex}$`;
+      }
+    }
+    if (name === "object") return "";
     if (name === "t") return textContent(element);
     if (name === "tab") return "\t";
     if (name === "br") return "\n";
-    if (name === "blip") {
-      const relationshipId = element.getAttribute("r:embed");
+    if (name === "blip" || name === "imagedata") {
+      const relationshipId = element.getAttribute("r:embed") || element.getAttribute("r:id");
       const target = relationshipId ? relationships.get(relationshipId) : null;
       const url = target ? imageUrls.get(target) : null;
       if (url) {
@@ -307,16 +473,65 @@ export async function importDocx(
     return elementChildren(element).map(walkParagraph).join("");
   };
 
+  const highlightedTokens = (paragraph: XmlElement): string => {
+    const tokens: string[] = [];
+    for (const highlight of descendantsNamed(paragraph, "highlight")) {
+      const value = highlight.getAttribute("w:val") || highlight.getAttribute("val") || "";
+      if (!value || value === "none") continue;
+      let run: XmlNode | null = highlight.parentNode;
+      while (run && localName(run) !== "r") run = run.parentNode;
+      const label = run ? descendantsNamed(run, "t").map(textContent).join("").trim() : "";
+      const upper = label.match(/\b([A-D])\b/)?.[1];
+      const lower = label.match(/\b([a-d])\b/)?.[1];
+      if (upper) tokens.push(`[[CORRECT:${upper}]]`);
+      else if (lower) tokens.push(`[[TRUE:${lower}]]`);
+    }
+    return tokens.join(" ");
+  };
+
   for (let i = 0; i < paragraphs.length; i += 1) {
-    const line = walkParagraph(paragraphs.item(i)!).replace(/[ \t]+/g, " ").trim();
+    const paragraph = paragraphs.item(i)!;
+    const tokens = highlightedTokens(paragraph);
+    const line = `${walkParagraph(paragraph)} ${tokens}`.replace(/[ \t]+/g, " ").trim();
     if (line) lines.push(line);
   }
 
-  if (Object.keys(zip).some((path) => path.startsWith("word/embeddings/"))) {
-    warnings.push("Phát hiện đối tượng nhúng MathType/OLE. Định dạng OLE cũ không thể chuyển trực tiếp trên máy chủ; hãy đổi công thức sang Word Equation hoặc SVG trước khi nhập.");
+  const embeddedObjectCount = Object.keys(zip).filter((path) => path.startsWith("word/embeddings/")).length;
+  if (embeddedObjectCount > 0) {
+    equationCount += embeddedObjectCount;
+    warnings.push(`Phát hiện ${embeddedObjectCount} đối tượng MathType/OLE. Hệ thống giữ được văn bản và bố cục câu nhưng chưa chuyển được công thức MTEF cũ; nên đổi công thức sang Word Equation hoặc BlueMath SVG trước khi nhập chính thức.`);
   }
 
-  const questions = parseQuestionBlocks(lines.join("\n"), warnings);
+  const fullText = lines.join("\n");
+  const answerHeading = /^(?:PHẦN\s+II\s*:\s*)?ĐÁP ÁN\s*$/im.exec(fullText);
+  const solutionHeading = /^(?:PHẦN\s+III\s*:\s*GIẢI\s+CHI\s+TIẾT|LỜI\s+GIẢI\s+CHI\s+TIẾT)\s*$/im.exec(fullText);
+  const examEnd = Math.min(
+    answerHeading?.index ?? Number.POSITIVE_INFINITY,
+    solutionHeading?.index ?? Number.POSITIVE_INFINITY,
+    fullText.length,
+  );
+  const examText = fullText.slice(0, examEnd).replace(/\[\[(?:CORRECT:[A-D]|TRUE:[a-d])\]\]/g, "");
+  const solutionText = solutionHeading
+    ? fullText.slice(solutionHeading.index + solutionHeading[0].length)
+    : "";
+  const cleanSolutionText = solutionText.replace(/\[\[(?:CORRECT:[A-D]|TRUE:[a-d])\]\]/g, "");
+  const questions = parseQuestionBlocks(examText, warnings);
+  const solutionWarnings: string[] = [];
+  const solutionQuestions = cleanSolutionText ? parseQuestionBlocks(cleanSolutionText, solutionWarnings) : [];
+  questions.forEach((question, index) => {
+    const solution = solutionQuestions[index];
+    if (solution?.explanation) question.explanation = solution.explanation;
+  });
+
+  const answerKey = mergeAnswerKeys(extractAnswerKey(document), extractHighlightedAnswerKey(solutionText));
+  applyAnswerKey(questions, answerKey);
+
+  const unresolvedMultipleChoice = questions.filter((question) => question.type === "multiple_choice" && question.correctAnswer === -1).length;
+  const unresolvedTrueFalse = questions.filter((question) => question.type === "true_false" && (!Array.isArray(question.correctAnswer) || question.correctAnswer.length < (question.options?.length ?? 4))).length;
+  const unresolvedShortAnswer = questions.filter((question) => question.type === "short_answer" && !String(question.correctAnswer ?? "").trim()).length;
+  if (unresolvedMultipleChoice > 0) warnings.push(`${unresolvedMultipleChoice} câu trắc nghiệm chưa nhận diện được đáp án.`);
+  if (unresolvedTrueFalse > 0) warnings.push(`${unresolvedTrueFalse} câu đúng/sai chưa nhận diện đủ đáp án.`);
+  if (unresolvedShortAnswer > 0) warnings.push(`${unresolvedShortAnswer} câu trả lời ngắn chưa nhận diện được đáp án.`);
   return {
     title: fileName.replace(/\.docx$/i, ""),
     questions,
