@@ -123,7 +123,7 @@ export async function uploadToR2(input: {
 export async function createR2UploadUrl(input: {
   contentType: string;
   fileName: string;
-  folder: "exam-imports" | "learning-materials";
+  folder: "exam-imports" | "exam-assets" | "learning-materials";
   metadata?: Record<string, string>;
 }): Promise<{ key: string; uploadUrl: string; url: string | null }> {
   const config = getConfig();

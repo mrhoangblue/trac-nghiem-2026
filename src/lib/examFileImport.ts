@@ -1,6 +1,6 @@
 import { DOMParser, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom";
 import { unzipSync } from "fflate";
-import type { ParsedQuestion } from "@/utils/latexParser";
+import { parseLatexExam, type ParsedQuestion } from "@/utils/latexParser";
 
 export interface ImportedExamFile {
   title: string;
@@ -365,5 +365,44 @@ export async function importPdf(bytes: Uint8Array, fileName: string): Promise<Im
     latex: questionsToLatex(questions),
     warnings,
     stats: { questionCount: questions.length, equationCount: 0, imageCount: 0, pageCount: pdf.numPages },
+  };
+}
+
+export function extractExamLatex(source: string): { latex: string; blockCount: number } {
+  const normalized = source.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  const withoutComments = normalized.replace(/(?<!\\)%[^\n]*/g, "");
+  const blocks: string[] = [];
+  const blockPattern = /\\begin\{(ex|bt)\}[\s\S]*?\\end\{\1\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = blockPattern.exec(withoutComments)) !== null) {
+    blocks.push(match[0].trim());
+  }
+  return { latex: blocks.join("\n\n"), blockCount: blocks.length };
+}
+
+export async function importTex(bytes: Uint8Array, fileName: string): Promise<ImportedExamFile> {
+  const warnings: string[] = [];
+  const source = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  const extracted = extractExamLatex(source);
+  if (extracted.blockCount === 0) {
+    warnings.push("Không tìm thấy khối \\begin{ex}…\\end{ex} hoặc \\begin{bt}…\\end{bt} trong file TEX.");
+  }
+  const questions = extracted.latex
+    ? parseLatexExam(extracted.latex).map((question, index) => ({ ...question, id: index + 1 }))
+    : [];
+  const unknownCount = questions.filter((question) => question.type === "essay").length;
+  if (unknownCount > 0) {
+    warnings.push(`${unknownCount} câu chưa có \\choice, \\choiceTF hoặc \\shortans nên cần bổ sung loại câu hỏi.`);
+  }
+  if (source.trim() && extracted.latex.length < source.trim().length) {
+    warnings.push("Hệ thống đã lược bỏ phần khai báo gói lệnh, định dạng tài liệu và nội dung ngoài các khối câu hỏi.");
+  }
+  const equationCount = (extracted.latex.match(/\\(?:frac|sqrt|sum|prod|int|lim|vec|overline)\b|\$[^$]+\$/g) ?? []).length;
+  return {
+    title: fileName.replace(/\.tex$/i, ""),
+    questions,
+    latex: extracted.latex,
+    warnings,
+    stats: { questionCount: questions.length, equationCount, imageCount: 0 },
   };
 }

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/verifyAuth";
-import { importDocx, importPdf } from "@/lib/examFileImport";
+import { importDocx, importPdf, importTex } from "@/lib/examFileImport";
 import { downloadFromR2, getR2ObjectMetadata, getR2Status, uploadToR2 } from "@/lib/r2Storage";
 
 export const runtime = "nodejs";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const FILE_TYPES: Record<string, string> = {
+  docx: DOCX_TYPE,
+  pdf: "application/pdf",
+  tex: "text/x-tex",
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const extension = fileName.split(".").pop()?.toLowerCase();
-    if (extension !== "docx" && extension !== "pdf") {
+    if (extension !== "docx" && extension !== "pdf" && extension !== "tex") {
       return NextResponse.json({ error: "FILE_TYPE_UNSUPPORTED" }, { status: 415 });
     }
 
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
       if (r2.configured) {
         sourceObject = await uploadToR2({
           body: bytes,
-          contentType: fileType || (extension === "docx" ? DOCX_TYPE : "application/pdf"),
+          contentType: fileType || FILE_TYPES[extension],
           fileName,
           folder: "exam-imports",
           metadata: { uploadedBy: authUser.uid },
@@ -91,7 +96,9 @@ export async function POST(request: NextRequest) {
               }
             : undefined,
         )
-      : await importPdf(bytes, fileName);
+      : extension === "pdf"
+        ? await importPdf(bytes, fileName)
+        : await importTex(bytes, fileName);
 
     if (r2.configured && !r2.publicAccessConfigured && extension === "docx") {
       storageWarnings.push("R2 đã có thông tin ghi file nhưng thiếu R2_PUBLIC_BASE_URL; ảnh trong DOCX chưa thể dùng trong đề.");

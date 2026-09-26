@@ -180,6 +180,16 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm tra cục bộ: DOCX tổng hợp chuyển đúng phân số OMML, đáp án B và một SVG; PDF một trang được đọc không lỗi và cảnh báo khi không có cấu trúc câu; ESLint phần thay đổi không có lỗi; TypeScript đạt; production build Next.js 16.3.6 đạt và nhận đủ ba route R2/import mới.
 - Giới hạn: chưa thể upload thật vì môi trường chưa có `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` và `R2_PUBLIC_BASE_URL`; trình duyệt kiểm thử không có phiên giáo viên nên trang bảo vệ quyền chỉ hiển thị yêu cầu đăng nhập.
 
+### 26/09/2026 — Thiết kế lại trang tạo đề và nhập TEX
+
+- Tổ chức lại trang “Tạo bài thi mới” thành bốn bước dễ quét: thông tin/phân loại, nội dung đề, thiết lập, xem trước. Bản xem trước bám theo màn hình trên desktop và là bước xác nhận trước khi lưu.
+- Đổi “Phân loại đề thi” và “Loại đề” sang dropdown có label liên kết đúng với control; loại đề tự khóa với nhóm “Thi Thử TN THPT”. Bỏ chế độ và ba textarea nhập từng phần, giữ một Smart Input duy nhất.
+- Thêm nhập file TEX. Máy chủ chỉ giữ các khối `ex`/`bt`, bỏ preamble, comment và nội dung ngoài câu hỏi, sau đó tự phân loại `choice`, `choiceTF`, `shortans`/`dapso` và đưa vào bản xem trước.
+- Điểm trả lời ngắn mặc định đổi thành 3 điểm nhưng vẫn là ô số có thể chỉnh; API tạo đề cũng dùng 3 làm fallback mới.
+- Bổ sung mô tả và ảnh minh họa đề. Giáo viên có thể dán URL hoặc upload PNG/JPG/WebP/SVG tối đa 8 MB lên R2; ảnh được lưu cùng đề, hiển thị trong bản xem trước và trên thẻ đề ở trang chủ.
+- Tăng kiểm tra trước khi lưu: bắt buộc tên đề, ít nhất một câu hợp lệ và ít nhất một lớp khi chọn phạm vi lớp cụ thể.
+- Kiểm tra parser tổng hợp: TEX có preamble/comment được rút còn đúng một câu `ex`, nhận đúng đáp án B và hai biểu thức; DOCX/OMML/SVG và PDF mẫu tiếp tục đạt.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

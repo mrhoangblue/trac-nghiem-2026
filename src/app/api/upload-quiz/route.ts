@@ -40,6 +40,7 @@ interface UploadQuizRequest {
     key?: string;
     url?: string | null;
   } | null;
+  coverImageUrl?: string;
 }
 
 interface ProcessedQuestion extends ParsedQuestion {
@@ -170,6 +171,16 @@ export async function POST(request: NextRequest) {
           url: typeof body.importSourceObject.url === "string" ? body.importSourceObject.url : null,
         }
       : null;
+    let coverImageUrl = "";
+    if (body.coverImageUrl?.trim()) {
+      try {
+        const parsedCoverUrl = new URL(body.coverImageUrl.trim());
+        if (!['http:', 'https:'].includes(parsedCoverUrl.protocol)) throw new Error("INVALID_COVER_IMAGE_URL");
+        coverImageUrl = parsedCoverUrl.toString();
+      } catch {
+        return NextResponse.json({ error: "INVALID_COVER_IMAGE_URL" }, { status: 400 });
+      }
+    }
     batch.set(docRef, {
       title: body.title,
       description: body.description ?? "",
@@ -180,7 +191,7 @@ export async function POST(request: NextRequest) {
       part3Count: p3Questions.length,
       scoringConfig: {
         part1TotalScore: Number(body.scoringConfig?.part1TotalScore ?? 3),
-        part3TotalScore: Number(body.scoringConfig?.part3TotalScore ?? 1),
+        part3TotalScore: Number(body.scoringConfig?.part3TotalScore ?? 3),
       },
       duration: Number(body.duration ?? 90),
       startTime: body.startTime || null,
@@ -198,6 +209,7 @@ export async function POST(request: NextRequest) {
       targetClassIds: body.targetClassIds ?? [],
       requiresPassword: Boolean(password),
       importSourceObject,
+      coverImageUrl,
       createdAt: FieldValue.serverTimestamp(),
     });
 

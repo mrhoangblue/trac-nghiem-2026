@@ -17,6 +17,7 @@ interface Exam {
   questionCount: number;
   gradeLevel?: string;
   examType?: string;
+  coverImageUrl?: string;
   /** "all" = mọi học sinh; "classes" = chỉ HS thuộc targetClassIds. Mặc định "all". */
   targetType?: "all" | "classes";
   targetClassIds?: string[];
@@ -60,7 +61,14 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 
 function ExamCard({ exam }: { exam: Exam }) {
   return (
-    <article className="exam-card group flex flex-col rounded-3xl bg-white p-6 transition-all duration-200">
+    <article className="exam-card group flex flex-col overflow-hidden rounded-3xl bg-white transition-all duration-200">
+      {exam.coverImageUrl && (
+        <div className="relative aspect-[16/7] overflow-hidden bg-brand-50">
+          <Image src={exam.coverImageUrl} alt={`Ảnh minh họa ${exam.title}`} fill unoptimized sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-300 group-hover:scale-[1.03]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+        </div>
+      )}
+      <div className="flex flex-1 flex-col p-6">
       <div className="mb-6 flex items-center justify-between gap-3">
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-earth"><FileText size={23} /></span>
         <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{exam.gradeLevel || "Môn Toán"}</span>
@@ -73,6 +81,7 @@ function ExamCard({ exam }: { exam: Exam }) {
         <Link href={`/quiz/${exam.id}`} className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-brand-100">
           Làm bài <ArrowRight size={16} />
         </Link>
+      </div>
       </div>
     </article>
   );
@@ -144,6 +153,7 @@ function HomeContent() {
               : (raw.questionCount ?? 0),
             gradeLevel: raw.gradeLevel ?? undefined,
             examType: raw.examType ?? undefined,
+            coverImageUrl: raw.coverImageUrl ?? undefined,
             targetType: raw.targetType ?? "all",
             targetClassIds: Array.isArray(raw.targetClassIds) ? raw.targetClassIds : [],
           } as Exam;

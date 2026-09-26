@@ -94,13 +94,16 @@ export default function CreateExamPage() {
   const { user } = useAuth();
 
   const [examTitle, setExamTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverError, setCoverError] = useState("");
   const [part1, setPart1] = useState("");
   const [part2, setPart2] = useState("");
   const [part3, setPart3] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Smart input
-  const [smartMode, setSmartMode] = useState(false);
   const [smartInput, setSmartInput] = useState("");
   const [smartResult, setSmartResult] = useState<{
     counts: { p1: number; p2: number; p3: number; unknown: number };
@@ -112,7 +115,7 @@ export default function CreateExamPage() {
 
   const [scoringConfig, setScoringConfig] = useState<ScoringConfig>({
     part1TotalScore: 3,
-    part3TotalScore: 1,
+    part3TotalScore: 3,
   });
   const [duration, setDuration] = useState(90);
   const [startTime, setStartTime] = useState("");
@@ -165,6 +168,41 @@ export default function CreateExamPage() {
     setPart2(result.part2);
     setPart3(result.part3);
     setSmartResult({ counts: result.counts });
+    const questions = [
+      ...parseLatexExam(result.part1),
+      ...parseLatexExam(result.part2),
+      ...parseLatexExam(result.part3),
+    ].map((question, index) => ({ ...question, id: index + 1 }));
+    setPreviewData({ title: examTitle.trim() || "Đề thi chưa đặt tên", questions });
+  };
+
+  const handleCoverImage = async (file: File | null) => {
+    if (!file || !user) return;
+    setUploadingCover(true);
+    setCoverError("");
+    try {
+      const token = await user.getIdToken();
+      const presignResponse = await fetch("/api/storage/presign", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, folder: "exam-assets" }),
+      });
+      const payload = (await presignResponse.json().catch(() => null)) as { uploadUrl?: string; url?: string; contentType?: string; error?: string } | null;
+      if (!presignResponse.ok || !payload?.uploadUrl || !payload.url) {
+        throw new Error(payload?.error === "FILE_SIZE_INVALID" ? "Ảnh phải nhỏ hơn 8 MB." : "R2 chưa sẵn sàng để lưu ảnh. Bạn vẫn có thể dán URL ảnh công khai.");
+      }
+      const uploadResponse = await fetch(payload.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": payload.contentType || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadResponse.ok) throw new Error("Không thể tải ảnh lên R2. Hãy kiểm tra CORS của bucket.");
+      setCoverImageUrl(payload.url);
+    } catch (error) {
+      setCoverError(error instanceof Error ? error.message : "Không thể tải ảnh minh họa.");
+    } finally {
+      setUploadingCover(false);
+    }
   };
 
   const handleExamFile = async (file: File | null) => {
@@ -209,16 +247,15 @@ export default function CreateExamPage() {
       if (!response.ok || !payload?.questions || typeof payload.latex !== "string") {
         const messages: Record<string, string> = {
           FILE_SIZE_INVALID: "File phải nhỏ hơn 25 MB.",
-          FILE_TYPE_UNSUPPORTED: "Chỉ hỗ trợ file DOCX hoặc PDF.",
+          FILE_TYPE_UNSUPPORTED: "Chỉ hỗ trợ file DOCX, PDF hoặc TEX.",
           DOCX_INVALID: "File DOCX không hợp lệ hoặc đã bị hỏng.",
         };
         throw new Error(messages[payload?.error ?? ""] ?? "Không thể đọc file đề thi.");
       }
 
       const classified = smartParseLatex(payload.latex);
-      const importedTitle = examTitle.trim() || payload.title || file.name.replace(/\.(docx|pdf)$/i, "");
+      const importedTitle = examTitle.trim() || payload.title || file.name.replace(/\.(docx|pdf|tex)$/i, "");
       setExamTitle(importedTitle);
-      setSmartMode(true);
       setSmartInput(payload.latex);
       setPart1(classified.part1);
       setPart2(classified.part2);
@@ -235,23 +272,20 @@ export default function CreateExamPage() {
     }
   };
 
-  const handlePreview = () => {
-    if (!examTitle.trim()) { alert("Vui lòng nhập tên bài thi!"); return; }
-    try {
-      const allQuestions = [
-        ...parseLatexExam(part1),
-        ...parseLatexExam(part2),
-        ...parseLatexExam(part3),
-      ].map((q, index) => ({ ...q, id: index + 1 }));
-      setPreviewData({ title: examTitle, questions: allQuestions });
-    } catch (error) {
-      console.error(error);
-      alert("Có lỗi xảy ra khi biên dịch LaTeX. Vui lòng kiểm tra lại cú pháp.");
-    }
-  };
-
   const handleSave = async () => {
     if (!previewData) return;
+    if (!examTitle.trim()) {
+      alert("Vui lòng nhập tên bài thi.");
+      return;
+    }
+    if (previewData.questions.length === 0) {
+      alert("Đề thi chưa có câu hỏi hợp lệ. Vui lòng kiểm tra Smart Input.");
+      return;
+    }
+    if (targetType === "classes" && targetClassIds.length === 0) {
+      alert("Vui lòng chọn ít nhất một lớp được làm bài.");
+      return;
+    }
     const timeError = validateTimeRange(startTime, endTime);
     if (timeError) {
       alert(timeError);
@@ -271,8 +305,8 @@ export default function CreateExamPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          title: previewData.title,
-          description: "",
+          title: examTitle.trim(),
+          description,
           questions: previewData.questions,
           scoringConfig: {
             part1TotalScore: Number(scoringConfig.part1TotalScore),
@@ -291,6 +325,7 @@ export default function CreateExamPage() {
           targetType,
           targetClassIds: targetType === "classes" ? targetClassIds : [],
           importSourceObject,
+          coverImageUrl,
         }),
       });
 
@@ -306,9 +341,9 @@ export default function CreateExamPage() {
       }
 
       alert("✓ Đã lưu bài thi lên Firestore thành công!");
-      setExamTitle(""); setPart1(""); setPart2(""); setPart3("");
+      setExamTitle(""); setDescription(""); setCoverImageUrl(""); setPart1(""); setPart2(""); setPart3("");
       setSmartInput(""); setSmartResult(null); setPreviewData(null);
-      setScoringConfig({ part1TotalScore: 3, part3TotalScore: 1 });
+      setScoringConfig({ part1TotalScore: 3, part3TotalScore: 3 });
       setDuration(90); setStartTime(""); setEndTime(""); setExamPassword("");
       setMaxRetries(1); setIsShared(false);
       setGradeLevel(GRADE_LEVELS[0]); setExamType(EXAM_TYPES[0]);
@@ -324,42 +359,51 @@ export default function CreateExamPage() {
 
   return (
     <AdminGuard>
-      <div className="max-w-6xl mx-auto px-4 py-12 w-full">
-        <div className="flex items-center justify-between mb-8">
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="mb-8 rounded-[2rem] border border-brand-200 bg-gradient-to-br from-white via-brand-50/60 to-orange-50 p-6 shadow-soft sm:p-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Tạo Bài Thi Mới</h1>
-            <p className="text-gray-500 mt-2">Nhập mã LaTeX chuẩn ex_test 3.1 để tạo bài thi.</p>
+            <p className="text-xs font-extrabold uppercase tracking-[.18em] text-brand-700">Không gian biên soạn đề</p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-950 sm:text-4xl">Tạo bài thi mới</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-600">Nhập đề một lần, kiểm tra kết quả nhận diện, thiết lập cách tổ chức bài thi rồi xem trước trước khi lưu.</p>
+            <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold text-brand-800">
+              {["1 · Thông tin", "2 · Nội dung đề", "3 · Thiết lập", "4 · Xem trước"].map((step) => <span key={step} className="rounded-full border border-brand-200 bg-white/80 px-3 py-1.5">{step}</span>)}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,.85fr)]">
           {/* ── Editor Form ─────────────────────────────────────────────── */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 space-y-6">
-            {/* Tên bài thi */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Tên bài thi</label>
-              <input
-                type="text"
-                className="w-full p-4 border-2 border-gray-200 rounded-xl font-medium focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
-                placeholder="VD: Kiểm tra Giữa kì 1 - Toán 12"
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-              />
-            </div>
+          <div className="flex flex-col gap-6">
+            <section className="order-1 rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="basic-info-heading">
+              <div className="mb-5 flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-700 text-sm font-extrabold text-white">1</span>
+                <div><h2 id="basic-info-heading" className="font-extrabold text-gray-900">Thông tin và phân loại</h2><p className="text-xs text-gray-500">Những nội dung học sinh nhìn thấy trong kho đề.</p></div>
+              </div>
+              <div className="space-y-5">
+                <div>
+                  <label htmlFor="exam-title" className="mb-2 block text-sm font-bold text-gray-700">Tên bài thi</label>
+                  <input id="exam-title" type="text" className="w-full rounded-xl border-2 border-gray-200 p-3.5 font-medium outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" placeholder="Ví dụ: Kiểm tra giữa học kỳ I – Toán 12" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="exam-description" className="mb-2 block text-sm font-bold text-gray-700">Mô tả <span className="font-normal text-gray-400">(không bắt buộc)</span></label>
+                  <textarea id="exam-description" rows={3} className="w-full resize-y rounded-xl border-2 border-gray-200 p-3.5 text-sm leading-6 outline-none transition focus:border-brand-500" placeholder="Nội dung trọng tâm, hướng dẫn hoặc lưu ý cho học sinh…" value={description} onChange={(event) => setDescription(event.target.value)} />
+                </div>
+              </div>
+            </section>
 
-            <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-5">
+            <section className="order-3 rounded-3xl border border-blue-200 bg-blue-50/60 p-6 shadow-soft" aria-labelledby="file-import-heading">
               <div className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white">⇧</span>
                 <div>
-                  <h3 className="font-extrabold text-blue-950">Nhập đề từ Word hoặc PDF</h3>
-                  <p className="mt-1 text-xs leading-5 text-blue-800/75">Hỗ trợ DOCX có Word Equation, ảnh PNG/JPG/SVG và PDF có lớp văn bản. Hãy xem trước và chỉnh lại đáp án trước khi lưu.</p>
+                  <h2 id="file-import-heading" className="font-extrabold text-blue-950">Tải file đề có sẵn</h2>
+                  <p className="mt-1 text-xs leading-5 text-blue-800/75">DOCX nhận Word Equation và ảnh; PDF đọc lớp văn bản; TEX tự lấy riêng các khối câu hỏi ex/bt.</p>
                 </div>
               </div>
               <label className={`mt-4 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed px-4 py-3 text-sm font-bold transition ${importingFile ? "cursor-wait border-blue-200 bg-white/50 text-blue-400" : "border-blue-300 bg-white text-blue-700 hover:border-blue-500 hover:bg-blue-50"}`}>
-                {importingFile ? "Đang đọc và phân tích file…" : "Chọn file .docx hoặc .pdf"}
+                {importingFile ? "Đang đọc và phân tích file…" : "Chọn file .docx, .pdf hoặc .tex"}
                 <input
                   type="file"
-                  accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  accept=".docx,.pdf,.tex,application/pdf,text/x-tex,application/x-tex,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   disabled={importingFile}
                   className="sr-only"
                   onChange={(event) => {
@@ -377,61 +421,43 @@ export default function CreateExamPage() {
                   <ul className="mt-1 list-disc space-y-1 pl-4">{importWarnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>
                 </div>
               )}
-            </div>
+            </section>
 
-            {/* ── Phân loại đề (cây thư mục) ──────────────────────────── */}
-            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-5 space-y-4">
-              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-brand-500">🗂️</span> Phân loại đề thi
-              </h3>
-
-              {/* Cấp 1: grade */}
-              <div>
-                <label className="text-sm font-semibold text-gray-600 mb-2 block">Cấp học</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {GRADE_LEVELS.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setGradeLevel(g)}
-                      className={`py-2.5 px-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-                        gradeLevel === g
-                          ? "border-brand-500 bg-brand-50 text-brand-700"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
+            <section className="order-2 rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="classification-heading">
+              <h2 id="classification-heading" className="mb-4 text-sm font-extrabold text-gray-900">Phân loại và ảnh minh họa</h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="grade-level" className="mb-2 block text-sm font-bold text-gray-700">Phân loại đề thi</label>
+                  <select id="grade-level" value={gradeLevel} onChange={(event) => setGradeLevel(event.target.value)} className="w-full rounded-xl border-2 border-gray-200 bg-white p-3.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-brand-500">
+                    {GRADE_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="exam-type" className="mb-2 block text-sm font-bold text-gray-700">Loại đề</label>
+                  <select id="exam-type" value={examType} onChange={(event) => setExamType(event.target.value)} disabled={gradeLevel === "Thi Thử TN THPT"} className="w-full rounded-xl border-2 border-gray-200 bg-white p-3.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-brand-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
+                    {EXAM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                  {gradeLevel === "Thi Thử TN THPT" && <p className="mt-1.5 text-xs text-gray-400">Loại đề được ẩn với nhóm Thi thử TN THPT.</p>}
                 </div>
               </div>
-
-              {/* Cấp 2: exam type (ẩn nếu Thi Thử TN THPT) */}
-              {gradeLevel !== "Thi Thử TN THPT" && (
+              <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
                 <div>
-                  <label className="text-sm font-semibold text-gray-600 mb-2 block">Loại đề</label>
-                  <div className="space-y-1.5">
-                    {EXAM_TYPES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setExamType(t)}
-                        className={`w-full text-left py-2 px-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-                          examType === t
-                            ? "border-brand-400 bg-brand-50 text-brand-700"
-                            : "border-gray-200 text-gray-600 hover:border-gray-300"
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
+                  <label htmlFor="cover-image-url" className="mb-2 block text-sm font-bold text-gray-700">Ảnh minh họa <span className="font-normal text-gray-400">(không bắt buộc)</span></label>
+                  <input id="cover-image-url" type="url" value={coverImageUrl} onChange={(event) => { setCoverImageUrl(event.target.value); setCoverError(""); }} placeholder="Dán URL ảnh hoặc tải ảnh lên R2" className="w-full rounded-xl border-2 border-gray-200 p-3 text-sm outline-none transition focus:border-brand-500" />
+                  <label className={`mt-2 inline-flex cursor-pointer items-center rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-800 transition hover:bg-brand-100 ${uploadingCover ? "pointer-events-none opacity-60" : ""}`}>
+                    {uploadingCover ? "Đang tải ảnh…" : "Tải ảnh từ máy"}
+                    <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" className="sr-only" disabled={uploadingCover} onChange={(event) => { void handleCoverImage(event.target.files?.[0] ?? null); event.target.value = ""; }} />
+                  </label>
+                  {coverError && <p className="mt-2 text-xs font-semibold leading-5 text-red-600" role="alert">{coverError}</p>}
                 </div>
-              )}
-            </div>
+                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border-4 border-white bg-brand-50 shadow-soft">
+                  {/^https?:\/\//i.test(coverImageUrl) ? <Image src={coverImageUrl} alt="Xem trước ảnh minh họa đề thi" fill unoptimized className="object-cover" /> : <div className="grid h-full place-items-center px-3 text-center text-xs font-semibold text-brand-400">Ảnh bìa<br />16:9 hoặc 4:3</div>}
+                </div>
+              </div>
+            </section>
 
             {/* ── Cấu hình làm bài ──────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-danger-50 to-orange-50 border border-danger-100 rounded-2xl p-5 space-y-4">
+            <section className="order-7 space-y-4 rounded-3xl border border-danger-100 bg-gradient-to-br from-danger-50 to-orange-50 p-6 shadow-soft">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
                 <span className="text-danger-500">⚙️</span> Cấu hình làm bài
               </h3>
@@ -478,18 +504,8 @@ export default function CreateExamPage() {
               {/* isShared */}
               <div className="bg-white rounded-xl border border-danger-100 p-4">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <div
-                    onClick={() => setIsShared(!isShared)}
-                    className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
-                      isShared ? "bg-brand-500" : "bg-gray-300"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                        isShared ? "translate-x-5" : ""
-                      }`}
-                    />
-                  </div>
+                  <input type="checkbox" checked={isShared} onChange={(event) => setIsShared(event.target.checked)} className="peer sr-only" />
+                  <span className="relative h-6 w-11 shrink-0 rounded-full bg-gray-300 transition peer-checked:bg-brand-500 peer-focus-visible:ring-4 peer-focus-visible:ring-brand-200 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5" aria-hidden="true" />
                   <div>
                     <p className="text-sm font-bold text-gray-700">Chia sẻ đề thi</p>
                     <p className="text-xs text-gray-400">
@@ -500,10 +516,10 @@ export default function CreateExamPage() {
                   </div>
                 </label>
               </div>
-            </div>
+            </section>
 
             {/* ── Đối tượng làm bài ────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-success-50 to-brand-50 border border-success-100 rounded-2xl p-5 space-y-4">
+            <section className="order-8 space-y-4 rounded-3xl border border-success-100 bg-gradient-to-br from-success-50 to-brand-50 p-6 shadow-soft">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
                 <span className="text-success-500">🎯</span> Đối tượng làm bài
               </h3>
@@ -575,122 +591,30 @@ export default function CreateExamPage() {
                   )}
                 </div>
               )}
-            </div>
+            </section>
 
-            {/* ── Mode toggle ──────────────────────────────────────────── */}
-            <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-              <button
-                onClick={() => setSmartMode(false)}
-                className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                  !smartMode ? "bg-white shadow text-brand-700" : "text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                ✂️ Nhập từng phần
-              </button>
-              <button
-                onClick={() => setSmartMode(true)}
-                className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                  smartMode ? "bg-white shadow text-brand-700" : "text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                ✨ Smart Input (1 lần dán)
-              </button>
-            </div>
-
-            {/* ── Smart Input mode ─────────────────────────────────────── */}
-            {smartMode && (
-              <div className="space-y-4">
-                <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 flex gap-3">
-                  <span className="text-brand-500 text-xl shrink-0">💡</span>
-                  <div className="text-sm text-brand-800">
-                    <p className="font-bold mb-1">Chế độ nhập thông minh</p>
-                    <p className="leading-relaxed text-brand-700">
-                      Dán toàn bộ nội dung file LaTeX. Hệ thống tự phân loại dựa trên{" "}
-                      <code className="bg-brand-100 px-1 rounded text-xs font-mono">\choice</code>{" "}
-                      /{" "}
-                      <code className="bg-brand-100 px-1 rounded text-xs font-mono">\choiceTF</code>{" "}
-                      /{" "}
-                      <code className="bg-brand-100 px-1 rounded text-xs font-mono">\shortans</code>.
-                    </p>
-                  </div>
-                </div>
-
-                <textarea
-                  className="w-full h-56 p-4 border-2 border-brand-200 rounded-xl font-mono text-xs focus:border-brand-500 outline-none transition-all resize-y bg-gray-50"
-                  placeholder={"% Dán toàn bộ nội dung file .tex vào đây\n\\begin{ex}\n  ...\n  \\choice{A}{B}{C}{\\True D}\n\\end{ex}"}
-                  value={smartInput}
-                  onChange={(e) => setSmartInput(e.target.value)}
-                  spellCheck={false}
-                />
-
-                <button
-                  onClick={handleSmartClassify}
-                  className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all"
-                >
-                  ✨ Phân loại tự động
-                </button>
-
-                {smartResult && (
-                  <div className="bg-success-50 border border-success-200 rounded-2xl p-4">
-                    <p className="font-bold text-success-800 text-sm mb-2">Kết quả phân loại:</p>
-                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                      {[
-                        { label: "Phần I", count: smartResult.counts.p1, cls: "bg-brand-100 text-brand-700" },
-                        { label: "Phần II", count: smartResult.counts.p2, cls: "bg-amber-100 text-amber-700" },
-                        { label: "Phần III", count: smartResult.counts.p3, cls: "bg-success-100 text-success-700" },
-                      ].map(({ label, count, cls }) => (
-                        <div key={label} className={`rounded-xl px-3 py-2 ${cls}`}>
-                          <p className="font-extrabold text-xl">{count}</p>
-                          <p className="text-xs font-semibold opacity-80">{label}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {smartResult.counts.unknown > 0 && (
-                      <p className="mt-2 text-xs text-amber-700 font-medium">
-                        ⚠️ {smartResult.counts.unknown} câu không nhận dạng → đưa vào Phần I.
-                      </p>
-                    )}
-                    <p className="mt-2 text-xs text-success-700">
-                      ✓ Kết quả đã điền vào 3 ô bên dưới.
-                    </p>
-                  </div>
-                )}
-
-                <hr className="border-gray-200" />
+            <section className="order-4 rounded-3xl border border-brand-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="smart-input-heading">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-700 text-sm font-extrabold text-white">2</span>
+                <div><h2 id="smart-input-heading" className="font-extrabold text-gray-900">Smart Input</h2><p className="mt-1 text-xs leading-5 text-gray-500">Dán toàn bộ mã LaTeX. Hệ thống tự chia theo <code>\choice</code>, <code>\choiceTF</code> và <code>\shortans</code>.</p></div>
               </div>
-            )}
-
-            {/* ── LaTeX inputs ─────────────────────────────────────────── */}
-            <div className="space-y-6">
-              {[
-                { label: "Phần I: Trắc nghiệm nhiều phương án (\\choice)", value: part1, set: setPart1, accent: "border-brand-200 focus:border-brand-400" },
-                { label: "Phần II: Trắc nghiệm Đúng/Sai (\\choiceTF)",   value: part2, set: setPart2, accent: "border-amber-200 focus:border-amber-400" },
-                { label: "Phần III: Trả lời ngắn (\\shortans / \\dapso)", value: part3, set: setPart3, accent: "border-success-200 focus:border-success-400" },
-              ].map(({ label, value, set, accent }) => (
-                <div key={label}>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-bold text-gray-700">{label}</label>
-                    {value && (
-                      <span className="text-xs text-gray-400 font-mono">
-                        {value.split(/\\begin\{(?:ex|bt)\}/).length - 1} câu
-                      </span>
-                    )}
+              <label htmlFor="smart-latex" className="sr-only">Mã LaTeX của đề thi</label>
+              <textarea id="smart-latex" className="h-72 w-full resize-y rounded-2xl border-2 border-brand-200 bg-slate-950 p-5 font-mono text-xs leading-6 text-slate-100 outline-none transition focus:border-brand-500" placeholder={"% Dán toàn bộ nội dung hoặc tải file .tex\n\\begin{ex}\n  ...\n  \\choice{A}{B}{C}{\\True D}\n\\end{ex}"} value={smartInput} onChange={(event) => { setSmartInput(event.target.value); setSmartResult(null); setPreviewData(null); }} spellCheck={false} />
+              <button type="button" onClick={handleSmartClassify} className="mt-4 w-full rounded-xl bg-brand-700 py-3.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-brand-800">Phân tích và tạo bản xem trước</button>
+              {smartResult && (
+                <div className="mt-4 rounded-2xl border border-success-200 bg-success-50 p-4" role="status">
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                    {[{ label: "Nhiều lựa chọn", count: smartResult.counts.p1 }, { label: "Đúng / Sai", count: smartResult.counts.p2 }, { label: "Trả lời ngắn", count: smartResult.counts.p3 }].map(({ label, count }) => <div key={label} className="rounded-xl bg-white px-2 py-2.5"><p className="text-xl font-extrabold text-success-800">{count}</p><p className="text-[10px] font-semibold text-gray-500">{label}</p></div>)}
                   </div>
-                  <textarea
-                    className={`w-full h-36 p-4 border-2 ${accent} rounded-xl font-mono text-sm outline-none transition-all resize-y`}
-                    placeholder="\begin{ex}...\end{ex}"
-                    value={value}
-                    onChange={(e) => set(e.target.value)}
-                    spellCheck={false}
-                  />
+                  {smartResult.counts.unknown > 0 && <p className="mt-3 text-xs font-semibold text-amber-700">Có {smartResult.counts.unknown} câu chưa nhận diện được loại câu hỏi.</p>}
                 </div>
-              ))}
-            </div>
+              )}
+            </section>
 
             {/* ── Điểm số ──────────────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-6 space-y-5">
+            <section className="order-5 space-y-5 rounded-3xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white p-6 shadow-soft">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-brand-500">🎯</span> Thiết lập điểm số
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-700 text-sm font-extrabold text-white">3</span> Thiết lập điểm số
               </h3>
 
               <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-2">
@@ -733,10 +657,10 @@ export default function CreateExamPage() {
                   <span className="text-sm text-gray-500">điểm</span>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* ── Thời gian ────────────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-6 space-y-4">
+            <section className="order-6 space-y-4 rounded-3xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white p-6 shadow-soft">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
                 <span className="text-brand-500">⏱</span> Cấu hình thời gian
               </h3>
@@ -777,18 +701,12 @@ export default function CreateExamPage() {
                   />
                 </div>
               </div>
-            </div>
+            </section>
 
-            <button
-              onClick={handlePreview}
-              className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
-            >
-              Biên dịch &amp; Xem trước
-            </button>
           </div>
 
           {/* ── Live Preview ─────────────────────────────────────────────── */}
-          <div className="bg-gray-50 rounded-3xl shadow-inner border border-gray-200 p-8 min-h-[800px]">
+          <aside className="rounded-3xl border border-gray-200 bg-gray-50 p-5 shadow-inner lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto sm:p-7" aria-label="Bản xem trước đề thi">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Bản xem trước</h2>
               {previewData && (
@@ -815,16 +733,23 @@ export default function CreateExamPage() {
                 <p>Chưa có dữ liệu. Hãy bấm Biên dịch để xem trước!</p>
               </div>
             ) : (
-              <div className="space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+              <div className="space-y-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
+                {coverImageUrl && /^https?:\/\//i.test(coverImageUrl) && (
+                  <div className="relative aspect-[16/7] overflow-hidden rounded-2xl bg-brand-50">
+                    <Image src={coverImageUrl} alt={`Ảnh minh họa ${previewData.title}`} fill unoptimized className="object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+                  </div>
+                )}
                 <div className="text-center mb-8 border-b border-gray-100 pb-6">
-                  <h1 className="text-2xl font-extrabold text-gray-900 mb-2">{previewData.title}</h1>
+                  <h1 className="text-2xl font-extrabold text-gray-900 mb-2">{examTitle.trim() || previewData.title}</h1>
+                  {description.trim() && <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500">{description.trim()}</p>}
                   <div className="flex items-center justify-center gap-2 flex-wrap mt-2">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 font-semibold">{gradeLevel}</span>
                     {gradeLevel !== "Thi Thử TN THPT" && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">{examType}</span>
                     )}
                   </div>
-                  <p className="text-gray-500 text-sm mt-2">Tổng số câu hỏi: {previewData.questions.length}</p>
+                  <p className="text-gray-500 text-sm mt-2">{previewData.questions.length} câu · {duration} phút · Trả lời ngắn {scoringConfig.part3TotalScore} điểm</p>
                 </div>
 
                 {(["multiple_choice", "true_false", "short_answer"] as const).map((type) => {
@@ -876,7 +801,7 @@ export default function CreateExamPage() {
                 })}
               </div>
             )}
-          </div>
+          </aside>
         </div>
       </div>
     </AdminGuard>
