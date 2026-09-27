@@ -46,6 +46,7 @@ export interface ClassMemberDoc {
 }
 
 export type ClassResourceType = "pdf" | "video" | "slides";
+export type ClassResourceSource = "upload" | "link";
 
 export interface ClassCourseResource {
   id: string;
@@ -55,6 +56,11 @@ export interface ClassCourseResource {
   url: string;
   embedUrl: string;
   provider: string;
+  source?: ClassResourceSource;
+  storageKey?: string;
+  fileName?: string;
+  contentType?: string;
+  size?: number;
   createdAt: string;
 }
 
@@ -73,6 +79,7 @@ export interface ClassCourseDoc {
   title: string;
   description?: string;
   coverImageUrl?: string;
+  coverImageKey?: string;
   published: boolean;
   lessons: ClassCourseLesson[];
   /** Dữ liệu phiên bản cũ, được API tự chuyển thành một bài học. */

@@ -12,6 +12,16 @@ Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 27/09/2026. Mốc kh�
 - Upload và đọc lại thành công `healthchecks/connection-2026-09-27.txt`; URL công khai trả HTTP 200.
 - Viết lại tài liệu `CLOUDFLARE_R2_VA_NHAP_DE.md` theo cấu hình thật, kèm hướng dẫn production và xử lý sự cố.
 
+### 27/09/2026 — Chuẩn hóa học liệu khóa học và R2
+
+- Tách rõ hai nguồn học liệu: upload file lên R2 hoặc dán link/embed.
+- Chặn MP4/WebM ở giao diện và API; video chỉ nhận YouTube, Vimeo hoặc Google Drive.
+- Bổ sung upload ảnh bìa khóa học vào `course-assets/`.
+- Lưu metadata R2 cho học liệu gồm object key, tên file, MIME và dung lượng.
+- Dọn object R2 khi thay/xóa tài nguyên, xóa bài học hoặc xóa khóa học.
+- Thêm Office Online Viewer cho DOCX/PPTX công khai.
+- Kiểm thử presigned PUT và public GET cho ảnh bìa và PDF đều trả HTTP 200; file thử được xóa sau kiểm tra.
+
 ## 1. Phạm vi và độ đầy đủ
 
 - Đã kiểm tra các file Markdown của dự án, ngoài node_modules, .git, .next và các worktree phụ. README trước đó là tài liệu Next.js mặc định; AGENTS.md là hướng dẫn làm việc; CLAUDE.md tham chiếu AGENTS.md. Chưa thấy nhật ký dự án tập trung trong phạm vi này.

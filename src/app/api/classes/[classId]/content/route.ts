@@ -1,6 +1,7 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { deleteFromR2 } from "@/lib/r2Storage";
 import { verifyAuth, type AuthContextData } from "@/lib/verifyAuth";
 import { parseExamDateTime } from "@/lib/examAccess";
 import { normalizeResourceLink } from "@/utils/classResourceLinks";
@@ -9,6 +10,7 @@ import type {
   ClassCourseLesson,
   ClassCourseResource,
   ClassExamStatus,
+  ClassResourceSource,
   ClassResourceType,
 } from "@/utils/classroomTypes";
 
@@ -25,9 +27,15 @@ interface RequestBody {
   title?: unknown;
   description?: unknown;
   coverImageUrl?: unknown;
+  coverImageKey?: unknown;
   published?: unknown;
   type?: unknown;
   url?: unknown;
+  source?: unknown;
+  storageKey?: unknown;
+  fileName?: unknown;
+  contentType?: unknown;
+  size?: unknown;
 }
 
 interface ClassAccess {
@@ -52,6 +60,23 @@ function optionalHttpUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function optionalStorageKey(value: unknown, prefix: "learning-materials/" | "course-assets/"): string | null {
+  if (value === undefined || value === "") return "";
+  if (typeof value !== "string" || value.length > 1000) return null;
+  const normalized = value.trim().replace(/^\/+/, "");
+  return normalized.startsWith(prefix) ? normalized : null;
+}
+
+async function deleteStoredObjects(keys: Array<string | undefined>): Promise<void> {
+  const uniqueKeys = [...new Set(keys.filter((key): key is string => Boolean(key)))];
+  const results = await Promise.allSettled(uniqueKeys.map((key) => deleteFromR2(key)));
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn(`Không thể xóa object R2 ${uniqueKeys[index]}:`, result.reason);
+    }
+  });
 }
 
 function toIso(value: unknown): string | null {
@@ -107,6 +132,7 @@ function serializeCourse(document: FirebaseFirestore.QueryDocumentSnapshot) {
     title: String(data.title ?? "Khóa học chưa đặt tên"),
     description: String(data.description ?? ""),
     coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : "",
+    coverImageKey: typeof data.coverImageKey === "string" ? data.coverImageKey : "",
     published: Boolean(data.published),
     lessons: normalizeLessons(data),
     createdAt: toIso(data.createdAt),
@@ -273,7 +299,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const title = textValue(body?.title, 120);
     const description = textValue(body?.description ?? "", 1000);
     const coverImageUrl = optionalHttpUrl(body?.coverImageUrl);
-    if (!title || description === null || coverImageUrl === null || typeof body?.published !== "boolean") {
+    const coverImageKey = optionalStorageKey(body?.coverImageKey, "course-assets/");
+    if (!title || description === null || coverImageUrl === null || coverImageKey === null || typeof body?.published !== "boolean") {
       return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
     }
 
@@ -284,6 +311,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       title,
       description,
       coverImageUrl,
+      coverImageKey,
       published: body.published,
       lessons: [],
       createdAt: FieldValue.serverTimestamp(),
@@ -321,16 +349,22 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const title = textValue(body.title, 120);
       const description = textValue(body.description ?? "", 1000);
       const coverImageUrl = optionalHttpUrl(body.coverImageUrl);
-      if (!title || description === null || coverImageUrl === null || typeof body.published !== "boolean") {
+      const coverImageKey = optionalStorageKey(body.coverImageKey, "course-assets/");
+      if (!title || description === null || coverImageUrl === null || coverImageKey === null || typeof body.published !== "boolean") {
         return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
       }
+      const previousCoverImageKey = typeof data.coverImageKey === "string" ? data.coverImageKey : undefined;
       await course.courseRef.update({
         title,
         description,
         coverImageUrl,
+        coverImageKey,
         published: body.published,
         updatedAt: FieldValue.serverTimestamp(),
       });
+      if (previousCoverImageKey && previousCoverImageKey !== coverImageKey) {
+        await deleteStoredObjects([previousCoverImageKey]);
+      }
       return NextResponse.json({ success: true });
     }
 
@@ -365,11 +399,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body?.action === "delete_lesson") {
       const lessonId = textValue(body.lessonId, 200);
       if (!lessonId) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      const deletedLesson = lessons.find((item) => item.id === lessonId);
       await course.courseRef.update({
         lessons: lessons.filter((item) => item.id !== lessonId),
         resources: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      await deleteStoredObjects((deletedLesson?.resources ?? []).map((resource) => resource.storageKey));
       return NextResponse.json({ success: true });
     }
 
@@ -394,12 +430,28 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const title = textValue(body.title, 160);
       const description = textValue(body.description ?? "", 1000);
       const type = body.type as ClassResourceType;
-      if (!title || description === null || !["pdf", "video", "slides"].includes(type)) {
+      const source = body.source as ClassResourceSource;
+      const storageKey = optionalStorageKey(body.storageKey, "learning-materials/");
+      const fileName = textValue(body.fileName ?? "", 255);
+      const contentType = textValue(body.contentType ?? "", 200);
+      const size = Number(body.size ?? 0);
+      if (
+        !title
+        || description === null
+        || !["pdf", "video", "slides"].includes(type)
+        || !["upload", "link"].includes(source)
+        || storageKey === null
+        || fileName === null
+        || contentType === null
+        || !Number.isFinite(size)
+        || size < 0
+        || (source === "upload" && (!storageKey || type === "video"))
+      ) {
         return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
       }
       const normalized = normalizeResourceLink(typeof body.url === "string" ? body.url : "", type);
       if (!normalized) {
-        return NextResponse.json({ error: "INVALID_URL" }, { status: 400 });
+        return NextResponse.json({ error: type === "video" ? "VIDEO_EMBED_REQUIRED" : "INVALID_URL" }, { status: 400 });
       }
 
       const lessonId = textValue(body.lessonId, 200);
@@ -418,9 +470,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         title,
         description,
         type,
+        source,
         ...normalized,
+        ...(source === "upload" && {
+          storageKey,
+          fileName,
+          contentType,
+          size,
+        }),
         createdAt: existingIndex >= 0 ? resources[existingIndex].createdAt : new Date().toISOString(),
       };
+      const previousStorageKey = existingIndex >= 0 ? resources[existingIndex].storageKey : undefined;
       if (existingIndex >= 0) resources[existingIndex] = resource;
       else resources.push(resource);
       lessons[lessonIndex] = { ...lessons[lessonIndex], resources };
@@ -430,6 +490,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resources: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      if (previousStorageKey && previousStorageKey !== resource.storageKey) {
+        await deleteStoredObjects([previousStorageKey]);
+      }
       return NextResponse.json({ success: true, resource });
     }
 
@@ -438,6 +501,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const lessonIndex = lessonId ? lessons.findIndex((item) => item.id === lessonId) : -1;
       const resourceId = textValue(body.resourceId, 200);
       if (!resourceId || lessonIndex < 0) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+      const deletedResource = lessons[lessonIndex].resources.find((item) => item.id === resourceId);
       lessons[lessonIndex] = {
         ...lessons[lessonIndex],
         resources: lessons[lessonIndex].resources.filter((item) => item.id !== resourceId),
@@ -447,6 +511,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resources: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      await deleteStoredObjects([deletedResource?.storageKey]);
       return NextResponse.json({ success: true });
     }
 
@@ -492,6 +557,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!courseId) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
     const course = await getCourse(classId, courseId);
     if (!course) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    const courseData = course.courseSnapshot.data() ?? {};
+    const storedKeys = [
+      typeof courseData.coverImageKey === "string" ? courseData.coverImageKey : undefined,
+      ...flattenCourseResources(normalizeLessons(courseData)).map((resource) => resource.storageKey),
+    ];
     const progressSnapshot = await adminDb
       .collection("class_course_progress")
       .where("courseId", "==", courseId)
@@ -502,6 +572,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       await batch.commit();
     }
     await course.courseRef.delete();
+    await deleteStoredObjects(storedKeys);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/classes/[classId]/content failed:", error);

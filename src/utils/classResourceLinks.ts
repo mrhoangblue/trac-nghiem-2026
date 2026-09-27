@@ -31,6 +31,7 @@ export function normalizeResourceLink(
       : url.searchParams.get("v")
         ?? url.pathname.match(/\/(?:embed|shorts)\/([^/?]+)/)?.[1];
     if (videoId) {
+      if (type !== "video") return null;
       return {
         url: url.toString(),
         embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`,
@@ -42,6 +43,7 @@ export function normalizeResourceLink(
   if (host === "vimeo.com" || host.endsWith("player.vimeo.com")) {
     const videoId = url.pathname.match(/(?:video\/)?(\d+)/)?.[1];
     if (videoId) {
+      if (type !== "video") return null;
       return {
         url: url.toString(),
         embedUrl: `https://player.vimeo.com/video/${videoId}`,
@@ -64,6 +66,7 @@ export function normalizeResourceLink(
   if (host === "docs.google.com" && url.pathname.includes("/presentation/")) {
     const fileId = googleFileId(url);
     if (fileId) {
+      if (type !== "slides") return null;
       return {
         url: url.toString(),
         embedUrl: `https://docs.google.com/presentation/d/${encodeURIComponent(fileId)}/embed?start=false&loop=false&delayms=3000`,
@@ -71,6 +74,19 @@ export function normalizeResourceLink(
       };
     }
   }
+
+  const extension = url.pathname.split(".").pop()?.toLowerCase();
+  if (extension === "docx" || extension === "pptx") {
+    return {
+      url: url.toString(),
+      embedUrl: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url.toString())}`,
+      provider: "Microsoft Office Online",
+    };
+  }
+
+  // Video phải đến từ nguồn có thể chuyển thành URL embed an toàn ở trên.
+  // Không nhận URL video trực tiếp hoặc file MP4/WebM trên R2.
+  if (type === "video") return null;
 
   const provider = type === "pdf" ? "Tài liệu trực tuyến" : type === "slides" ? "Bài trình chiếu" : "Video trực tuyến";
   return { url: url.toString(), embedUrl: url.toString(), provider };

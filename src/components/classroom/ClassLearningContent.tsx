@@ -9,6 +9,7 @@ import type {
   ClassCourseResource,
   ClassExamStatus,
   ClassExamSummary,
+  ClassResourceSource,
   ClassResourceType,
 } from "@/utils/classroomTypes";
 
@@ -17,6 +18,7 @@ interface CourseView {
   title: string;
   description: string;
   coverImageUrl: string;
+  coverImageKey: string;
   published: boolean;
   lessons: ClassCourseLesson[];
   createdAt: string | null;
@@ -36,6 +38,7 @@ interface CourseDraft {
   title: string;
   description: string;
   coverImageUrl: string;
+  coverImageKey: string;
   published: boolean;
 }
 
@@ -47,6 +50,11 @@ interface ResourceDraft {
   description: string;
   type: ClassResourceType;
   url: string;
+  source: ClassResourceSource;
+  storageKey: string;
+  fileName: string;
+  contentType: string;
+  size: number;
 }
 
 interface LessonDraft {
@@ -100,6 +108,11 @@ function resourceToDraft(
     description: resource?.description ?? "",
     type: resource?.type ?? "pdf",
     url: resource?.url ?? "",
+    source: resource?.source ?? (resource?.storageKey ? "upload" : "link"),
+    storageKey: resource?.storageKey ?? "",
+    fileName: resource?.fileName ?? "",
+    contentType: resource?.contentType ?? "",
+    size: resource?.size ?? 0,
   };
 }
 
@@ -113,6 +126,7 @@ export default function ClassLearningContent({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingResource, setUploadingResource] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courseDraft, setCourseDraft] = useState<CourseDraft | null>(null);
   const [lessonDraft, setLessonDraft] = useState<LessonDraft | null>(null);
@@ -166,6 +180,7 @@ export default function ClassLearningContent({
     if (!response.ok) {
       const messages: Record<string, string> = {
         INVALID_URL: "Liên kết không hợp lệ. Hãy dùng liên kết http hoặc https có quyền xem.",
+        VIDEO_EMBED_REQUIRED: "Video chỉ hỗ trợ YouTube, Vimeo hoặc Google Drive có quyền xem.",
         RESOURCE_LIMIT: "Mỗi bài học hỗ trợ tối đa 100 tài nguyên.",
         LESSON_LIMIT: "Mỗi khóa học hỗ trợ tối đa 100 bài học.",
         LESSON_NOT_FOUND: "Không tìm thấy bài học. Vui lòng tải lại trang.",
@@ -189,6 +204,7 @@ export default function ClassLearningContent({
           title: courseDraft.title,
           description: courseDraft.description,
           coverImageUrl: courseDraft.coverImageUrl,
+          coverImageKey: courseDraft.coverImageKey,
           published: courseDraft.published,
         });
       } else {
@@ -196,6 +212,7 @@ export default function ClassLearningContent({
           title: courseDraft.title,
           description: courseDraft.description,
           coverImageUrl: courseDraft.coverImageUrl,
+          coverImageKey: courseDraft.coverImageKey,
           published: courseDraft.published,
         });
       }
@@ -223,6 +240,11 @@ export default function ClassLearningContent({
         description: resourceDraft.description,
         type: resourceDraft.type,
         url: resourceDraft.url,
+        source: resourceDraft.source,
+        storageKey: resourceDraft.storageKey,
+        fileName: resourceDraft.fileName,
+        contentType: resourceDraft.contentType,
+        size: resourceDraft.size,
       });
       setResourceDraft(null);
       await loadContent();
@@ -235,6 +257,10 @@ export default function ClassLearningContent({
 
   const uploadResourceFile = async (file: File | null) => {
     if (!file || !user || !resourceDraft) return;
+    if (resourceDraft.type === "video" || file.type.startsWith("video/")) {
+      setError("Video chỉ hỗ trợ liên kết embed từ YouTube, Vimeo hoặc Google Drive.");
+      return;
+    }
     setUploadingResource(true);
     setError(null);
     try {
@@ -244,7 +270,7 @@ export default function ClassLearningContent({
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, folder: "learning-materials" }),
       });
-      const payload = (await response.json().catch(() => null)) as { uploadUrl?: string; url?: string; contentType?: string; error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as { uploadUrl?: string; url?: string; key?: string; contentType?: string; error?: string } | null;
       if (!response.ok || !payload?.uploadUrl || !payload.url) {
         const messages: Record<string, string> = {
           R2_NOT_READY: "Cloudflare R2 chưa được cấu hình đầy đủ hoặc chưa có public URL.",
@@ -259,21 +285,66 @@ export default function ClassLearningContent({
         body: file,
       });
       if (!uploadResponse.ok) throw new Error("R2 từ chối file. Hãy kiểm tra CORS và quyền ghi của bucket.");
-      const inferredType: ClassResourceType = file.type.startsWith("video/")
-        ? "video"
-        : file.name.toLowerCase().endsWith(".pptx")
-          ? "slides"
-          : "pdf";
+      const inferredType: ClassResourceType = file.name.toLowerCase().endsWith(".pptx") ? "slides" : "pdf";
       setResourceDraft((current) => current ? {
         ...current,
         url: payload.url ?? current.url,
         type: inferredType,
+        source: "upload",
+        storageKey: payload.key ?? "",
+        fileName: file.name,
+        contentType: payload.contentType || file.type || "application/octet-stream",
+        size: file.size,
         title: current.title || file.name.replace(/\.[^.]+$/, ""),
       } : current);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Không thể upload file.");
     } finally {
       setUploadingResource(false);
+    }
+  };
+
+  const uploadCourseCover = async (file: File | null) => {
+    if (!file || !user || !courseDraft) return;
+    setUploadingCover(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/storage/presign", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, folder: "course-assets" }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        uploadUrl?: string;
+        url?: string;
+        key?: string;
+        contentType?: string;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.uploadUrl || !payload.url || !payload.key) {
+        const messages: Record<string, string> = {
+          R2_NOT_READY: "Cloudflare R2 chưa được cấu hình đầy đủ hoặc chưa có public URL.",
+          FILE_SIZE_INVALID: "Ảnh bìa phải nhỏ hơn 8 MB.",
+          FILE_TYPE_UNSUPPORTED: "Ảnh bìa hỗ trợ PNG, JPG, JPEG hoặc WebP.",
+        };
+        throw new Error(messages[payload?.error ?? ""] ?? "Không thể chuẩn bị vùng upload ảnh bìa.");
+      }
+      const uploadResponse = await fetch(payload.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": payload.contentType || file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadResponse.ok) throw new Error("R2 từ chối ảnh bìa. Hãy kiểm tra CORS và quyền ghi của bucket.");
+      setCourseDraft((current) => current ? {
+        ...current,
+        coverImageUrl: payload.url ?? current.coverImageUrl,
+        coverImageKey: payload.key ?? "",
+      } : current);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Không thể upload ảnh bìa.");
+    } finally {
+      setUploadingCover(false);
     }
   };
 
@@ -464,7 +535,7 @@ export default function ClassLearningContent({
           {canEdit && (
             <button
               type="button"
-              onClick={() => setCourseDraft({ title: "", description: "", coverImageUrl: "", published: true })}
+              onClick={() => setCourseDraft({ title: "", description: "", coverImageUrl: "", coverImageKey: "", published: true })}
               className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700"
             >
               + Tạo khóa học
@@ -491,15 +562,30 @@ export default function ClassLearningContent({
             </label>
             <label className="block text-sm font-bold text-gray-700">
               Ảnh minh họa khóa học
+              <span className={`mt-1.5 block cursor-pointer rounded-2xl border-2 border-dashed p-4 text-center transition ${uploadingCover ? "border-gray-200 bg-gray-50 text-gray-400" : "border-brand-200 bg-white text-brand-700 hover:border-brand-400"}`}>
+                {uploadingCover ? "Đang tải ảnh lên R2…" : "Tải ảnh từ máy lên Cloudflare R2"}
+                <span className="mt-1 block text-xs font-normal text-gray-500">PNG, JPG hoặc WebP · tối đa 8 MB</span>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  disabled={uploadingCover}
+                  className="sr-only"
+                  onChange={(event) => {
+                    void uploadCourseCover(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </span>
+              <span className="my-3 flex items-center gap-3 text-xs font-normal text-gray-400 before:h-px before:flex-1 before:bg-gray-200 after:h-px after:flex-1 after:bg-gray-200">hoặc dán liên kết ảnh</span>
               <input
                 type="url"
                 value={courseDraft.coverImageUrl}
-                onChange={(event) => setCourseDraft({ ...courseDraft, coverImageUrl: event.target.value })}
+                onChange={(event) => setCourseDraft({ ...courseDraft, coverImageUrl: event.target.value, coverImageKey: "" })}
                 maxLength={2000}
                 placeholder="https://.../anh-khoa-hoc.jpg"
                 className="mt-1.5 w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 font-normal outline-none focus:border-brand-500"
               />
-              <span className="mt-1.5 block text-xs font-normal text-gray-400">Dán liên kết ảnh công khai. Để trống, hệ thống dùng ảnh nền mặc định.</span>
+              <span className="mt-1.5 block text-xs font-normal text-gray-400">{courseDraft.coverImageKey ? "Ảnh đã được lưu trong bucket lms." : "Dán liên kết ảnh công khai. Để trống, hệ thống dùng ảnh nền mặc định."}</span>
               {/^https?:\/\//i.test(courseDraft.coverImageUrl) && (
                 <span className="mt-3 block h-36 rounded-2xl bg-brand-100 bg-cover bg-center" style={{ backgroundImage: `url(${JSON.stringify(courseDraft.coverImageUrl)})` }} role="img" aria-label="Xem trước ảnh minh họa" />
               )}
@@ -567,7 +653,7 @@ export default function ClassLearningContent({
                       <div className="mt-5 flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
                         <span className="text-xs text-gray-400">{resources.length} tài nguyên</span>
                         <div className="flex gap-2">
-                          {canEdit && <button type="button" onClick={() => setCourseDraft({ id: course.id, title: course.title, description: course.description, coverImageUrl: course.coverImageUrl, published: course.published })} className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200">Sửa</button>}
+                          {canEdit && <button type="button" onClick={() => setCourseDraft({ id: course.id, title: course.title, description: course.description, coverImageUrl: course.coverImageUrl, coverImageKey: course.coverImageKey, published: course.published })} className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200">Sửa</button>}
                           <button type="button" onClick={() => openCourse(course)} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700">{canEdit ? "Quản lý" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu"}</button>
                         </div>
                       </div>
@@ -597,7 +683,7 @@ export default function ClassLearningContent({
                       </div>
                       {canEdit && (
                         <div className="flex gap-2">
-                          <button onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, published: selectedCourse.published })} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25">Sửa khóa học</button>
+                          <button onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, coverImageKey: selectedCourse.coverImageKey, published: selectedCourse.published })} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25">Sửa khóa học</button>
                           <button disabled={saving} onClick={() => void deleteCourse(selectedCourse)} className="rounded-xl bg-danger-500/80 px-4 py-2 text-sm font-bold hover:bg-danger-500">Xóa</button>
                         </div>
                       )}
@@ -655,7 +741,7 @@ export default function ClassLearningContent({
                             return (
                               <div key={resource.id} className={`flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5 ${active ? "bg-brand-50" : ""}`}>
                                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${completed ? "bg-success-100 text-success-700" : locked ? "bg-gray-100 text-gray-400" : "bg-brand-100 text-brand-700"}`}>{completed ? "✓" : locked ? "🔒" : RESOURCE_META[resource.type].icon}</span>
-                                <button type="button" disabled={locked} onClick={() => setActiveResourceId(resource.id)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"><span className={`block truncate text-sm font-bold ${locked ? "text-gray-400" : "text-gray-800"}`}>{globalIndex + 1}. {resource.title}</span><span className="mt-0.5 block text-xs text-gray-400">{locked ? "Hoàn thành nội dung trước để mở khóa" : `${RESOURCE_META[resource.type].label} · ${resource.provider}`}</span></button>
+                                <button type="button" disabled={locked} onClick={() => setActiveResourceId(resource.id)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"><span className={`block truncate text-sm font-bold ${locked ? "text-gray-400" : "text-gray-800"}`}>{globalIndex + 1}. {resource.title}</span><span className="mt-0.5 block text-xs text-gray-400">{locked ? "Hoàn thành nội dung trước để mở khóa" : `${RESOURCE_META[resource.type].label} · ${resource.provider} · ${resource.source === "upload" || resource.storageKey ? "R2" : "Liên kết"}`}</span></button>
                                 {canEdit && <div className="flex gap-1"><button disabled={saving || resourceIndex === 0} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "up")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↑</button><button disabled={saving || resourceIndex === lesson.resources.length - 1} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "down")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↓</button><button onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id, resource))} className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700">Sửa</button><button onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "delete_resource")} className="rounded-lg bg-danger-50 px-2.5 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
                               </div>
                             );
@@ -719,7 +805,21 @@ export default function ClassLearningContent({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-bold text-gray-700">Loại tài nguyên
-                <select value={resourceDraft.type} onChange={(event) => setResourceDraft({ ...resourceDraft, type: event.target.value as ClassResourceType })} className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500">
+                <select value={resourceDraft.type} onChange={(event) => {
+                  const type = event.target.value as ClassResourceType;
+                  setResourceDraft({
+                    ...resourceDraft,
+                    type,
+                    ...(type === "video" ? {
+                      source: "link",
+                      url: resourceDraft.source === "upload" ? "" : resourceDraft.url,
+                      storageKey: "",
+                      fileName: "",
+                      contentType: "",
+                      size: 0,
+                    } : {}),
+                  });
+                }} className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500">
                   <option value="pdf">PDF / tài liệu</option>
                   <option value="video">Video</option>
                   <option value="slides">PPTX / Google Slides</option>
@@ -729,30 +829,77 @@ export default function ClassLearningContent({
                 <input value={resourceDraft.title} onChange={(event) => setResourceDraft({ ...resourceDraft, title: event.target.value })} maxLength={160} required className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500" />
               </label>
             </div>
-            <label className={`block rounded-2xl border-2 border-dashed p-4 text-center text-sm font-bold transition ${uploadingResource ? "cursor-wait border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer border-brand-200 bg-brand-50/60 text-brand-700 hover:border-brand-400"}`}>
-              {uploadingResource ? "Đang upload lên Cloudflare R2…" : "Upload file trực tiếp lên R2"}
-              <span className="mt-1 block text-xs font-normal text-gray-500">PDF, DOCX, PPTX, MP4/WebM hoặc ảnh · tối đa 100 MB</span>
-              <input
-                type="file"
-                accept=".pdf,.docx,.pptx,.mp4,.webm,.png,.jpg,.jpeg,.webp,.svg"
-                disabled={uploadingResource}
-                className="sr-only"
-                onChange={(event) => {
-                  void uploadResourceFile(event.target.files?.[0] ?? null);
-                  event.target.value = "";
-                }}
-              />
-            </label>
-            <label className="block text-sm font-bold text-gray-700">Liên kết chia sẻ
-              <input type="url" value={resourceDraft.url} onChange={(event) => setResourceDraft({ ...resourceDraft, url: event.target.value })} required placeholder="https://drive.google.com/... hoặc liên kết có quyền xem" className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500" />
-              <span className="mt-1.5 block text-xs font-normal leading-5 text-gray-400">Có thể upload lên R2 ở trên hoặc dán liên kết Google Drive, YouTube, Vimeo, Google Slides và nguồn công khai.</span>
-            </label>
+            <fieldset>
+              <legend className="text-sm font-bold text-gray-700">Nguồn học liệu</legend>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={resourceDraft.type === "video"}
+                  onClick={() => setResourceDraft({
+                    ...resourceDraft,
+                    source: "upload",
+                    ...(resourceDraft.source !== "upload" ? { url: "", storageKey: "", fileName: "", contentType: "", size: 0 } : {}),
+                  })}
+                  className={`rounded-2xl border-2 p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${resourceDraft.source === "upload" ? "border-brand-500 bg-brand-50 shadow-sm" : "border-gray-200 bg-white hover:border-brand-200"}`}
+                >
+                  <span className="block font-extrabold text-gray-900">⬆ Upload file</span>
+                  <span className="mt-1 block text-xs leading-5 text-gray-500">Lưu PDF, DOCX, PPTX hoặc ảnh trực tiếp trong R2.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResourceDraft({
+                    ...resourceDraft,
+                    source: "link",
+                    ...(resourceDraft.source !== "link" ? { url: "" } : {}),
+                    storageKey: "",
+                    fileName: "",
+                    contentType: "",
+                    size: 0,
+                  })}
+                  className={`rounded-2xl border-2 p-4 text-left transition ${resourceDraft.source === "link" ? "border-brand-500 bg-brand-50 shadow-sm" : "border-gray-200 bg-white hover:border-brand-200"}`}
+                >
+                  <span className="block font-extrabold text-gray-900">🔗 Dán link / Embed</span>
+                  <span className="mt-1 block text-xs leading-5 text-gray-500">Google Drive, YouTube, Vimeo, Google Slides hoặc URL công khai.</span>
+                </button>
+              </div>
+              {resourceDraft.type === "video" && <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Video chỉ dùng link embed để tránh chiếm dung lượng và băng thông R2.</p>}
+            </fieldset>
+
+            {resourceDraft.source === "upload" && resourceDraft.type !== "video" ? (
+              <label className={`block rounded-2xl border-2 border-dashed p-5 text-center text-sm font-bold transition ${uploadingResource ? "cursor-wait border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer border-brand-200 bg-brand-50/60 text-brand-700 hover:border-brand-400"}`}>
+                {uploadingResource ? "Đang upload lên Cloudflare R2…" : resourceDraft.storageKey ? "Đổi file đã upload" : "Chọn file để upload lên R2"}
+                <span className="mt-1 block text-xs font-normal text-gray-500">PDF, DOCX, PPTX hoặc ảnh · tối đa 100 MB · không nhận video</span>
+                {resourceDraft.fileName && <span className="mt-2 block text-xs font-semibold text-success-700">✓ {resourceDraft.fileName} ({Math.max(1, Math.round(resourceDraft.size / 1024))} KB)</span>}
+                <input
+                  type="file"
+                  accept={resourceDraft.type === "slides" ? ".pptx,.pdf" : ".pdf,.docx,.png,.jpg,.jpeg,.webp,.svg"}
+                  disabled={uploadingResource}
+                  className="sr-only"
+                  onChange={(event) => {
+                    void uploadResourceFile(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            ) : (
+              <label className="block text-sm font-bold text-gray-700">Liên kết chia sẻ / embed
+                <input
+                  type="url"
+                  value={resourceDraft.url}
+                  onChange={(event) => setResourceDraft({ ...resourceDraft, url: event.target.value })}
+                  required
+                  placeholder={resourceDraft.type === "video" ? "https://youtube.com/watch?v=... hoặc Vimeo / Google Drive" : "https://drive.google.com/... hoặc liên kết có quyền xem"}
+                  className="mt-1.5 w-full rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500"
+                />
+                <span className="mt-1.5 block text-xs font-normal leading-5 text-gray-400">{resourceDraft.type === "video" ? "Hỗ trợ YouTube, Vimeo và Google Drive. Hệ thống tự chuyển sang URL embed." : "Liên kết phải cho phép người học xem nội dung."}</span>
+              </label>
+            )}
             <label className="block text-sm font-bold text-gray-700">Mô tả
               <textarea value={resourceDraft.description} onChange={(event) => setResourceDraft({ ...resourceDraft, description: event.target.value })} maxLength={1000} rows={2} className="mt-1.5 w-full resize-none rounded-xl border-2 border-gray-200 px-4 py-3 font-normal outline-none focus:border-brand-500" />
             </label>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setResourceDraft(null)} className="rounded-xl px-4 py-2.5 text-sm font-bold text-gray-600">Hủy</button>
-              <button disabled={saving} className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu tài nguyên"}</button>
+              <button disabled={saving || !resourceDraft.url.trim() || (resourceDraft.source === "upload" && !resourceDraft.storageKey)} className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu tài nguyên"}</button>
             </div>
           </form>
           </div>

@@ -134,6 +134,7 @@ lms/
 ├── exam-imports/YYYY-MM-DD/<uuid>-ten-file.pdf
 ├── exam-imports/YYYY-MM-DD/<uuid>-ten-file.tex
 ├── exam-assets/YYYY-MM-DD/<uuid>-anh-minh-hoa.png
+├── course-assets/YYYY-MM-DD/<uuid>-anh-bia-khoa-hoc.png
 ├── learning-materials/YYYY-MM-DD/<uuid>-hoc-lieu.pdf
 └── healthchecks/connection-2026-09-27.txt
 ```
@@ -146,7 +147,10 @@ Tên file được bỏ dấu tiếng Việt và ký tự không an toàn; UUID 
 | --- | --- | ---: |
 | File nhập đề | DOCX, PDF, TEX | 25 MB |
 | Ảnh minh họa đề | PNG, JPG, JPEG, WebP, SVG | 8 MB |
-| Học liệu | PDF, DOCX, PPTX, MP4, WebM, PNG, JPG, JPEG, WebP, SVG | 100 MB |
+| Học liệu upload | PDF, DOCX, PPTX, PNG, JPG, JPEG, WebP, SVG | 100 MB |
+| Ảnh bìa khóa học | PNG, JPG, JPEG, WebP | 8 MB |
+
+Video không upload lên R2. Giáo viên dán liên kết YouTube, Vimeo hoặc Google Drive; hệ thống chuẩn hóa thành URL embed. DOCX và PPTX công khai trên R2 được mở qua Microsoft Office Online Viewer.
 
 Các giới hạn được kiểm tra trước khi cấp presigned URL. URL upload hết hạn sau 10 phút.
 

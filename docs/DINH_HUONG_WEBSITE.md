@@ -92,3 +92,20 @@ Giữ khả năng xuất dữ liệu lớp/điểm; quy định người có quy
 Tập trung chu kỳ đầu vào: **đăng ký → vào lớp → mở đề → làm bài → nộp và xem kết quả** hoạt động đúng dưới quyền thực tế. Sau đó ưu tiên ngân hàng câu hỏi và sổ câu sai. Chưa cần viết lại stack, tích hợp thanh toán, mở chợ nội dung hay chọn một model AI cụ thể.
 
 Danh sách công việc kỹ thuật và điều kiện nghiệm thu: [Kế hoạch cải thiện](KE_HOACH_CAI_THIEN.md).
+
+## 8. Chuẩn hóa học liệu lớp học — triển khai 27/09/2026
+
+Luồng nội dung lớp học được chuẩn hóa theo cấu trúc **Lớp → Khóa học → Bài học → Học liệu**. Giáo viên có hai cách thêm học liệu:
+
+1. **Upload file lên Cloudflare R2:** PDF, DOCX, PPTX và ảnh. Hệ thống lưu URL, object key, tên file, MIME và dung lượng; object được dọn khi giáo viên thay hoặc xóa nội dung.
+2. **Dán link/embed:** Google Drive, Google Slides, YouTube, Vimeo hoặc URL tài liệu công khai.
+
+Video chỉ dùng link/embed, không upload MP4/WebM lên R2. Quyết định này giảm dung lượng, băng thông và chi phí vận hành. Ảnh bìa khóa học có thể upload vào `course-assets/` hoặc dùng liên kết công khai.
+
+Điều kiện nghiệm thu của bước này:
+
+- server từ chối upload video kể cả khi bỏ qua giao diện;
+- presigned upload và public read của `course-assets/` và `learning-materials/` đều đạt HTTP 200;
+- tài nguyên upload lưu được metadata R2 để quản lý vòng đời file;
+- link video không thuộc YouTube, Vimeo hoặc Google Drive bị từ chối;
+- dữ liệu cũ không có trường `source` hoặc `storageKey` vẫn hiển thị được.

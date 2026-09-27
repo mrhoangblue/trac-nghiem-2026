@@ -1,4 +1,4 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 
@@ -23,6 +23,8 @@ interface R2Config {
   bucket: string;
   publicBaseUrl?: string;
 }
+
+export type R2ObjectFolder = "exam-imports" | "exam-assets" | "learning-materials" | "course-assets";
 
 let cachedClient: S3Client | null = null;
 
@@ -78,7 +80,7 @@ function safeFileName(fileName: string): string {
 }
 
 function createObjectKey(
-  folder: "exam-imports" | "exam-assets" | "learning-materials",
+  folder: R2ObjectFolder,
   fileName: string,
 ): string {
   const date = new Date().toISOString().slice(0, 10);
@@ -95,7 +97,7 @@ export async function uploadToR2(input: {
   body: Uint8Array | Buffer;
   contentType: string;
   fileName: string;
-  folder: "exam-imports" | "exam-assets" | "learning-materials";
+  folder: R2ObjectFolder;
   metadata?: Record<string, string>;
 }): Promise<{ key: string; url: string | null }> {
   const config = getConfig();
@@ -123,7 +125,7 @@ export async function uploadToR2(input: {
 export async function createR2UploadUrl(input: {
   contentType: string;
   fileName: string;
-  folder: "exam-imports" | "exam-assets" | "learning-materials";
+  folder: R2ObjectFolder;
   metadata?: Record<string, string>;
 }): Promise<{ key: string; uploadUrl: string; url: string | null }> {
   const config = getConfig();
@@ -161,4 +163,14 @@ export async function getR2ObjectMetadata(key: string): Promise<{
     size: Number(response.ContentLength ?? 0),
     contentType: response.ContentType ?? null,
   };
+}
+
+export async function deleteFromR2(key: string): Promise<void> {
+  const config = getConfig();
+  if (!config) throw new Error("R2_NOT_CONFIGURED");
+  const normalizedKey = key.trim().replace(/^\/+/, "");
+  const allowedPrefix = ["exam-imports/", "exam-assets/", "learning-materials/", "course-assets/"]
+    .some((prefix) => normalizedKey.startsWith(prefix));
+  if (!normalizedKey || !allowedPrefix) throw new Error("R2_OBJECT_KEY_INVALID");
+  await getClient(config).send(new DeleteObjectCommand({ Bucket: config.bucket, Key: normalizedKey }));
 }
