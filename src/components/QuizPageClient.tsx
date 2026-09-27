@@ -10,6 +10,18 @@ import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 
 type QuizData = Omit<QuizClientProps, "examId">;
 type AccessMetadata = TimingConfig & { title: string; requiresPassword: boolean };
+type ExamAccessData = {
+  title?: string;
+  questions?: ParsedQuestion[];
+  scoringConfig?: ScoringConfig;
+  duration?: number;
+  startTime?: string | null;
+  endTime?: string | null;
+  requiresPassword?: boolean;
+  tikzProcessed?: boolean;
+  rawLatex?: { part1?: string; part2?: string; part3?: string };
+  maxRetries?: number;
+};
 
 function LoadingExam() {
   return (
@@ -31,7 +43,7 @@ export default function QuizPageClient({ examId }: { examId: string }) {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
-  const [error, setError] = useState<"not-found" | "not-open" | "closed" | "permission" | "unknown" | null>(null);
+  const [error, setError] = useState<"not-found" | "not-open" | "closed" | "permission" | "auth" | "unknown" | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const loadExam = useCallback(async (suppliedPassword = "", signal?: AbortSignal) => {
@@ -40,17 +52,32 @@ export default function QuizPageClient({ examId }: { examId: string }) {
       setPasswordError(null);
 
       try {
-        const idToken = await user.getIdToken();
-        const response = await fetch(`/api/exams/${encodeURIComponent(examId)}/access`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify(suppliedPassword ? { password: suppliedPassword } : {}),
-          signal,
-        });
-        const payload = await response.json();
+        const requestExam = async (forceRefresh: boolean) => {
+          const idToken = await user.getIdToken(forceRefresh);
+          return fetch(`/api/exams/${encodeURIComponent(examId)}/access`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify(suppliedPassword ? { password: suppliedPassword } : {}),
+            signal,
+            cache: "no-store",
+          });
+        };
+
+        // Firebase may retain an expired/revoked token in a long-lived browser tab.
+        // Refresh it once on 401 instead of leaving the user on a generic error page.
+        let response = await requestExam(false);
+        if (response.status === 401 && !signal?.aborted) {
+          response = await requestExam(true);
+        }
+
+        const payload = (await response.json().catch(() => ({ error: "INVALID_RESPONSE" }))) as {
+          error?: string;
+          metadata?: AccessMetadata;
+          exam?: ExamAccessData;
+        };
         if (signal?.aborted) return;
 
         if (!response.ok) {
@@ -68,12 +95,13 @@ export default function QuizPageClient({ examId }: { examId: string }) {
             NOT_OPEN: "not-open",
             CLOSED: "closed",
             FORBIDDEN: "permission",
+            UNAUTHENTICATED: "auth",
           };
-          setError(errorMap[payload.error] ?? "unknown");
+          setError(payload.error ? (errorMap[payload.error] ?? "unknown") : "unknown");
           return;
         }
 
-        const data = payload.exam;
+        const data = payload.exam!;
         const scoringConfig: ScoringConfig = data.scoringConfig ?? {
           part1TotalScore: 3,
           part3TotalScore: 1,
@@ -208,6 +236,8 @@ export default function QuizPageClient({ examId }: { examId: string }) {
             ? `Đề thi đã hết hạn${metadata?.endTime ? ` từ ${formatDateTime(metadata.endTime)}` : ""}. Giáo viên có thể gia hạn để mở lại.`
         : error === "permission"
           ? "Tài khoản của bạn chưa được cấp quyền đọc đề thi này."
+          : error === "auth"
+            ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất, đăng nhập lại rồi mở đề."
           : "Có lỗi khi tải đề thi. Vui lòng thử lại.";
 
     return (
