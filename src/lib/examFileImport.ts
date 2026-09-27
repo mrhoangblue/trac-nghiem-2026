@@ -1,4 +1,5 @@
 import { DOMParser, type Document as XmlDocument, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom";
+import { convertMetafileToDataUrl, convertMetafileToSvg, loadSystemFonts } from "emf-converter";
 import { unzipSync } from "fflate";
 import { parseLatexExam, type ParsedQuestion } from "@/utils/latexParser";
 
@@ -22,6 +23,15 @@ type AssetUploader = (input: {
 }) => Promise<string | null>;
 
 const IMAGE_TOKEN_RE = /\[\[EXAM_IMAGE:([^\]]+)\]\]/g;
+const INLINE_IMAGE_TOKEN = (url: string) => `[[EXAM_INLINE_IMAGE:${url}]]`;
+let metafileFontsPromise: ReturnType<typeof loadSystemFonts> | null = null;
+
+function getMetafileFonts() {
+  metafileFontsPromise ??= loadSystemFonts({
+    filter: (_path, name) => /times|stix|latin|symbol|serif|liberation|dejavu|cambria|noto/i.test(name),
+  });
+  return metafileFontsPromise;
+}
 
 function elementChildren(node: XmlNode): XmlElement[] {
   const result: XmlElement[] = [];
@@ -54,15 +64,6 @@ function descendantsNamed(node: XmlNode, name: string): XmlElement[] {
   };
   visit(node);
   return result;
-}
-
-function hasAncestorNamed(node: XmlNode, name: string): boolean {
-  let current = node.parentNode;
-  while (current) {
-    if (localName(current) === name) return true;
-    current = current.parentNode;
-  }
-  return false;
 }
 
 function blueMathLatex(node: XmlNode): string | null {
@@ -193,6 +194,47 @@ function contentTypeFor(fileName: string): string {
     emf: "image/emf",
     wmf: "image/wmf",
   } as Record<string, string>)[ext ?? ""] ?? "application/octet-stream";
+}
+
+async function prepareOfficeAsset(
+  bytes: Uint8Array,
+  fileName: string,
+): Promise<{ bytes: Uint8Array; fileName: string; contentType: string; convertedMetafile: boolean }> {
+  const contentType = contentTypeFor(fileName);
+  if (contentType !== "image/wmf" && contentType !== "image/emf") {
+    return { bytes, fileName, contentType, convertedMetafile: false };
+  }
+
+  try {
+    const arrayBuffer = Uint8Array.from(bytes).buffer;
+    const fonts = await getMetafileFonts();
+    const pngDataUrl = await convertMetafileToDataUrl(arrayBuffer, {
+      fonts,
+      dpiScale: 2,
+      maxWidth: 1600,
+      maxHeight: 800,
+    });
+    if (pngDataUrl) {
+      return {
+        bytes: Uint8Array.from(Buffer.from(pngDataUrl.slice(pngDataUrl.indexOf(",") + 1), "base64")),
+        fileName: fileName.replace(/\.(?:wmf|emf)$/i, ".png"),
+        contentType: "image/png",
+        convertedMetafile: true,
+      };
+    }
+    const svg = await convertMetafileToSvg(arrayBuffer, { includeSize: true });
+    if (svg) {
+      return {
+        bytes: new TextEncoder().encode(svg),
+        fileName: fileName.replace(/\.(?:wmf|emf)$/i, ".svg"),
+        contentType: "image/svg+xml",
+        convertedMetafile: true,
+      };
+    }
+  } catch {
+    // Keep the original asset and surface one grouped warning below.
+  }
+  return { bytes, fileName, contentType, convertedMetafile: false };
 }
 
 function normalizeTarget(target: string): string {
@@ -408,7 +450,7 @@ export async function importDocx(
   const allElements = document.getElementsByTagName("*");
   for (let index = 0; index < allElements.length; index += 1) {
     const element = allElements.item(index);
-    if (!element || blueMathLatexFromAncestors(element) || hasAncestorNamed(element, "object")) continue;
+    if (!element || blueMathLatexFromAncestors(element)) continue;
     const name = localName(element);
     if (name !== "blip" && name !== "imagedata") continue;
     const relationshipId = element.getAttribute("r:embed") || element.getAttribute("r:id");
@@ -418,14 +460,19 @@ export async function importDocx(
 
   if (uploadAsset) {
     let legacyVectorCount = 0;
+    let convertedMetafileCount = 0;
     for (const path of referencedAssetPaths) {
       const mediaBytes = zip[path];
       if (!mediaBytes) continue;
       const mediaName = path.split("/").pop() ?? "image";
-      const type = contentTypeFor(mediaName);
-      if (["image/emf", "image/wmf"].includes(type)) legacyVectorCount += 1;
-      const url = await uploadAsset({ bytes: mediaBytes, fileName: mediaName, contentType: type });
+      const prepared = await prepareOfficeAsset(mediaBytes, mediaName);
+      if (prepared.convertedMetafile) convertedMetafileCount += 1;
+      else if (["image/emf", "image/wmf"].includes(prepared.contentType)) legacyVectorCount += 1;
+      const url = await uploadAsset(prepared);
       if (url) imageUrls.set(path, url);
+    }
+    if (convertedMetafileCount > 0) {
+      warnings.push(`Đã chuyển ${convertedMetafileCount} ảnh xem trước WMF/EMF của Word và MathType sang PNG/SVG dùng được trên web.`);
     }
     if (legacyVectorCount > 0) {
       warnings.push(`${legacyVectorCount} hình minh họa là WMF/EMF; trình duyệt có thể không hiển thị, nên đổi sang SVG hoặc PNG.`);
@@ -456,7 +503,17 @@ export async function importDocx(
         return `$${latex}$`;
       }
     }
-    if (name === "object") return "";
+    if (name === "object") {
+      const preview = descendantsNamed(element, "imagedata")[0];
+      const relationshipId = preview?.getAttribute("r:id");
+      const target = relationshipId ? relationships.get(relationshipId) : null;
+      const url = target ? imageUrls.get(target) : null;
+      if (url) {
+        referencedImages += 1;
+        return INLINE_IMAGE_TOKEN(url);
+      }
+      return "";
+    }
     if (name === "t") return textContent(element);
     if (name === "tab") return "\t";
     if (name === "br") return "\n";
@@ -499,7 +556,7 @@ export async function importDocx(
   const embeddedObjectCount = Object.keys(zip).filter((path) => path.startsWith("word/embeddings/")).length;
   if (embeddedObjectCount > 0) {
     equationCount += embeddedObjectCount;
-    warnings.push(`Phát hiện ${embeddedObjectCount} đối tượng MathType/OLE. Hệ thống giữ được văn bản và bố cục câu nhưng chưa chuyển được công thức MTEF cũ; nên đổi công thức sang Word Equation hoặc BlueMath SVG trước khi nhập chính thức.`);
+    warnings.push(`Phát hiện ${embeddedObjectCount} đối tượng MathType/OLE; hệ thống giữ công thức bằng ảnh xem trước đúng vị trí thay vì chuyển MTEF sang LaTeX.`);
   }
 
   const fullText = lines.join("\n");
@@ -526,12 +583,31 @@ export async function importDocx(
   const answerKey = mergeAnswerKeys(extractAnswerKey(document), extractHighlightedAnswerKey(solutionText));
   applyAnswerKey(questions, answerKey);
 
+  let imageAnswerCount = 0;
+  for (const question of questions) {
+    if (question.type !== "short_answer" || String(question.correctAnswer ?? "").trim()) continue;
+    const inlineImages = Array.from(
+      question.explanation.matchAll(/\[\[EXAM_INLINE_IMAGE:([^\]]+)\]\]/g),
+      (item) => item[1],
+    );
+    const explicitAnswer = /(?:Trả lời|Đáp số)\s*:?[ \t]*\[\[EXAM_INLINE_IMAGE:([^\]]+)\]\]/i.exec(question.explanation)?.[1];
+    const answerImageUrl = explicitAnswer ?? inlineImages.at(-1);
+    if (answerImageUrl) {
+      question.correctAnswerImageUrl = answerImageUrl;
+      question.requiresAnswerReview = true;
+      imageAnswerCount += 1;
+    }
+  }
+
   const unresolvedMultipleChoice = questions.filter((question) => question.type === "multiple_choice" && question.correctAnswer === -1).length;
   const unresolvedTrueFalse = questions.filter((question) => question.type === "true_false" && (!Array.isArray(question.correctAnswer) || question.correctAnswer.length < (question.options?.length ?? 4))).length;
-  const unresolvedShortAnswer = questions.filter((question) => question.type === "short_answer" && !String(question.correctAnswer ?? "").trim()).length;
+  const unresolvedShortAnswer = questions.filter((question) => question.type === "short_answer" && !String(question.correctAnswer ?? "").trim() && !question.correctAnswerImageUrl).length;
   if (unresolvedMultipleChoice > 0) warnings.push(`${unresolvedMultipleChoice} câu trắc nghiệm chưa nhận diện được đáp án.`);
   if (unresolvedTrueFalse > 0) warnings.push(`${unresolvedTrueFalse} câu đúng/sai chưa nhận diện đủ đáp án.`);
   if (unresolvedShortAnswer > 0) warnings.push(`${unresolvedShortAnswer} câu trả lời ngắn chưa nhận diện được đáp án.`);
+  if (imageAnswerCount > 0) {
+    warnings.push(`${imageAnswerCount} đáp án ngắn được giữ dưới dạng ảnh MathType; giáo viên cần nhập thêm giá trị chữ/số để hệ thống chấm tự động.`);
+  }
   return {
     title: fileName.replace(/\.docx$/i, ""),
     questions,

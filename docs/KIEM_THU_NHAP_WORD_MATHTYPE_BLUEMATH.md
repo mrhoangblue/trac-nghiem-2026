@@ -8,7 +8,7 @@ Phạm vi: đọc và phân tích trực tiếp hai file DOCX mẫu; tài nguyê
 | Mẫu | Kết quả | Mức sẵn sàng |
 | --- | --- | --- |
 | BlueMath SVG có metadata | Tách đúng 22 câu: 12 nhiều lựa chọn, 4 đúng/sai, 6 trả lời ngắn. Đọc được công thức LaTeX, đáp án, hình minh họa và phần lớn lời giải. | Có thể dùng để nhập và xem trước, sau đó giáo viên kiểm tra trước khi lưu. |
-| MathType OLE/MTEF cũ | Tách đúng 22 câu, đọc được văn bản, hình minh họa, 12 đáp án nhiều lựa chọn, 4 bộ đáp án đúng/sai và lời giải dạng chữ. Không chuyển được 499 công thức OLE; 6 đáp án trả lời ngắn nằm trong đối tượng MathType nên còn trống. | Chưa nên nhập tự động thành đề chính thức nếu chưa chuyển công thức. |
+| MathType OLE/MTEF cũ | Tách đúng 22 câu, đọc được văn bản, hình minh họa, 12 đáp án nhiều lựa chọn, 4 bộ đáp án đúng/sai và lời giải. 499 công thức OLE được giữ thành ảnh inline; 6 đáp án ngắn được giữ thành ảnh và gắn cờ cần nhập giá trị chấm tự động. | Có thể nhập và xem trước theo pipeline ảnh; giáo viên cần hoàn thiện giá trị của đáp án ngắn trước khi phát hành. |
 
 ## Kết quả định lượng
 
@@ -19,7 +19,7 @@ Phạm vi: đọc và phân tích trực tiếp hai file DOCX mẫu; tài nguyê
 - Nhận đúng đáp án nhiều lựa chọn: `C, B, B, A, A, B, C, A, D, D, C, D`.
 - Nhận đúng bốn bộ đáp án đúng/sai từ các bảng lời giải.
 - Giữ 22 tham chiếu hình; chỉ ghi 13 file hình thực dùng vào thư mục tạm thay vì ghi toàn bộ 297 file media trong DOCX.
-- Giới hạn chính: công thức trong thân câu, lựa chọn và lời giải bị trống vì định dạng OLE/MTEF không cung cấp LaTeX hoặc MathML chuẩn để máy chủ đọc trực tiếp.
+- 499 công thức OLE trong thân câu, lựa chọn và lời giải được lấy từ ảnh xem trước WMF/EMF, chuyển sang PNG và chèn đúng vị trí. Sáu đáp án ngắn được giữ thành ảnh nhưng vẫn cần giáo viên nhập giá trị chữ/số để chấm tự động.
 
 ### Đề 10 — BlueMath
 

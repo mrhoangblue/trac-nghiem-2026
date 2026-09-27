@@ -208,6 +208,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Kiểm thử cục bộ không dùng R2: cả hai mẫu tách đúng 22 câu theo cơ cấu 12 nhiều lựa chọn, 4 đúng/sai, 6 trả lời ngắn. BlueMath đọc đủ công thức và toàn bộ đáp án; MathType đọc đủ đáp án nhiều lựa chọn/đúng-sai nhưng chưa chuyển được 499 công thức OLE và 6 đáp án ngắn nằm trong MathType.
 - ESLint phần thay đổi và TypeScript đạt. Production build Next.js 16.3.6 bằng Webpack đạt đủ 23 trang; Turbopack trong sandbox không thể tạo tiến trình PostCSS vì bị chặn bind cổng, không phải lỗi mã ứng dụng. Báo cáo chi tiết và đường dẫn dữ liệu tạm được ghi tại `docs/KIEM_THU_NHAP_WORD_MATHTYPE_BLUEMATH.md`.
 
+### 27/09/2026 — Pipeline ảnh MathType OLE và rà soát lời giải LaTeX
+
+- Đổi pipeline MathType từ bỏ qua OLE sang lấy ảnh xem trước WMF/EMF, chuyển thành PNG và chèn đúng vị trí trong câu, lựa chọn và lời giải. Hình minh họa Word thông thường tiếp tục được giữ trong tài nguyên câu hỏi.
+- Mẫu Đề 04 xử lý đúng 499 đối tượng OLE, chuyển 285 media WMF/EMF duy nhất, giữ đủ 6 đáp án ngắn dưới dạng ảnh và gắn cờ cần nhập giá trị để chấm tự động. Toàn bộ lần chạy local mất khoảng 1,1 giây, không dùng R2.
+- Thêm kho `public/local-imports` chỉ cho môi trường phát triển để giáo viên có thể kiểm thử import qua localhost khi R2 chưa cấu hình; thư mục được ignore khỏi Git.
+- Rà soát read-only 5 đề LaTeX/110 lời giải/1.194 biểu thức trong Firestore. Không có lỗi parse KaTeX; lỗi hiển thị tập trung ở `itemize`, `item`, `textbf`, delimiter khác chuẩn và cách renderer cũ dùng HTML thô.
+- Thay renderer văn bản bằng React node an toàn, bổ sung danh sách, chữ đậm/nghiêng, delimiter `\\(...\\)`/`\\[...\\]` và ảnh inline. Admin preview và trang sửa đề dùng chung pipeline với phòng thi/xem lại.
+- Báo cáo chi tiết: `docs/PIPELINE_WORD_OLE_VA_RA_SOAT_LOI_GIAI_LATEX.md`.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

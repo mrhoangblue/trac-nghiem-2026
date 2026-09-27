@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { importDocx, importPdf, importTex } from "@/lib/examFileImport";
 import { downloadFromR2, getR2ObjectMetadata, getR2Status, uploadToR2 } from "@/lib/r2Storage";
@@ -12,6 +15,20 @@ const FILE_TYPES: Record<string, string> = {
   pdf: "application/pdf",
   tex: "text/x-tex",
 };
+
+function createLocalAssetUploader() {
+  const batchId = randomUUID();
+  let sequence = 0;
+  return async (asset: { bytes: Uint8Array; fileName: string; contentType: string }) => {
+    sequence += 1;
+    const safeName = asset.fileName.normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "-");
+    const storedName = `${String(sequence).padStart(4, "0")}-${safeName || "asset"}`;
+    const directory = path.join(process.cwd(), "public", "local-imports", batchId);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, storedName), asset.bytes);
+    return `/local-imports/${batchId}/${storedName}`;
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,6 +81,7 @@ export async function POST(request: NextRequest) {
 
     const r2 = getR2Status();
     const storageWarnings: string[] = [];
+    const localAssetUploader = process.env.NODE_ENV !== "production" ? createLocalAssetUploader() : undefined;
 
     if (!sourceObject) {
       if (r2.configured) {
@@ -94,14 +112,18 @@ export async function POST(request: NextRequest) {
                 });
                 return uploaded.url;
               }
-            : undefined,
+            : localAssetUploader,
         )
       : extension === "pdf"
         ? await importPdf(bytes, fileName)
         : await importTex(bytes, fileName);
 
     if (r2.configured && !r2.publicAccessConfigured && extension === "docx") {
-      storageWarnings.push("R2 đã có thông tin ghi file nhưng thiếu R2_PUBLIC_BASE_URL; ảnh trong DOCX chưa thể dùng trong đề.");
+      storageWarnings.push(localAssetUploader
+        ? "R2 thiếu R2_PUBLIC_BASE_URL nên localhost đang dùng kho ảnh cục bộ để kiểm thử."
+        : "R2 đã có thông tin ghi file nhưng thiếu R2_PUBLIC_BASE_URL; ảnh trong DOCX chưa thể dùng trong đề.");
+    } else if (!r2.configured && localAssetUploader && extension === "docx") {
+      storageWarnings.push("Đang dùng kho ảnh cục bộ của localhost để kiểm thử; dữ liệu này không thay thế R2 khi triển khai production.");
     }
 
     return NextResponse.json({

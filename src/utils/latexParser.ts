@@ -4,6 +4,8 @@ export interface ParsedQuestion {
   questionText: string;
   options?: string[];
   correctAnswer: string | number | boolean[] | null;
+  correctAnswerImageUrl?: string;
+  requiresAnswerReview?: boolean;
   explanation: string;
   tikzCode?: string;
   explanationTikzCode?: string;

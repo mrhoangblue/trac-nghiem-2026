@@ -815,7 +815,7 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
         {q.options.map((opt, i) => (
           <div key={i} className={`p-3 rounded-xl border text-sm ${q.correctAnswer === i ? "border-success-500 bg-success-50 text-success-900" : "border-gray-200 text-gray-700"}`}>
             <span className="font-bold mr-2">{String.fromCharCode(65 + i)}.</span>
-            <Latex>{opt}</Latex>
+            {processLatexText(opt)}
           </div>
         ))}
       </div>
@@ -826,7 +826,7 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
       <div className="space-y-2 pl-8">
         {q.options.map((opt, i) => (
           <div key={i} className="p-3 rounded-xl border border-gray-200 text-gray-700 flex justify-between items-center gap-4">
-            <div className="flex-1"><span className="font-bold mr-2">{String.fromCharCode(97 + i)})</span><Latex>{opt}</Latex></div>
+            <div className="flex-1"><span className="font-bold mr-2">{String.fromCharCode(97 + i)})</span>{processLatexText(opt)}</div>
             <div className={`font-bold px-3 py-1 rounded-md text-sm shrink-0 ${(q.correctAnswer as boolean[])[i] ? "bg-success-100 text-success-700" : "bg-danger-100 text-danger-700"}`}>
               {(q.correctAnswer as boolean[])[i] ? "ĐÚNG" : "SAI"}
             </div>
@@ -840,7 +840,13 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
       <div className="pl-8">
         <div className="inline-block p-3 rounded-xl border border-brand-200 bg-brand-50 text-brand-900">
           <span className="font-bold mr-2">Đáp án:</span>
-          <Latex>{String(q.correctAnswer ?? "")}</Latex>
+          {q.correctAnswerImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={q.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-20 max-w-full align-middle" />
+          ) : (
+            <Latex>{String(q.correctAnswer ?? "")}</Latex>
+          )}
+          {q.requiresAnswerReview && <p className="mt-2 text-xs font-semibold text-amber-700">Cần nhập giá trị chữ/số để chấm tự động.</p>}
         </div>
       </div>
     );

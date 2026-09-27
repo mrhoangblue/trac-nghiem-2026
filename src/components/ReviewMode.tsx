@@ -357,7 +357,12 @@ export default function ReviewMode({
                   <div className="px-3 py-2 rounded-xl border border-success-400 bg-success-100 text-success-900">
                     <span className="opacity-60">Đáp án đúng: </span>
                     <strong>
-                      <Latex>{String(q.correctAnswer ?? "")}</Latex>
+                      {q.correctAnswerImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={q.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-16 max-w-full align-middle" />
+                      ) : (
+                        <Latex>{String(q.correctAnswer ?? "")}</Latex>
+                      )}
                     </strong>
                   </div>
                 </div>
