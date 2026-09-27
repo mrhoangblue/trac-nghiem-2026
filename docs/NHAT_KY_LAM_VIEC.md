@@ -1,6 +1,16 @@
 # Nhật ký làm việc và đối chiếu lịch sử
 
-Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 25/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
+Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 27/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
+
+### 27/09/2026 — Kết nối Cloudflare R2 cho bucket LMS
+
+- Xác nhận Cloudflare account `Frankii`, Account ID `d167c941879591d5f7226fddde596507` và bucket `lms` tại Asia-Pacific.
+- Bật Public Development URL `https://pub-8570ef336c1a44e9a59d382b24202de6.r2.dev` cho giai đoạn kiểm thử.
+- Thêm CORS cho `http://localhost:3000`, cho phép `GET`, `PUT`, `HEAD` và header `Content-Type`.
+- Tạo Account API token `website-trac-nghiem-lms` với quyền Object Read & Write, giới hạn riêng bucket `lms`.
+- Điền sáu biến `R2_*` vào `.env.local`; access key và secret tiếp tục được Git bỏ qua.
+- Upload và đọc lại thành công `healthchecks/connection-2026-09-27.txt`; URL công khai trả HTTP 200.
+- Viết lại tài liệu `CLOUDFLARE_R2_VA_NHAP_DE.md` theo cấu hình thật, kèm hướng dẫn production và xử lý sự cố.
 
 ## 1. Phạm vi và độ đầy đủ
 
