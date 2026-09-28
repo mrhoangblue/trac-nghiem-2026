@@ -95,7 +95,7 @@ export default function AdminUserTeachingSpacePage() {
 
   return (
     <AdminGuard adminOnly>
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      <div className="workspace-page mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
         <Link href="/admin/users" className="inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-900">
           <ArrowLeft className="h-4 w-4" /> Quay lại danh sách người dùng
         </Link>

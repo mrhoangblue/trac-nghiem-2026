@@ -199,7 +199,7 @@ export default function ReviewPage() {
   return (
     <div>
       {/* Back link */}
-      <div className="max-w-3xl mx-auto px-4 pt-6">
+      <div className="workspace-page max-w-3xl mx-auto px-4 pt-6">
         <Link
           href="/student/history"
           className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-brand-600 transition-colors"

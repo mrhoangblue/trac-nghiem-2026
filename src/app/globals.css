@@ -3,6 +3,11 @@
 :root {
   --background: #FFFDF6;
   --foreground: #1C1917;
+  --surface: #FFFEFB;
+  --surface-raised: #FFFFFF;
+  --line: #E8E0D3;
+  --academic-ink: #19324A;
+  --academic-blue: #2E6282;
 }
 
 @theme inline {
@@ -76,6 +81,8 @@
   :focus-visible { outline: 3px solid #B45309; outline-offset: 4px; }
   ::selection { background: #FDE3A0; color: #451A03; }
   h1, h2, h3 { text-wrap: balance; }
+  input, textarea, select, button { font: inherit; }
+  input::placeholder, textarea::placeholder { color: #9A8D7D; opacity: 1; }
 }
 
 .skip-link { position: fixed; top: -6rem; left: 1rem; z-index: 100; padding: .75rem 1rem; background: #78350F; color: white; border-radius: 1rem; }
@@ -89,9 +96,72 @@
 .exam-card { box-shadow: var(--shadow-soft); border: 1px solid #EDE7DA; }
 .exam-card:hover { border-color: #D9AA70; box-shadow: var(--shadow-lift); transform: translateY(-3px); }
 
+/* Shared application shell: every signed-in workspace inherits the same
+   spacing, paper-like background, control behavior and data presentation. */
+.app-main {
+  min-height: calc(100dvh - 4rem);
+  background:
+    linear-gradient(180deg, rgb(255 253 246 / .76), rgb(255 254 251 / .96)),
+    linear-gradient(90deg, rgb(120 53 15 / .025) 1px, transparent 1px),
+    linear-gradient(rgb(120 53 15 / .025) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+}
+
+.app-main > :where(div, main, section) {
+  animation: page-settle .22s ease-out both;
+}
+
+.workspace-page {
+  width: 100%;
+  isolation: isolate;
+}
+
+.workspace-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1.25rem;
+}
+
+.workspace-surface {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 32px -28px rgb(69 26 3 / .55);
+}
+
+.app-main :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+  min-height: 2.75rem;
+  color: #261C14;
+}
+
+.app-main :where(input, textarea, select):disabled {
+  cursor: not-allowed;
+  opacity: .66;
+}
+
+.app-main :where(table) {
+  font-variant-numeric: tabular-nums;
+}
+
+.app-main :where(thead th) {
+  letter-spacing: .015em;
+}
+
+.app-main :where(button, a) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes page-settle {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+@media (max-width: 640px) {
+  .app-main :where(button, a[role="button"]) { min-height: 2.5rem; }
+  .workspace-header { padding-bottom: 1rem; }
 }
 
 body {

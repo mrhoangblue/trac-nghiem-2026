@@ -208,9 +208,9 @@ function ExamListContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 w-full">
+    <div className="workspace-page max-w-7xl mx-auto px-4 py-8 sm:py-10 w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="workspace-header flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900">{listTitle}</h1>
           <p className="text-gray-500 mt-1">Xem, sửa và xóa các đề thi.</p>
@@ -267,7 +267,7 @@ function ExamListContent() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="workspace-surface bg-white rounded-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-bold text-gray-800">
             {loading ? "Đang tải…" : `${filtered.length} đề thi`}

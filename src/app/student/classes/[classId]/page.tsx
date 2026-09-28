@@ -30,7 +30,7 @@ export default function StudentClassDetailPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
+    <main className="workspace-page mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
       <Link href="/student/classes" className="mb-5 inline-flex text-sm font-bold text-brand-700 hover:underline">
         ← Lớp học của tôi
       </Link>

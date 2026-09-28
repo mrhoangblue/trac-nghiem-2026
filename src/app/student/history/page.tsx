@@ -137,9 +137,9 @@ export default function StudentHistoryPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12 w-full space-y-8">
+    <div className="workspace-page max-w-4xl mx-auto px-4 py-8 sm:py-10 w-full space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="workspace-header flex items-center gap-4">
         {user.photoURL && (
           <img
             src={user.photoURL}
@@ -216,7 +216,7 @@ export default function StudentHistoryPage() {
           })()}
 
           {/* Bảng lịch sử */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="workspace-surface bg-white rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>

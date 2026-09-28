@@ -10,13 +10,10 @@ import { db } from "@/lib/firebase";
 import {
   doc,
   getDoc,
-  updateDoc,
-  addDoc,
   collection,
   getDocs,
   query,
   where,
-  serverTimestamp,
 } from "firebase/firestore";
 import AdminGuard from "@/components/AdminGuard";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
@@ -266,26 +263,13 @@ export default function EditExamPage() {
           "Đây là đề của giáo viên khác.\nHệ thống sẽ TẠO BẢN SAO mới và gán cho bạn (đề gốc không bị thay đổi).\n\nTiếp tục?"
         )) { setSaving(false); return; }
 
-        const cloneRef = await addDoc(collection(db, "exams"), {
-          ...examPayload,
-          authorEmail: user?.email ?? "",
-          isClonedFromShared: true,
-          isShared: false,
-          requiresPassword: false,
-          createdAt: serverTimestamp(),
+        const cloneResponse = await fetch("/api/upload-quiz", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ...examPayload, isShared: false, password: newPassword }),
         });
-
-        if (newPassword) {
-          const accessResponse = await fetch(`/api/exams/${cloneRef.id}/access`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ passwordAction: "set", password: newPassword }),
-          });
-          if (!accessResponse.ok) throw new Error("Không thể đặt mật khẩu cho bản sao.");
-        }
+        const clonePayload = await cloneResponse.json().catch(() => null) as { id?: string; error?: string } | null;
+        if (!cloneResponse.ok || !clonePayload?.id) throw new Error(clonePayload?.error ?? "Không thể tạo bản sao bài thi.");
 
         alert("✓ Bản sao đã được tạo và thêm vào kho 'Đề được chia sẻ' của bạn!");
         router.push("/admin/exam-list?tab=shared");
@@ -296,30 +280,20 @@ export default function EditExamPage() {
           return;
         }
 
-        await updateDoc(doc(db, "exams", id), {
-          ...examPayload,
-          authorEmail: user?.email ?? originalAuthorEmail,
-          isShared,
-          updatedAt: serverTimestamp(),
-        });
-
         const passwordAction = removePassword ? "remove" : newPassword ? "set" : "keep";
-        const accessResponse = await fetch(`/api/exams/${id}/access`, {
+        const updateResponse = await fetch(`/api/exams/${encodeURIComponent(id)}`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
+          ...examPayload,
+          isShared,
             passwordAction,
             ...(newPassword ? { password: newPassword } : {}),
-            startTime: examPayload.startTime,
-            endTime: examPayload.endTime,
           }),
         });
-        if (!accessResponse.ok) {
-          const payload = await accessResponse.json().catch(() => null);
-          throw new Error(payload?.message ?? "Không thể cập nhật mật khẩu hoặc thời gian mở đề.");
+        if (!updateResponse.ok) {
+          const payload = await updateResponse.json().catch(() => null) as { error?: string; message?: string } | null;
+          throw new Error(payload?.message ?? payload?.error ?? "Không thể cập nhật bài thi.");
         }
 
         alert("✓ Cập nhật bài thi thành công!");
@@ -327,7 +301,7 @@ export default function EditExamPage() {
       }
     } catch (err) {
       console.error(err);
-      alert("❌ Lỗi khi lưu. Vui lòng thử lại.");
+      alert(`❌ ${err instanceof Error ? err.message : "Lỗi khi lưu. Vui lòng thử lại."}`);
     } finally {
       setSaving(false);
     }
@@ -357,7 +331,7 @@ export default function EditExamPage() {
 
   return (
     <AdminGuard>
-      <div className="max-w-6xl mx-auto px-4 py-12 w-full">
+      <div className="workspace-page max-w-6xl mx-auto px-4 py-8 sm:py-10 w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

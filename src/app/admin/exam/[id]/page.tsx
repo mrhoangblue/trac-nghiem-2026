@@ -396,7 +396,7 @@ export default function ExamDetailPage() {
 
   return (
     <AdminGuard>
-      <div className="max-w-6xl mx-auto px-4 py-12 w-full">
+      <div className="workspace-page max-w-6xl mx-auto px-4 py-8 sm:py-10 w-full">
         {/* Back */}
         <Link
           href="/admin/dashboard"

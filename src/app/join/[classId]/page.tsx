@@ -113,7 +113,7 @@ export default function JoinClassByLinkPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 max-w-md w-full">
+      <div className="workspace-surface bg-white rounded-2xl p-8 max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-brand-100 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4">

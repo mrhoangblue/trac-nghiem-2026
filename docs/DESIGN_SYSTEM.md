@@ -1,5 +1,15 @@
 # Quy chuẩn giao diện website trắc nghiệm
 
+## Định hướng 28/09/2026: Bàn học Toán số
+
+Tham khảo skill `frontend-design` từ kho mã nguồn Anthropic. Giao diện lấy nội dung Toán học và môi trường lớp học làm gốc: nền giấy sáng, nhịp lưới rất nhẹ, chữ nâu đậm, hổ phách cho hành động chính và xanh học thuật dành riêng cho trải nghiệm làm bài. Ảnh chân dung và nội dung thật đóng vai trò nhận diện; tránh thêm gradient, nhãn viết hoa hoặc thẻ bo tròn nếu chúng không giúp phân cấp thông tin.
+
+- Mỗi trang chỉ có một tiêu đề cấp một và một hành động chính rõ ràng.
+- Trang quản trị ưu tiên bảng, thanh công cụ và mật độ vừa phải; trang học ưu tiên dòng đọc ngắn, nội dung tuần tự và tiến độ.
+- Biểu mẫu dùng cùng chiều cao, trạng thái focus, văn phong lỗi và vị trí nút lưu.
+- Trạng thái tải, rỗng, lỗi và không đủ quyền phải nói rõ người dùng cần làm gì tiếp theo.
+- Mobile giữ vùng chạm tối thiểu 40px, bảng được cuộn ngang và menu không che trạng thái quan trọng.
+
 Cập nhật: 24/09/2026. Tham chiếu thiết kế: mục 6 trong CLAUDE.md và bảng màu Tailwind của dự án Website Gia Su. Áp dụng sở thích màu Lộ Bàng Thổ đã được chủ dự án chốt, không phải tuyên bố về hiệu quả phong thủy.
 
 ## Bảng màu

@@ -359,7 +359,7 @@ export default function CreateExamPage() {
 
   return (
     <AdminGuard>
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="workspace-page mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-8 rounded-[2rem] border border-brand-200 bg-gradient-to-br from-white via-brand-50/60 to-orange-50 p-6 shadow-soft sm:p-8">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[.18em] text-brand-700">Không gian biên soạn đề</p>

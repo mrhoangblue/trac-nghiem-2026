@@ -309,7 +309,7 @@ export default function AdminUsersPage() {
 
   return (
     <AdminGuard adminOnly>
-      <div className="max-w-7xl mx-auto px-4 py-12 w-full">
+      <div className="workspace-page max-w-7xl mx-auto px-4 py-8 sm:py-10 w-full">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>

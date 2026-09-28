@@ -2,6 +2,15 @@
 
 Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
 
+### 28/09/2026 — Sửa lưu đề qua API và chuẩn hóa giao diện toàn hệ thống
+
+- Xác định lỗi “Missing or insufficient permissions” xuất hiện sau bước xử lý TikZ do trang chỉnh sửa gọi Firestore trực tiếp từ trình duyệt.
+- Thêm `PATCH /api/exams/[examId]`: xác thực admin/giáo viên, kiểm tra tác giả, chuẩn hóa dữ liệu và lưu nội dung đề, lịch mở đề, chia sẻ, lớp nhận đề và mật khẩu trong cùng một batch Admin SDK.
+- Chuyển thao tác cập nhật và nhân bản đề trên trang chỉnh sửa sang API máy chủ; lỗi trả về nay hiển thị nguyên nhân cụ thể.
+- Cài skill `frontend-design` từ kho Anthropic và bổ sung định hướng “Bàn học Toán số” vào quy chuẩn thiết kế.
+- Thêm app shell dùng chung cho toàn bộ trang: nền giấy/lưới nhẹ, chuyển trang tiết chế, biểu mẫu, bảng dữ liệu, focus, trạng thái disabled và vùng chạm mobile nhất quán.
+- Áp lớp bố cục chung cho các trang quản trị, tạo/chỉnh đề, người dùng, lớp học, hồ sơ, lịch sử, review, onboarding và tham gia lớp.
+
 ### 28/09/2026 — R2 TikZ, giao diện khóa học và hỏi đáp bài học
 
 - Chuyển pipeline TikZ sang lưu SVG/PNG đã render trong Cloudflare R2; Firestore giữ URL và object key.

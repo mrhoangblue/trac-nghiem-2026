@@ -90,7 +90,7 @@ export default function StudentClassesPage() {
   const pendingClasses = memberships.filter((item) => item.status === "pending");
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-9 px-4 py-8 sm:py-10">
+    <div className="workspace-page mx-auto w-full max-w-6xl space-y-9 px-4 py-8 sm:py-10">
       <header className="relative overflow-hidden rounded-[2rem] bg-[#2f241d] px-6 py-8 text-white shadow-xl sm:px-9">
         <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#d58a50]/25 blur-2xl" />
         <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-end">

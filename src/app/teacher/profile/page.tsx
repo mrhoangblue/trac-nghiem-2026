@@ -85,8 +85,8 @@ export default function TeacherProfilePage() {
 
   return (
     <AdminGuard>
-      <div className="max-w-lg mx-auto px-4 py-10 w-full">
-        <header className="mb-8">
+      <div className="workspace-page max-w-lg mx-auto px-4 py-8 sm:py-10 w-full">
+        <header className="workspace-header mb-8">
           <h1 className="text-3xl font-extrabold text-gray-900">Hồ sơ giáo viên</h1>
           <p className="text-gray-500 mt-1 text-sm">
             Cập nhật họ tên và số điện thoại để học sinh tìm thấy bạn khi nhập đúng cụm từ không dấu.
@@ -98,7 +98,7 @@ export default function TeacherProfilePage() {
         ) : (
           <form
             onSubmit={handleSave}
-            className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5"
+            className="workspace-surface rounded-2xl p-6 space-y-5"
           >
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">

@@ -239,7 +239,7 @@ export default function TeacherStudentDetailPage() {
 
   return (
     <AdminGuard>
-      <div className="max-w-5xl mx-auto px-4 py-10 w-full">
+      <div className="workspace-page max-w-5xl mx-auto px-4 py-8 sm:py-10 w-full">
         <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
           <Link href={backHref} className="text-brand-600 hover:text-brand-800 font-semibold">
             ← {fromClass ? "Quay lại lớp học" : "Quản lý lớp học"}

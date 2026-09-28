@@ -82,7 +82,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 via-brand-50 to-brand-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 w-full max-w-md overflow-hidden">
+      <div className="workspace-surface bg-white rounded-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-brand-600 to-brand-600 px-8 py-8 text-center">
           <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">
