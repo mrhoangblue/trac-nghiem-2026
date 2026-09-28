@@ -82,6 +82,70 @@ const RESOURCE_META: Record<ClassResourceType, { label: string; icon: string }> 
   slides: { label: "PPTX / Slides", icon: "📊" },
 };
 
+function resourceExtension(resource: ClassCourseResource): string {
+  const candidate = resource.fileName || resource.url;
+  return candidate.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() ?? "";
+}
+
+function ResourceViewer({ resource }: { resource: ClassCourseResource }) {
+  const extension = resourceExtension(resource);
+  const contentType = resource.contentType?.toLowerCase() ?? "";
+  const isImage = contentType.startsWith("image/")
+    || ["png", "jpg", "jpeg", "webp", "svg", "gif"].includes(extension);
+  const isPdf = contentType === "application/pdf" || extension === "pdf";
+  const isOffice = ["doc", "docx", "ppt", "pptx"].includes(extension)
+    || resource.provider === "Microsoft Office Online";
+
+  if (isImage) {
+    return (
+      <div className="flex min-h-72 items-center justify-center bg-[linear-gradient(45deg,#f3f4f6_25%,transparent_25%),linear-gradient(-45deg,#f3f4f6_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f3f4f6_75%),linear-gradient(-45deg,transparent_75%,#f3f4f6_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] p-4 sm:min-h-[620px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={resource.embedUrl} alt={resource.title} className="max-h-[580px] max-w-full rounded-lg object-contain shadow-sm" loading="lazy" />
+      </div>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <iframe
+        src={`${resource.embedUrl}#toolbar=1&navpanes=0&view=FitH`}
+        title={resource.title}
+        className="h-[520px] w-full bg-white sm:h-[720px]"
+        loading="lazy"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+      />
+    );
+  }
+
+  if (isOffice) {
+    return (
+      <iframe
+        src={resource.embedUrl}
+        title={resource.title}
+        className="h-[520px] w-full bg-white sm:h-[720px]"
+        loading="lazy"
+        allow="clipboard-read; clipboard-write; fullscreen"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+      />
+    );
+  }
+
+  return (
+    <iframe
+      src={resource.embedUrl}
+      title={resource.title}
+      className="h-[440px] w-full sm:h-[620px]"
+      loading="lazy"
+      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+      allowFullScreen
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
+      referrerPolicy="strict-origin-when-cross-origin"
+    />
+  );
+}
+
 function formatDate(value: string | null): string {
   if (!value) return "Chưa có thời gian";
   const date = new Date(value);
@@ -285,7 +349,7 @@ export default function ClassLearningContent({
         body: file,
       });
       if (!uploadResponse.ok) throw new Error("R2 từ chối file. Hãy kiểm tra CORS và quyền ghi của bucket.");
-      const inferredType: ClassResourceType = file.name.toLowerCase().endsWith(".pptx") ? "slides" : "pdf";
+      const inferredType: ClassResourceType = /\.pptx?$/i.test(file.name) ? "slides" : "pdf";
       setResourceDraft((current) => current ? {
         ...current,
         url: payload.url ?? current.url,
@@ -708,7 +772,7 @@ export default function ClassLearningContent({
                       </div>
                       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-inner">
                         {activeResource.embedUrl ? (
-                          <iframe src={activeResource.embedUrl} title={activeResource.title} className="h-[440px] w-full sm:h-[620px]" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads" referrerPolicy="strict-origin-when-cross-origin" />
+                          <ResourceViewer resource={activeResource} />
                         ) : (
                           <div className="flex h-64 flex-col items-center justify-center gap-3 px-5 text-center text-gray-500"><span className="text-3xl">🔒</span><p className="text-sm font-semibold">Hoàn thành nội dung trước để mở tài liệu này.</p></div>
                         )}
@@ -868,11 +932,11 @@ export default function ClassLearningContent({
             {resourceDraft.source === "upload" && resourceDraft.type !== "video" ? (
               <label className={`block rounded-2xl border-2 border-dashed p-5 text-center text-sm font-bold transition ${uploadingResource ? "cursor-wait border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer border-brand-200 bg-brand-50/60 text-brand-700 hover:border-brand-400"}`}>
                 {uploadingResource ? "Đang upload lên Cloudflare R2…" : resourceDraft.storageKey ? "Đổi file đã upload" : "Chọn file để upload lên R2"}
-                <span className="mt-1 block text-xs font-normal text-gray-500">PDF, DOCX, PPTX hoặc ảnh · tối đa 100 MB · không nhận video</span>
+                <span className="mt-1 block text-xs font-normal text-gray-500">PDF, Word (DOC/DOCX), PowerPoint (PPT/PPTX) hoặc ảnh · tối đa 100 MB · không nhận video</span>
                 {resourceDraft.fileName && <span className="mt-2 block text-xs font-semibold text-success-700">✓ {resourceDraft.fileName} ({Math.max(1, Math.round(resourceDraft.size / 1024))} KB)</span>}
                 <input
                   type="file"
-                  accept={resourceDraft.type === "slides" ? ".pptx,.pdf" : ".pdf,.docx,.png,.jpg,.jpeg,.webp,.svg"}
+                  accept={resourceDraft.type === "slides" ? ".ppt,.pptx,.pdf" : ".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.svg"}
                   disabled={uploadingResource}
                   className="sr-only"
                   onChange={(event) => {

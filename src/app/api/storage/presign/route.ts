@@ -4,13 +4,15 @@ import { createR2UploadUrl, getR2Status } from "@/lib/r2Storage";
 
 export const runtime = "nodejs";
 
-const LEARNING_EXTENSIONS = new Set(["pdf", "docx", "pptx", "png", "jpg", "jpeg", "webp", "svg"]);
+const LEARNING_EXTENSIONS = new Set(["pdf", "doc", "docx", "ppt", "pptx", "png", "jpg", "jpeg", "webp", "svg"]);
 const EXAM_EXTENSIONS = new Set(["docx", "pdf", "tex"]);
 const EXAM_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg"]);
 const COURSE_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
 const CONTENT_TYPES: Record<string, string> = {
   pdf: "application/pdf",
+  doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ppt: "application/vnd.ms-powerpoint",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   png: "image/png",
   jpg: "image/jpeg",

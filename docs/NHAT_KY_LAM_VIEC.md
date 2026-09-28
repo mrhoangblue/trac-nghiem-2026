@@ -19,6 +19,13 @@ Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc kh�
 - Chuyển thêm học sinh và xóa học sinh khỏi hai lần ghi Firestore phía trình duyệt sang API thành viên có transaction. Danh sách UID trong lớp và tài liệu membership giờ được cập nhật nguyên tử, có kiểm tra quyền, tài khoản học sinh, trùng thành viên và sĩ số tối đa.
 - Kiểm tra cục bộ: truy vấn Firestore đạt; bản ghi chẩn đoán tạo/xóa thành công; ESLint phần thay đổi và TypeScript đạt; bốn phương thức GET/POST/PATCH/DELETE của API thành viên đều trả đúng HTTP 401 khi thiếu token.
 
+### 28/09/2026 — Sửa trình xem học liệu PNG, PDF, Word và PowerPoint
+
+- Xác nhận PDF đang dùng trong khóa học trả HTTP 200, đúng `Content-Type: application/pdf` và hỗ trợ byte range; lỗi “This page has been blocked by Chrome” do trình xem PDF tích hợp bị đặt trong `iframe sandbox` dùng chung cho mọi loại học liệu.
+- Tách trình xem theo định dạng: ảnh hiển thị trực tiếp với chế độ co vừa khung; PDF dùng trình xem PDF của trình duyệt không sandbox; DOC/DOCX và PPT/PPTX dùng Microsoft Office Online; video và liên kết embed khác tiếp tục dùng iframe hạn chế quyền.
+- Bổ sung upload và nhận diện định dạng Word/PowerPoint cũ `.doc` và `.ppt`, đồng thời gán MIME chính xác tại API ký URL R2.
+- Kiểm thử trên R2 bằng ba tệp giả lập không chứa dữ liệu riêng: PNG, DOCX, PPTX và PDF khóa học đều trả HTTP 200 với MIME đúng và byte range; Office Online trả HTTP 200 cho DOCX/PPTX. Ba tệp giả lập đã được xóa sau kiểm tra.
+
 ### 27/09/2026 — Kết nối Cloudflare R2 cho bucket LMS
 
 - Xác nhận Cloudflare account `Frankii`, Account ID `d167c941879591d5f7226fddde596507` và bucket `lms` tại Asia-Pacific.

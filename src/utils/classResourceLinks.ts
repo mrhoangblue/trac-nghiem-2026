@@ -76,7 +76,7 @@ export function normalizeResourceLink(
   }
 
   const extension = url.pathname.split(".").pop()?.toLowerCase();
-  if (extension === "docx" || extension === "pptx") {
+  if (["doc", "docx", "ppt", "pptx"].includes(extension ?? "")) {
     return {
       url: url.toString(),
       embedUrl: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url.toString())}`,
