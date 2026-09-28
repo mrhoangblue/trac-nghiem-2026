@@ -26,6 +26,12 @@ Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc kh�
 - Bổ sung upload và nhận diện định dạng Word/PowerPoint cũ `.doc` và `.ppt`, đồng thời gán MIME chính xác tại API ký URL R2.
 - Kiểm thử trên R2 bằng ba tệp giả lập không chứa dữ liệu riêng: PNG, DOCX, PPTX và PDF khóa học đều trả HTTP 200 với MIME đúng và byte range; Office Online trả HTTP 200 cho DOCX/PPTX. Ba tệp giả lập đã được xóa sau kiểm tra.
 
+### 28/09/2026 — Đồng nhất danh sách lớp giữa localhost và Vercel
+
+- Xác nhận localhost và Vercel cùng dùng Firestore project `test-website-5779f`; không tồn tại hai kho dữ liệu cần sao chép. Firestore hiện có bốn lớp nhưng chia cho hai UID đăng nhập: tài khoản giáo viên `nv.hoang@royal.edu.vn` sở hữu ba lớp và tài khoản admin `mrhoangblue@gmail.com` sở hữu một lớp.
+- Thay truy vấn danh sách lớp trực tiếp bằng `GET /api/classes`, xác minh ID token và đọc bằng Firebase Admin. Giáo viên nhận lớp do mình sở hữu; admin nhận toàn bộ lớp và nhìn thấy tên giáo viên trên từng thẻ.
+- API và request phía trình duyệt đều tắt cache, tự làm mới token một lần khi hết phiên và hiển thị lỗi tải thay vì âm thầm biến lỗi kết nối thành danh sách rỗng.
+
 ### 27/09/2026 — Kết nối Cloudflare R2 cho bucket LMS
 
 - Xác nhận Cloudflare account `Frankii`, Account ID `d167c941879591d5f7226fddde596507` và bucket `lms` tại Asia-Pacific.

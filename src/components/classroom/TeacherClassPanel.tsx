@@ -1,20 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BookOpenCheck, GraduationCap, Plus, Trash2, UsersRound } from "lucide-react";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import CreateClassModal from "./CreateClassModal";
 import { deleteClass } from "@/lib/classroomService";
 import { useAuth } from "@/lib/AuthContext";
-import { db } from "@/lib/firebase";
-import type { ClassDoc } from "@/utils/classroomTypes";
 
 interface ClassRow {
   id: string;
   name: string;
   classCode: string;
   description: string;
+  teacherId: string;
+  teacherName: string;
   studentCount: number;
   maxStudents?: number;
   isActive: boolean;
@@ -31,40 +30,47 @@ function Skeleton() {
   return <div className="h-72 animate-pulse rounded-[1.7rem] bg-white shadow-sm" />;
 }
 
-export default function TeacherClassPanel({ teacherId }: { teacherId: string }) {
-  const { user } = useAuth();
+export default function TeacherClassPanel() {
+  const { user, userProfile, isAdmin } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ClassRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const loadClasses = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const request = async (forceRefresh = false) => fetch("/api/classes", {
+        headers: { Authorization: `Bearer ${await user.getIdToken(forceRefresh)}` },
+        cache: "no-store",
+      });
+      let response = await request();
+      if (response.status === 401) response = await request(true);
+      const payload = (await response.json().catch(() => null)) as {
+        classes?: ClassRow[];
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.classes) {
+        throw new Error(payload?.error ?? "LOAD_FAILED");
+      }
+      setClasses(payload.classes);
+    } catch (error) {
+      console.error("Failed to load classes:", error);
+      setLoadError("Không thể tải danh sách lớp từ máy chủ. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
-    if (!teacherId) return;
-    let cancelled = false;
-    getDocs(query(collection(db, "classes"), where("teacherId", "==", teacherId)))
-      .then((snapshot) => {
-        if (cancelled) return;
-        const rows = snapshot.docs.map((item) => {
-          const data = item.data() as ClassDoc;
-          return {
-            id: item.id,
-            name: data.name,
-            classCode: data.classCode,
-            description: data.description ?? "",
-            studentCount: data.studentIds?.length ?? 0,
-            maxStudents: data.maxStudents,
-            isActive: data.isActive,
-          };
-        });
-        rows.sort((a, b) => a.name.localeCompare(b.name, "vi"));
-        setClasses(rows);
-      })
-      .catch((error) => console.error("Failed to load classes:", error))
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [teacherId]);
+    const timeoutId = window.setTimeout(() => { void loadClasses(); }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadClasses]);
 
   const handleConfirmDelete = async () => {
     if (!pendingDelete || !user || deleting) return;
@@ -101,6 +107,11 @@ export default function TeacherClassPanel({ teacherId }: { teacherId: string }) 
 
       {loading ? (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((item) => <Skeleton key={item} />)}</div>
+      ) : loadError ? (
+        <div className="rounded-[2rem] border border-danger-200 bg-danger-50 px-6 py-10 text-center">
+          <p className="font-bold text-danger-700">{loadError}</p>
+          <button type="button" onClick={() => void loadClasses()} className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-bold text-danger-700 shadow-sm">Tải lại</button>
+        </div>
       ) : classes.length === 0 ? (
         <div className="rounded-[2rem] border-2 border-dashed border-gray-200 bg-white py-16 text-center">
           <BookOpenCheck className="mx-auto h-12 w-12 text-brand-400" />
@@ -121,6 +132,7 @@ export default function TeacherClassPanel({ teacherId }: { teacherId: string }) 
                     <GraduationCap className="h-6 w-6 text-white/75" />
                   </div>
                   <h3 className="mt-5 line-clamp-2 text-xl font-black leading-snug">{cls.name}</h3>
+                  {isAdmin && <p className="mt-2 text-xs font-semibold text-white/75">Giáo viên: {cls.teacherName}</p>}
                 </div>
                 <div className="p-5">
                   <p className="line-clamp-2 min-h-10 text-sm leading-5 text-gray-500">{cls.description || "Không gian học tập, học liệu và bài kiểm tra của lớp."}</p>
@@ -158,7 +170,7 @@ export default function TeacherClassPanel({ teacherId }: { teacherId: string }) 
       )}
 
       {showModal && <CreateClassModal onClose={() => setShowModal(false)} onCreated={(result) => {
-        setClasses((current) => [...current, { id: result.classId, name: result.name, classCode: result.classCode, description: "", studentCount: 0, isActive: true }]);
+        setClasses((current) => [...current, { id: result.classId, name: result.name, classCode: result.classCode, description: "", teacherId: user?.uid ?? "", teacherName: userProfile?.fullName ?? "Giáo viên", studentCount: 0, isActive: true }].sort((a, b) => a.name.localeCompare(b.name, "vi")));
         setShowModal(false);
       }} />}
     </section>

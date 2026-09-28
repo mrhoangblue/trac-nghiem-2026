@@ -33,6 +33,46 @@ async function generateUniqueClassCode(): Promise<string> {
   throw new Error("Could not generate a unique class code");
 }
 
+export async function GET(request: NextRequest) {
+  try {
+    const authUser = await verifyAuth(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+    }
+    if (authUser.role !== "admin" && authUser.role !== "mod") {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    }
+
+    const query = authUser.role === "admin"
+      ? adminDb.collection("classes")
+      : adminDb.collection("classes").where("teacherId", "==", authUser.uid);
+    const snapshot = await query.get();
+    const classes = snapshot.docs.map((item) => {
+      const data = item.data();
+      return {
+        id: item.id,
+        name: typeof data.name === "string" ? data.name : "Lớp học",
+        classCode: typeof data.classCode === "string" ? data.classCode : "",
+        description: typeof data.description === "string" ? data.description : "",
+        teacherId: typeof data.teacherId === "string" ? data.teacherId : "",
+        teacherName: typeof data.teacherName === "string" ? data.teacherName : "Giáo viên",
+        studentCount: Array.isArray(data.studentIds) ? data.studentIds.length : 0,
+        maxStudents: typeof data.maxStudents === "number" ? data.maxStudents : undefined,
+        isActive: data.isActive !== false,
+      };
+    });
+    classes.sort((a, b) => a.name.localeCompare(b.name, "vi"));
+
+    return NextResponse.json(
+      { classes },
+      { headers: { "Cache-Control": "private, no-store, max-age=0" } },
+    );
+  } catch (error) {
+    console.error("GET /api/classes failed:", error);
+    return NextResponse.json({ error: "LOAD_FAILED" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authUser = await verifyAuth(request);

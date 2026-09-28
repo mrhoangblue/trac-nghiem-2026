@@ -16,9 +16,7 @@ export default function TeacherClassesPage() {
         </div>
 
         {user && userProfile && (
-          <TeacherClassPanel
-            teacherId={user.uid}
-          />
+          <TeacherClassPanel />
         )}
       </div>
     </AdminGuard>
