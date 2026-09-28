@@ -1,17 +1,8 @@
-import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
+import { createPrivateKey } from "node:crypto";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function configurationFingerprint(projectId: string, clientEmail: string, privateKey: string): string {
-  const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "der" });
-  const publicKeyFingerprint = createHash("sha256").update(publicKey).digest("hex");
-  return createHash("sha256")
-    .update(`${projectId}\0${clientEmail}\0${publicKeyFingerprint}`)
-    .digest("hex")
-    .slice(0, 16);
-}
 
 function connectionFailureCode(error: unknown): string {
   const record = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : {};
@@ -31,19 +22,6 @@ function connectionFailureCode(error: unknown): string {
     return "FIRESTORE_TIMEOUT";
   }
   return "FIREBASE_CONNECTION_FAILED";
-}
-
-function safeErrorDetails(error: unknown, projectId: string, clientEmail: string) {
-  const record = error && typeof error === "object" ? error as { code?: unknown; name?: unknown; message?: unknown } : {};
-  const message = String(record.message ?? error ?? "")
-    .replaceAll(projectId, "[project]")
-    .replaceAll(clientEmail, "[service-account]")
-    .slice(0, 500);
-  return {
-    errorCode: String(record.code ?? "UNKNOWN").slice(0, 80),
-    errorName: String(record.name ?? "Error").slice(0, 80),
-    errorMessage: message,
-  };
 }
 
 function normalize(value: string | undefined): string {
@@ -84,10 +62,8 @@ export async function GET() {
     );
   }
 
-  let fingerprint = "";
   try {
     createPrivateKey(privateKey);
-    fingerprint = configurationFingerprint(projectId, clientEmail, privateKey);
   } catch {
     return NextResponse.json(
       { status: "error", code: "INVALID_PRIVATE_KEY" },
@@ -99,18 +75,13 @@ export async function GET() {
     const { adminDb } = await import("@/lib/firebaseAdmin");
     await adminDb.collection("classes").limit(1).get();
     return NextResponse.json(
-      { status: "ok", code: "FIREBASE_READY", fingerprint },
+      { status: "ok", code: "FIREBASE_READY" },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     console.error("Firebase health check failed:", error);
     return NextResponse.json(
-      {
-        status: "error",
-        code: connectionFailureCode(error),
-        fingerprint,
-        diagnostic: safeErrorDetails(error, projectId, clientEmail),
-      },
+      { status: "error", code: connectionFailureCode(error) },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

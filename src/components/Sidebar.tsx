@@ -89,7 +89,7 @@ export default function Sidebar() {
             {isAdmin && (
               <>
                 <SectionLabel>Quản trị hệ thống</SectionLabel>
-                <SideLink href="/admin/users" icon={UsersRound} active={pathname === "/admin/users"}>Người dùng</SideLink>
+                <SideLink href="/admin/users" icon={UsersRound} active={pathname.startsWith("/admin/users")}>Người dùng</SideLink>
                 <SideLink href="/admin/exam-list" icon={ShieldCheck}>Toàn bộ đề thi</SideLink>
               </>
             )}

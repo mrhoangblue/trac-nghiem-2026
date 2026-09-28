@@ -200,7 +200,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                   <DrawerLink
                     href="/admin/users"
                     icon="👥"
-                    active={pathname === "/admin/users"}
+                    active={pathname.startsWith("/admin/users")}
                     onClose={onClose}
                   >
                     Người dùng
