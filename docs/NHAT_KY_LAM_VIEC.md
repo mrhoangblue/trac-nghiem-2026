@@ -276,6 +276,12 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Khảo sát danh mục skill chính thức không thấy skill chuyên biệt cho LMS/course UX; không cài skill gần tên nhưng sai phạm vi. Thiết kế được áp dụng trực tiếp theo mô hình browse → course workspace → resource/progress.
 - Kiểm tra: ESLint trên toàn bộ file thay đổi đạt, TypeScript đạt, production build Next.js 16.3.6 bằng Webpack đạt và nhận hai route khóa học mới. Giới hạn: phiên trình duyệt kiểm thử không có đăng nhập nên chưa chạy thao tác dữ liệu thật bằng tài khoản giáo viên/học sinh.
 
+### 28/09/2026 — Sửa lỗi render TikZ dùng bảng màu Hoàng Blue
+
+- Điều tra đề `uDJN8qshiqgMeCoIbSAo`: endpoint TikZ vẫn hoạt động và render mẫu cơ bản thành SVG; 4 hình của đề trả HTTP 400 vì dùng `HBdong`, `HBxam`, `HBson`, `HBcatDam` nhưng khối TikZ tách khỏi preamble không còn khai báo màu.
+- Pipeline tự phát hiện các màu Hoàng Blue được sử dụng và gửi đúng `\\definecolor` qua `extra_preamble`. Biên dịch cục bộ bằng `pdflatex` xác nhận cả 4/4 hình của câu 9, 13, lời giải câu 15 và câu 16 thành PDF thành công.
+- API đọc nội dung lỗi HTTP từ renderer thay vì chỉ ghi “Bad Request”; màn hình sửa đề chỉ rõ câu nào và phần đề bài/lời giải nào bị lỗi để lần sau có thể chẩn đoán macro hoặc thư viện thiếu.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

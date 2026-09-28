@@ -45,6 +45,7 @@ interface ProcessTikzResponse {
   questions: ParsedQuestion[];
   convertedCount: number;
   failedCount?: number;
+  failures?: Array<{ questionNumber: number; field: "question" | "explanation"; error: string }>;
   tikzProcessed: boolean;
   error?: string;
 }
@@ -218,9 +219,14 @@ export default function EditExamPage() {
         throw new Error(processed.error ?? "Không thể chuyển TikZ sang ảnh.");
       }
       if ((processed.failedCount ?? 0) > 0) {
+        const failureDetails = (processed.failures ?? []).slice(0, 6).map((failure) =>
+          `• Câu ${failure.questionNumber} (${failure.field === "question" ? "đề bài" : "lời giải"}): ${failure.error}`
+        ).join("\n");
         const ok = window.confirm(
           `Có ${processed.failedCount} hình TikZ không chuyển được sang ảnh. ` +
-          "Các hình này sẽ được lưu bằng cơ chế TikZ cũ và vẫn có thể nặng trên mobile.\n\nVẫn lưu bài thi?"
+          "Các hình này sẽ được lưu bằng cơ chế TikZ cũ và vẫn có thể nặng trên mobile." +
+          (failureDetails ? `\n\nChi tiết:\n${failureDetails}` : "") +
+          "\n\nVẫn lưu bài thi?"
         );
         if (!ok) return;
       }

@@ -81,6 +81,14 @@ export async function POST(request: NextRequest) {
       questions: results.map((result) => result.question),
       convertedCount: results.reduce((sum, result) => sum + result.convertedCount, 0),
       failedCount: results.reduce((sum, result) => sum + result.failedCount, 0),
+      failures: results.flatMap((result, index) => [
+        ...(result.question.tikzConversionError
+          ? [{ questionNumber: index + 1, field: "question", error: result.question.tikzConversionError }]
+          : []),
+        ...(result.question.explanationTikzConversionError
+          ? [{ questionNumber: index + 1, field: "explanation", error: result.question.explanationTikzConversionError }]
+          : []),
+      ]),
       tikzProcessed: true,
     });
   } catch (error) {

@@ -46,12 +46,29 @@ const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
 ];
 
 /**
+ * TikZ blocks are stored independently from the source document preamble.
+ * BlueMath/Hoang Blue documents therefore need their semantic palette restored
+ * before the standalone renderer compiles the block.
+ */
+const COLOR_RULES: Array<{ pattern: RegExp; preamble: string }> = [
+  { pattern: /\bHBdong\b/, preamble: "\\definecolor{HBdong}{HTML}{8A5A2B}" },
+  { pattern: /\bHBson\b/, preamble: "\\definecolor{HBson}{HTML}{B23A26}" },
+  { pattern: /\bHBxam\b/, preamble: "\\definecolor{HBxam}{HTML}{5E5348}" },
+  { pattern: /\bHBcatDam\b/, preamble: "\\definecolor{HBcatDam}{HTML}{EFDCBB}" },
+];
+
+/**
  * Inspects tikzCode and returns any extra preamble lines that the HF Space
  * needs to compile the diagram successfully.
  */
 function detectExtraPreamble(tikzCode: string): string {
   const lines: string[] = [];
   for (const rule of LIBRARY_RULES) {
+    if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
+      lines.push(rule.preamble);
+    }
+  }
+  for (const rule of COLOR_RULES) {
     if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
       lines.push(rule.preamble);
     }
@@ -146,11 +163,19 @@ export async function convertTikzToImage(
       cache: "no-store",
     });
 
-    if (!response.ok) {
-      throw new Error(`TikZ render HTTP ${response.status}: ${response.statusText}`);
+    const responseText = await response.text();
+    let payload: TikzRenderResponse = {};
+    try {
+      payload = JSON.parse(responseText) as TikzRenderResponse;
+    } catch {
+      // The renderer can return a plain-text LaTeX error for failed builds.
     }
 
-    const payload = (await response.json()) as TikzRenderResponse;
+    if (!response.ok) {
+      const detail = payload.error?.trim() || responseText.trim();
+      const conciseDetail = detail ? ` — ${detail.slice(0, 800)}` : "";
+      throw new Error(`TikZ render HTTP ${response.status}: ${response.statusText}${conciseDetail}`);
+    }
 
     if (payload.status !== "success" || !payload.image_base64) {
       throw new Error(payload.error ?? "TikZ render API returned an invalid response.");
