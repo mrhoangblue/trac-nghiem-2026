@@ -43,9 +43,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
 
-    const query = authUser.role === "admin"
-      ? adminDb.collection("classes")
-      : adminDb.collection("classes").where("teacherId", "==", authUser.uid);
+    // This endpoint powers “Lớp học của tôi”, including for admins. Keep it
+    // scoped to the signed-in owner; cross-teacher inspection has a dedicated
+    // read-only admin endpoint.
+    const query = adminDb.collection("classes").where("teacherId", "==", authUser.uid);
     const snapshot = await query.get();
     const classes = snapshot.docs.map((item) => {
       const data = item.data();

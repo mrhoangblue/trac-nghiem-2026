@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import AdminGuard from "@/components/AdminGuard";
+import { ArrowRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -201,10 +203,12 @@ export default function AdminUsersPage() {
     rows,
     showActions = false,
     showClass = false,
+    showTeachingView = false,
   }: {
     rows: UserRow[];
     showActions?: boolean;
     showClass?: boolean;
+    showTeachingView?: boolean;
   }) {
     if (rows.length === 0) {
       return (
@@ -228,6 +232,9 @@ export default function AdminUsersPage() {
               <th className="text-center px-4 py-3 font-semibold">Ngày đăng ký</th>
               {showActions && (
                 <th className="text-center px-6 py-3 font-semibold">Hành động</th>
+              )}
+              {showTeachingView && (
+                <th className="text-right px-6 py-3 font-semibold">Không gian giảng dạy</th>
               )}
             </tr>
           </thead>
@@ -280,6 +287,16 @@ export default function AdminUsersPage() {
                         ❌ Từ chối
                       </button>
                     </div>
+                  </td>
+                )}
+                {showTeachingView && (
+                  <td className="px-6 py-4 text-right">
+                    <Link
+                      href={`/admin/users/${encodeURIComponent(u.uid)}`}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-extrabold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100"
+                    >
+                      Xem lớp và bài học <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
                   </td>
                 )}
               </tr>
@@ -403,7 +420,7 @@ export default function AdminUsersPage() {
                   )}
                 </>
               )}
-              {activeTab === "staff" && <UserTable rows={staff} />}
+              {activeTab === "staff" && <UserTable rows={staff} showTeachingView />}
               {activeTab === "students" && <UserTable rows={students} showClass />}
             </>
           )}

@@ -31,7 +31,7 @@ function Skeleton() {
 }
 
 export default function TeacherClassPanel() {
-  const { user, userProfile, isAdmin } = useAuth();
+  const { user, userProfile } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -132,7 +132,6 @@ export default function TeacherClassPanel() {
                     <GraduationCap className="h-6 w-6 text-white/75" />
                   </div>
                   <h3 className="mt-5 line-clamp-2 text-xl font-black leading-snug">{cls.name}</h3>
-                  {isAdmin && <p className="mt-2 text-xs font-semibold text-white/75">Giáo viên: {cls.teacherName}</p>}
                 </div>
                 <div className="p-5">
                   <p className="line-clamp-2 min-h-10 text-sm leading-5 text-gray-500">{cls.description || "Không gian học tập, học liệu và bài kiểm tra của lớp."}</p>
