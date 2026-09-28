@@ -1,6 +1,6 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { initializeFirestore } from "firebase-admin/firestore";
+import { getFirestore, initializeFirestore } from "firebase-admin/firestore";
 
 const existingApp = getApps()[0];
 let adminApp = existingApp;
@@ -42,4 +42,17 @@ export const adminAuth = getAuth(adminApp);
 // REST transport is more stable on local/corporate networks that interrupt
 // long-lived HTTP/2 gRPC connections. Server routes do not use snapshots, so
 // every operation in this project is supported by the REST transport.
-export const adminDb = initializeFirestore(adminApp, { preferRest: true });
+// Vercel can reuse one Node process across route bundles. In that situation a
+// different bundle may already have initialized Firestore for the shared app.
+// Reuse that instance instead of crashing the whole route at module load.
+export const adminDb = (() => {
+  try {
+    return initializeFirestore(adminApp, { preferRest: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("already been initialized")) {
+      return getFirestore(adminApp);
+    }
+    throw error;
+  }
+})();
