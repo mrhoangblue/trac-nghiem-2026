@@ -2,6 +2,15 @@
 
 Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
 
+### 28/09/2026 — R2 TikZ, giao diện khóa học và hỏi đáp bài học
+
+- Chuyển pipeline TikZ sang lưu SVG/PNG đã render trong Cloudflare R2; Firestore giữ URL và object key.
+- Dùng khóa SHA-256 để tránh tạo trùng object cho cùng một hình và bổ sung cơ chế chuyển ảnh Base64 cũ khi lưu lại đề.
+- Thiết kế lại header bên trong khóa học bằng nền đồ họa nhẹ, bỏ ảnh bìa khỏi header; ảnh bìa chỉ hiển thị trên thẻ khóa học.
+- Tách tên bài học/tài nguyên và nhóm nút quản trị thành hai hàng để giao diện không bị bó hẹp.
+- Thêm nút thu gọn menu chính và bảng chương trình khóa học trên desktop.
+- Thêm hỏi đáp dưới từng bài học. API chỉ cho giáo viên lớp, admin và học sinh đã được duyệt truy cập; tác giả được xóa bình luận của mình, giáo viên được kiểm duyệt toàn bộ.
+
 ### 28/09/2026 — Sửa lỗi lưu hồ sơ học sinh lần đầu
 
 - Xác định trang onboarding ghi thẳng hồ sơ từ trình duyệt vào Firestore, khiến người dùng mới có thể bị từ chối khi rules đang triển khai chưa đồng bộ hoặc tài liệu hồ sơ tồn tại ở trạng thái chưa hoàn chỉnh.

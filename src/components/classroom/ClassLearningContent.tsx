@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
+import LessonDiscussion from "@/components/classroom/LessonDiscussion";
 import { flattenCourseResources } from "@/utils/courseProgress";
 import type {
   ClassCourseLesson,
@@ -206,6 +207,7 @@ export default function ClassLearningContent({
   const [activeResourceId, setActiveResourceId] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<"all" | ClassExamStatus>("all");
   const [examSort, setExamSort] = useState<"status" | "newest" | "oldest">("status");
+  const [curriculumOpen, setCurriculumOpen] = useState(true);
 
   const loadContent = useCallback(async () => {
     if (!user) return;
@@ -756,22 +758,23 @@ export default function ClassLearningContent({
               const activeIndex = resources.findIndex((resource) => resource.id === activeResource?.id);
               const activeCompleted = activeResource ? completedIds.has(activeResource.id) : false;
               return (
-                <div className={`${courseId ? "lg:grid lg:h-[calc(100dvh-8rem)] lg:max-h-[920px] lg:grid-cols-[22rem_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden" : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
-                  <div className="relative overflow-hidden bg-brand-900 px-6 py-7 text-white sm:px-8 lg:col-span-2 lg:row-start-1">
-                    {selectedCourse.coverImageUrl && <div className="absolute inset-0 bg-cover bg-center opacity-25" style={{ backgroundImage: `url(${JSON.stringify(selectedCourse.coverImageUrl)})` }} />}
-                    <div className="relative flex flex-wrap items-start justify-between gap-5">
-                      <div className="max-w-2xl">
-                        {courseId && <Link href={teacherMode ? `/teacher/classes/${classId}` : `/student/classes/${classId}`} className="mb-4 inline-flex text-xs font-bold text-brand-100 hover:text-white">← Quay lại lớp học</Link>}
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-200">Lộ trình học tuần tự</p>
+                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-8rem)] lg:max-h-[920px] ${curriculumOpen ? "lg:grid-cols-[22rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
+                  <div className={`relative overflow-hidden bg-[linear-gradient(120deg,#351c12_0%,#61341f_58%,#8b542d_100%)] px-6 py-6 text-white sm:px-8 ${courseId && curriculumOpen ? "lg:col-span-2" : "lg:col-span-1"} lg:row-start-1`}>
+                    <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[54px] border-white/[0.04]" />
+                    <div className="pointer-events-none absolute bottom-0 right-[22%] h-32 w-48 skew-x-[-24deg] border-l border-t border-brand-200/10" />
+                    <div className="relative">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        {courseId ? <Link href={teacherMode ? `/teacher/classes/${classId}` : `/student/classes/${classId}`} className="inline-flex text-xs font-bold text-brand-100 hover:text-white">← Quay lại lớp học</Link> : <span />}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {courseId && <button type="button" onClick={() => setCurriculumOpen((current) => !current)} className="hidden rounded-xl bg-white/10 px-3.5 py-2 text-xs font-bold ring-1 ring-white/15 hover:bg-white/20 lg:inline-flex">{curriculumOpen ? "Thu gọn nội dung" : "Mở nội dung khóa học"}</button>}
+                          {canEdit && <><button onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, coverImageKey: selectedCourse.coverImageKey, published: selectedCourse.published })} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25">Sửa khóa học</button><button disabled={saving} onClick={() => void deleteCourse(selectedCourse)} className="rounded-xl bg-danger-500/80 px-4 py-2 text-sm font-bold hover:bg-danger-500">Xóa</button></>}
+                        </div>
+                      </div>
+                      <div className="mt-5 max-w-3xl">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#f4d58b]">Lộ trình học tuần tự</p>
                         <h3 className="mt-2 text-2xl font-extrabold sm:text-3xl">{selectedCourse.title}</h3>
                         {selectedCourse.description && <p className="mt-3 text-sm leading-7 text-brand-100">{selectedCourse.description}</p>}
                       </div>
-                      {canEdit && (
-                        <div className="flex gap-2">
-                          <button onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, coverImageKey: selectedCourse.coverImageKey, published: selectedCourse.published })} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25">Sửa khóa học</button>
-                          <button disabled={saving} onClick={() => void deleteCourse(selectedCourse)} className="rounded-xl bg-danger-500/80 px-4 py-2 text-sm font-bold hover:bg-danger-500">Xóa</button>
-                        </div>
-                      )}
                     </div>
                     {isStudentViewer && (
                       <div className="relative mt-6 max-w-xl">
@@ -782,7 +785,7 @@ export default function ClassLearningContent({
                   </div>
 
                   {activeResource && (
-                    <div className="border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7 lg:col-start-2 lg:row-start-2 lg:overflow-y-auto lg:overscroll-contain lg:border-b-0">
+                    <div className={`border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7 ${curriculumOpen ? "lg:col-start-2" : "lg:col-start-1"} lg:row-start-2 lg:overflow-y-auto lg:overscroll-contain lg:border-b-0`}>
                       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Nội dung {activeIndex + 1}/{resources.length} · {RESOURCE_META[activeResource.type].label}</p>
@@ -809,13 +812,13 @@ export default function ClassLearningContent({
                     </div>
                   )}
 
-                  <div className={`space-y-4 p-5 sm:p-7 ${courseId ? `${activeResource ? "lg:col-start-1 lg:row-start-2 lg:border-r" : "lg:col-span-2 lg:row-start-2"} lg:overflow-y-auto lg:overscroll-contain` : ""}`}>
+                  <div className={`space-y-4 p-5 sm:p-7 ${courseId ? `${curriculumOpen ? `${activeResource ? "lg:col-start-1 lg:row-start-2 lg:border-r" : "lg:col-span-2 lg:row-start-2"}` : "lg:hidden"} lg:overflow-y-auto lg:overscroll-contain` : ""}`}>
                     <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Chương trình học</p><h4 className="mt-1 text-xl font-extrabold text-gray-900">Nội dung khóa học</h4></div>{canEdit && <button type="button" onClick={() => setLessonDraft({ courseId: selectedCourse.id, title: "", description: "" })} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white">+ Bài học</button>}</div>
                     {selectedCourse.lessons.map((lesson, lessonIndex) => (
                       <section key={lesson.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/60">
-                        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:px-5">
-                          <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600">Bài học {lessonIndex + 1}</p><h5 className="mt-1 font-extrabold text-gray-900">{lesson.title}</h5>{lesson.description && <p className="mt-1 text-sm text-gray-500">{lesson.description}</p>}</div>
-                          {canEdit && <div className="flex flex-wrap gap-1.5"><button disabled={saving || lessonIndex === 0} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "up")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↑</button><button disabled={saving || lessonIndex === selectedCourse.lessons.length - 1} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "down")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold disabled:opacity-30">↓</button><button onClick={() => setLessonDraft({ courseId: selectedCourse.id, lessonId: lesson.id, title: lesson.title, description: lesson.description ?? "" })} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700">Sửa</button><button onClick={() => void lessonAction(selectedCourse.id, lesson, "delete_lesson")} className="rounded-lg bg-danger-50 px-3 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
+                        <div className="border-b border-gray-200 px-4 py-4 sm:px-5">
+                          <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600">Bài học {lessonIndex + 1}</p><h5 className="mt-1 text-base font-extrabold leading-6 text-gray-900">{lesson.title}</h5>{lesson.description && <p className="mt-1 text-sm leading-6 text-gray-500">{lesson.description}</p>}</div>
+                          {canEdit && <div className="mt-3 flex flex-wrap gap-1.5 border-t border-gray-200/80 pt-3"><button aria-label="Đưa bài học lên" disabled={saving || lessonIndex === 0} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "up")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold shadow-sm disabled:opacity-30">↑</button><button aria-label="Đưa bài học xuống" disabled={saving || lessonIndex === selectedCourse.lessons.length - 1} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "down")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold shadow-sm disabled:opacity-30">↓</button><button onClick={() => setLessonDraft({ courseId: selectedCourse.id, lessonId: lesson.id, title: lesson.title, description: lesson.description ?? "" })} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700 shadow-sm">Sửa</button><button onClick={() => void lessonAction(selectedCourse.id, lesson, "delete_lesson")} className="rounded-lg bg-danger-50 px-3 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
                         </div>
                         <div className="divide-y divide-gray-100 bg-white">
                           {lesson.resources.map((resource, resourceIndex) => {
@@ -824,16 +827,16 @@ export default function ClassLearningContent({
                             const locked = isStudentViewer && !resources.slice(0, globalIndex).every((item) => completedIds.has(item.id));
                             const active = activeResourceId === resource.id;
                             return (
-                              <div key={resource.id} className={`flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5 ${active ? "bg-brand-50" : ""}`}>
-                                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${completed ? "bg-success-100 text-success-700" : locked ? "bg-gray-100 text-gray-400" : "bg-brand-100 text-brand-700"}`}>{completed ? "✓" : locked ? "🔒" : RESOURCE_META[resource.type].icon}</span>
-                                <button type="button" disabled={locked} onClick={() => setActiveResourceId(resource.id)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"><span className={`block truncate text-sm font-bold ${locked ? "text-gray-400" : "text-gray-800"}`}>{globalIndex + 1}. {resource.title}</span><span className="mt-0.5 block text-xs text-gray-400">{locked ? "Hoàn thành nội dung trước để mở khóa" : `${RESOURCE_META[resource.type].label} · ${resource.provider} · ${resource.source === "upload" || resource.storageKey ? "R2" : "Liên kết"}`}</span></button>
-                                {canEdit && <div className="flex gap-1"><button disabled={saving || resourceIndex === 0} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "up")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↑</button><button disabled={saving || resourceIndex === lesson.resources.length - 1} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "down")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↓</button><button onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id, resource))} className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700">Sửa</button><button onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "delete_resource")} className="rounded-lg bg-danger-50 px-2.5 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
+                              <div key={resource.id} className={`px-4 py-3.5 sm:px-5 ${active ? "bg-brand-50" : ""}`}>
+                                <div className="flex items-start gap-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${completed ? "bg-success-100 text-success-700" : locked ? "bg-gray-100 text-gray-400" : "bg-brand-100 text-brand-700"}`}>{completed ? "✓" : locked ? "🔒" : RESOURCE_META[resource.type].icon}</span><button type="button" disabled={locked} onClick={() => setActiveResourceId(resource.id)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"><span className={`block text-sm font-bold leading-5 ${locked ? "text-gray-400" : "text-gray-800"}`}>{globalIndex + 1}. {resource.title}</span><span className="mt-1 block text-xs leading-5 text-gray-400">{locked ? "Hoàn thành nội dung trước để mở khóa" : `${RESOURCE_META[resource.type].label} · ${resource.provider} · ${resource.source === "upload" || resource.storageKey ? "R2" : "Liên kết"}`}</span></button></div>
+                                {canEdit && <div className="mt-3 flex flex-wrap gap-1.5 pl-12"><button aria-label="Đưa nội dung lên" disabled={saving || resourceIndex === 0} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "up")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↑</button><button aria-label="Đưa nội dung xuống" disabled={saving || resourceIndex === lesson.resources.length - 1} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "down")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↓</button><button onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id, resource))} className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700">Sửa</button><button onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "delete_resource")} className="rounded-lg bg-danger-50 px-2.5 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
                               </div>
                             );
                           })}
                           {lesson.resources.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">Bài học chưa có tài nguyên.</p>}
                           {canEdit && <button type="button" onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id))} className="m-3 rounded-xl border-2 border-dashed border-brand-200 px-4 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-50">+ Thêm nội dung</button>}
                         </div>
+                        <LessonDiscussion classId={classId} courseId={selectedCourse.id} lessonId={lesson.id} />
                       </section>
                     ))}
                     {selectedCourse.lessons.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">Khóa học chưa có bài học.</div>}

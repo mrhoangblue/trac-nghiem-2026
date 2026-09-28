@@ -10,7 +10,9 @@ export interface ParsedQuestion {
   tikzCode?: string;
   explanationTikzCode?: string;
   tikzImageUrl?: string;
+  tikzImageKey?: string;
   explanationTikzImageUrl?: string;
+  explanationTikzImageKey?: string;
   imageUrls?: string[];
 }
 

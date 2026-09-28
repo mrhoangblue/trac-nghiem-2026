@@ -5,8 +5,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { hashExamPassword, validateExamPassword } from "@/lib/examAccess";
 import {
-  convertTikzToImage,
+  convertTikzToStoredImage,
   processTikzToImagesWithStats,
+  storeTikzDataUri,
 } from "@/utils/tikzToImage";
 
 export const runtime = "nodejs";
@@ -93,7 +94,9 @@ async function processQuestionTikz(
 
   if (question.tikzCode) {
     try {
-      processed.tikzImageUrl = await convertTikzToImage(question.tikzCode, { timeoutMs });
+      const stored = await convertTikzToStoredImage(question.tikzCode, { timeoutMs });
+      processed.tikzImageUrl = stored.url;
+      processed.tikzImageKey = stored.key;
       delete processed.tikzCode;
       convertedCount += 1;
     } catch (error) {
@@ -102,14 +105,26 @@ async function processQuestionTikz(
         error instanceof Error ? error.message : "Không thể chuyển hình TikZ.";
       console.error("Failed to convert question TikZ:", error);
     }
+  } else if (question.tikzImageUrl?.startsWith("data:image/")) {
+    try {
+      const stored = await storeTikzDataUri(question.tikzImageUrl);
+      processed.tikzImageUrl = stored.url;
+      processed.tikzImageKey = stored.key;
+      convertedCount += 1;
+    } catch (error) {
+      failedCount += 1;
+      processed.tikzConversionError = error instanceof Error ? error.message : "Không thể lưu hình TikZ lên R2.";
+    }
   }
 
   if (question.explanationTikzCode) {
     try {
-      processed.explanationTikzImageUrl = await convertTikzToImage(
+      const stored = await convertTikzToStoredImage(
         question.explanationTikzCode,
         { timeoutMs },
       );
+      processed.explanationTikzImageUrl = stored.url;
+      processed.explanationTikzImageKey = stored.key;
       delete processed.explanationTikzCode;
       convertedCount += 1;
     } catch (error) {
@@ -117,6 +132,16 @@ async function processQuestionTikz(
       processed.explanationTikzConversionError =
         error instanceof Error ? error.message : "Không thể chuyển hình lời giải.";
       console.error("Failed to convert explanation TikZ:", error);
+    }
+  } else if (question.explanationTikzImageUrl?.startsWith("data:image/")) {
+    try {
+      const stored = await storeTikzDataUri(question.explanationTikzImageUrl);
+      processed.explanationTikzImageUrl = stored.url;
+      processed.explanationTikzImageKey = stored.key;
+      convertedCount += 1;
+    } catch (error) {
+      failedCount += 1;
+      processed.explanationTikzConversionError = error instanceof Error ? error.message : "Không thể lưu hình lời giải lên R2.";
     }
   }
 

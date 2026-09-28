@@ -108,6 +108,14 @@ Không dùng quyền **Admin Read & Write** vì website không cần tạo hoặ
 
 ## 4. Kiến trúc upload của website
 
+### Ảnh TikZ đã render
+
+- Server gửi mã TikZ đến dịch vụ render, giải mã ảnh SVG/PNG trả về và upload thẳng vào thư mục `tikz-renders/` của R2.
+- Tên object dùng SHA-256 của nội dung ảnh, vì vậy cùng một hình dùng lại cùng object thay vì tạo nhiều bản sao.
+- Firestore chỉ lưu public URL và object key; hình TikZ mới không còn được lưu dưới dạng chuỗi Base64 lớn.
+- Khi giáo viên lưu lại đề cũ, các ảnh TikZ dạng `data:image/...` trong câu hỏi, lời giải và trường ảnh riêng được chuyển dần sang R2.
+- `R2_PUBLIC_BASE_URL` là bắt buộc vì trình duyệt cần URL công khai để hiển thị ảnh.
+
 Trình duyệt không nhận secret R2. Luồng upload:
 
 1. Giáo viên chọn file.

@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { uploadToR2 } from "@/lib/r2Storage";
+
 const TIKZ_RENDER_ENDPOINT =
   process.env.TIKZ_RENDER_ENDPOINT ?? "https://frankii1990-tikz-render.hf.space/render";
 
@@ -88,6 +91,12 @@ export interface ProcessMathContentResult {
   failedCount: number;
 }
 
+export interface StoredTikzImage {
+  url: string;
+  key: string;
+  contentType: "image/svg+xml" | "image/png";
+}
+
 interface TikzRenderResponse {
   status?: string;
   image_base64?: string;
@@ -127,6 +136,37 @@ function toImageDataUri(imageBase64: string, mimeHint?: string): string {
   return `data:${mime};base64,${trimmed}`;
 }
 
+function decodeRenderedImage(imageBase64: string, mimeHint?: string): {
+  body: Buffer;
+  contentType: "image/svg+xml" | "image/png";
+  extension: "svg" | "png";
+} {
+  const trimmed = imageBase64.trim();
+  const dataUri = trimmed.match(/^data:(image\/(?:svg\+xml|png));base64,([\s\S]+)$/i);
+  const hintedMime = dataUri?.[1]?.toLowerCase() ?? mimeHint?.toLowerCase();
+  const contentType = hintedMime === "image/svg+xml" ? "image/svg+xml" : "image/png";
+  const rawBase64 = dataUri?.[2] ?? trimmed;
+  const body = Buffer.from(rawBase64, "base64");
+  if (body.length === 0) throw new Error("TikZ renderer returned an empty image.");
+  return { body, contentType, extension: contentType === "image/svg+xml" ? "svg" : "png" };
+}
+
+export async function storeTikzDataUri(imageDataUri: string): Promise<StoredTikzImage> {
+  const decoded = decodeRenderedImage(imageDataUri);
+  const hash = createHash("sha256").update(decoded.body).digest("hex");
+  const key = `tikz-renders/${hash}.${decoded.extension}`;
+  const uploaded = await uploadToR2({
+    body: decoded.body,
+    contentType: decoded.contentType,
+    fileName: `${hash}.${decoded.extension}`,
+    folder: "tikz-renders",
+    objectKey: key,
+    metadata: { source: "tikz-renderer", sha256: hash },
+  });
+  if (!uploaded.url) throw new Error("R2_PUBLIC_URL_REQUIRED");
+  return { url: uploaded.url, key: uploaded.key, contentType: decoded.contentType };
+}
+
 function buildTikzImageTag(imageSrc: string): string {
   return `<img src="${imageSrc}" alt="Math Diagram" class="math-rendered-svg mx-auto my-2 max-w-full" />`;
 }
@@ -143,10 +183,10 @@ function buildTikzImageTag(imageSrc: string): string {
  *
  * Server-side only — call from Route Handlers or Server Actions.
  */
-export async function convertTikzToImage(
+export async function convertTikzToStoredImage(
   tikzCode: string,
   options: ConvertTikzOptions = {},
-): Promise<string> {
+): Promise<StoredTikzImage> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const { signal, clear } = createTimeoutSignal(timeoutMs);
 
@@ -181,7 +221,8 @@ export async function convertTikzToImage(
       throw new Error(payload.error ?? "TikZ render API returned an invalid response.");
     }
 
-    return toImageDataUri(payload.image_base64, payload.mime_type);
+    const dataUri = toImageDataUri(payload.image_base64, payload.mime_type);
+    return storeTikzDataUri(dataUri);
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`TikZ render timeout after ${timeoutMs}ms`);
@@ -190,6 +231,13 @@ export async function convertTikzToImage(
   } finally {
     clear();
   }
+}
+
+export async function convertTikzToImage(
+  tikzCode: string,
+  options: ConvertTikzOptions = {},
+): Promise<string> {
+  return (await convertTikzToStoredImage(tikzCode, options)).url;
 }
 
 // ── Private helper ────────────────────────────────────────────────────────────
@@ -257,6 +305,30 @@ async function convertBlocksToImages(
   };
 }
 
+async function migrateInlineRenderedImages(content: string): Promise<ProcessMathContentResult> {
+  const tags = content.match(/<img\b[^>]*>/gi) ?? [];
+  const dataUris = [...new Set(tags
+    .filter((tag) => tag.includes("math-rendered-svg"))
+    .map((tag) => tag.match(/\bsrc=["'](data:image\/(?:svg\+xml|png);base64,[^"']+)["']/i)?.[1])
+    .filter((value): value is string => Boolean(value)))];
+  if (dataUris.length === 0) return { content, convertedCount: 0, failedCount: 0 };
+
+  let migrated = content;
+  let convertedCount = 0;
+  let failedCount = 0;
+  await Promise.all(dataUris.map(async (dataUri) => {
+    try {
+      const stored = await storeTikzDataUri(dataUri);
+      migrated = migrated.split(dataUri).join(stored.url);
+      convertedCount += 1;
+    } catch (error) {
+      failedCount += 1;
+      console.error("Could not migrate inline TikZ image to R2:", error);
+    }
+  }));
+  return { content: migrated, convertedCount, failedCount };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -276,12 +348,18 @@ export async function processTikzToImagesWithStats(
   content: string,
   options: ConvertTikzOptions = {},
 ): Promise<ProcessMathContentResult> {
-  return convertBlocksToImages(
+  const rendered = await convertBlocksToImages(
     content,
     TIKZPICTURE_RE,
     (block) => block,
     options,
   );
+  const migrated = await migrateInlineRenderedImages(rendered.content);
+  return {
+    content: migrated.content,
+    convertedCount: rendered.convertedCount + migrated.convertedCount,
+    failedCount: rendered.failedCount + migrated.failedCount,
+  };
 }
 
 export async function processTikzToImages(

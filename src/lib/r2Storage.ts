@@ -24,7 +24,7 @@ interface R2Config {
   publicBaseUrl?: string;
 }
 
-export type R2ObjectFolder = "exam-imports" | "exam-assets" | "learning-materials" | "course-assets";
+export type R2ObjectFolder = "exam-imports" | "exam-assets" | "learning-materials" | "course-assets" | "tikz-renders";
 
 let cachedClient: S3Client | null = null;
 
@@ -98,6 +98,7 @@ export async function uploadToR2(input: {
   contentType: string;
   fileName: string;
   folder: R2ObjectFolder;
+  objectKey?: string;
   metadata?: Record<string, string>;
 }): Promise<{ key: string; url: string | null }> {
   const config = getConfig();
@@ -105,7 +106,11 @@ export async function uploadToR2(input: {
     throw new Error("R2_NOT_CONFIGURED");
   }
 
-  const key = createObjectKey(input.folder, input.fileName);
+  const requestedKey = input.objectKey?.trim().replace(/^\/+/, "");
+  if (requestedKey && (!requestedKey.startsWith(`${input.folder}/`) || requestedKey.includes(".."))) {
+    throw new Error("R2_OBJECT_KEY_INVALID");
+  }
+  const key = requestedKey || createObjectKey(input.folder, input.fileName);
   await getClient(config).send(
     new PutObjectCommand({
       Bucket: config.bucket,
@@ -169,7 +174,7 @@ export async function deleteFromR2(key: string): Promise<void> {
   const config = getConfig();
   if (!config) throw new Error("R2_NOT_CONFIGURED");
   const normalizedKey = key.trim().replace(/^\/+/, "");
-  const allowedPrefix = ["exam-imports/", "exam-assets/", "learning-materials/", "course-assets/"]
+  const allowedPrefix = ["exam-imports/", "exam-assets/", "learning-materials/", "course-assets/", "tikz-renders/"]
     .some((prefix) => normalizedKey.startsWith(prefix));
   if (!normalizedKey || !allowedPrefix) throw new Error("R2_OBJECT_KEY_INVALID");
   await getClient(config).send(new DeleteObjectCommand({ Bucket: config.bucket, Key: normalizedKey }));

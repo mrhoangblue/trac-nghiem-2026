@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { ParsedQuestion } from "@/utils/latexParser";
-import { convertTikzToImage } from "@/utils/tikzToImage";
+import { convertTikzToStoredImage, storeTikzDataUri } from "@/utils/tikzToImage";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,9 @@ interface ProcessTikzRequest {
 
 interface ProcessedQuestion extends ParsedQuestion {
   tikzImageUrl?: string;
+  tikzImageKey?: string;
   explanationTikzImageUrl?: string;
+  explanationTikzImageKey?: string;
   tikzConversionError?: string;
   explanationTikzConversionError?: string;
 }
@@ -27,7 +29,9 @@ async function convertQuestionTikz(
 
   if (question.tikzCode) {
     try {
-      processed.tikzImageUrl = await convertTikzToImage(question.tikzCode, { timeoutMs });
+      const stored = await convertTikzToStoredImage(question.tikzCode, { timeoutMs });
+      processed.tikzImageUrl = stored.url;
+      processed.tikzImageKey = stored.key;
       delete processed.tikzCode;
       convertedCount += 1;
     } catch (error) {
@@ -35,20 +39,42 @@ async function convertQuestionTikz(
       processed.tikzConversionError =
         error instanceof Error ? error.message : "Không thể chuyển hình TikZ.";
     }
+  } else if (question.tikzImageUrl?.startsWith("data:image/")) {
+    try {
+      const stored = await storeTikzDataUri(question.tikzImageUrl);
+      processed.tikzImageUrl = stored.url;
+      processed.tikzImageKey = stored.key;
+      convertedCount += 1;
+    } catch (error) {
+      failedCount += 1;
+      processed.tikzConversionError = error instanceof Error ? error.message : "Không thể lưu hình TikZ lên R2.";
+    }
   }
 
   if (question.explanationTikzCode) {
     try {
-      processed.explanationTikzImageUrl = await convertTikzToImage(
+      const stored = await convertTikzToStoredImage(
         question.explanationTikzCode,
         { timeoutMs },
       );
+      processed.explanationTikzImageUrl = stored.url;
+      processed.explanationTikzImageKey = stored.key;
       delete processed.explanationTikzCode;
       convertedCount += 1;
     } catch (error) {
       failedCount += 1;
       processed.explanationTikzConversionError =
         error instanceof Error ? error.message : "Không thể chuyển hình lời giải.";
+    }
+  } else if (question.explanationTikzImageUrl?.startsWith("data:image/")) {
+    try {
+      const stored = await storeTikzDataUri(question.explanationTikzImageUrl);
+      processed.explanationTikzImageUrl = stored.url;
+      processed.explanationTikzImageKey = stored.key;
+      convertedCount += 1;
+    } catch (error) {
+      failedCount += 1;
+      processed.explanationTikzConversionError = error instanceof Error ? error.message : "Không thể lưu hình lời giải lên R2.";
     }
   }
 
