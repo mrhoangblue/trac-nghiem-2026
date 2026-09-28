@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpRight, BookOpen, GraduationCap, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowUpRight, BookOpen, GraduationCap, Mail, Phone } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -34,7 +34,6 @@ export default function Footer() {
           <div className="space-y-3 text-sm text-white/70">
             <a href="mailto:mrhoangblue@gmail.com" className="flex items-center gap-2.5 transition hover:text-white"><Mail size={16} />mrhoangblue@gmail.com<ArrowUpRight size={13} /></a>
             <a href="tel:0962543567" className="flex items-center gap-2.5 transition hover:text-white"><Phone size={16} />0962 543 567</a>
-            <p className="flex items-start gap-2.5 leading-6"><MapPin size={16} className="mt-1 shrink-0" />Trường TH, THCS – THPT Hoàng Gia (Royal School)</p>
           </div>
         </div>
       </div>
