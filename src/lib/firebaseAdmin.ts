@@ -5,10 +5,27 @@ import { initializeFirestore } from "firebase-admin/firestore";
 const existingApp = getApps()[0];
 let adminApp = existingApp;
 
+function normalizeEnvironmentValue(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  let normalized = value.trim();
+  const hasMatchingQuotes =
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"));
+  if (hasMatchingQuotes) normalized = normalized.slice(1, -1).trim();
+
+  return normalized || undefined;
+}
+
 if (!adminApp) {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  // Vercel keeps quotes when a value is pasted from `.env.local`, while the
+  // local dotenv loader removes them. Normalize both forms so the exact same
+  // service-account values work in local and deployed environments.
+  const projectId = normalizeEnvironmentValue(process.env.FIREBASE_PROJECT_ID);
+  const clientEmail = normalizeEnvironmentValue(process.env.FIREBASE_CLIENT_EMAIL);
+  const privateKey = normalizeEnvironmentValue(process.env.FIREBASE_PRIVATE_KEY)
+    ?.replace(/\\n/g, "\n")
+    .replace(/\r/g, "");
 
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error(
