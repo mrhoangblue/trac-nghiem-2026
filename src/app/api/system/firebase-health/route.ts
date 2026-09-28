@@ -33,6 +33,19 @@ function connectionFailureCode(error: unknown): string {
   return "FIREBASE_CONNECTION_FAILED";
 }
 
+function safeErrorDetails(error: unknown, projectId: string, clientEmail: string) {
+  const record = error && typeof error === "object" ? error as { code?: unknown; name?: unknown; message?: unknown } : {};
+  const message = String(record.message ?? error ?? "")
+    .replaceAll(projectId, "[project]")
+    .replaceAll(clientEmail, "[service-account]")
+    .slice(0, 500);
+  return {
+    errorCode: String(record.code ?? "UNKNOWN").slice(0, 80),
+    errorName: String(record.name ?? "Error").slice(0, 80),
+    errorMessage: message,
+  };
+}
+
 function normalize(value: string | undefined): string {
   if (!value) return "";
   let result = value.trim();
@@ -92,7 +105,12 @@ export async function GET() {
   } catch (error) {
     console.error("Firebase health check failed:", error);
     return NextResponse.json(
-      { status: "error", code: connectionFailureCode(error), fingerprint },
+      {
+        status: "error",
+        code: connectionFailureCode(error),
+        fingerprint,
+        diagnostic: safeErrorDetails(error, projectId, clientEmail),
+      },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
