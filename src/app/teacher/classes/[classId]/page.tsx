@@ -7,18 +7,12 @@ import AdminGuard from "@/components/AdminGuard";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  arrayRemove,
-  arrayUnion,
   collection,
-  deleteDoc,
   doc,
   documentId,
   getDoc,
   getDocs,
   query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import type { ClassDoc } from "@/utils/classroomTypes";
@@ -30,6 +24,21 @@ import * as XLSX from "xlsx";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FIRESTORE_IN_LIMIT = 30;
+
+type TokenProvider = {
+  getIdToken: (forceRefresh?: boolean) => Promise<string>;
+};
+
+async function fetchWithAuth(user: TokenProvider, url: string, init: RequestInit = {}) {
+  const send = async (forceRefresh: boolean) => {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${await user.getIdToken(forceRefresh)}`);
+    return fetch(url, { ...init, headers });
+  };
+  let response = await send(false);
+  if (response.status === 401) response = await send(true);
+  return response;
+}
 
 function chunkIds<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -119,6 +128,7 @@ interface AddStudentModalProps {
 }
 
 function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentModalProps) {
+  const { user } = useAuth();
   const [form, setForm] = useState<AddStudentForm>({ email: "", fullName: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -147,58 +157,50 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
     setError(null);
 
     try {
-      // 1. Look up the user account by email
-      const userSnap = await getDocs(
-        query(collection(db, "users"), where("email", "==", email))
-      );
-      if (userSnap.empty) {
-        setError("Không tìm thấy tài khoản với email này. Học sinh phải đăng ký trước.");
+      if (!user) {
+        setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
         return;
       }
-      const userDoc = userSnap.docs[0];
-      const uid = userDoc.id;
-      const userData = userDoc.data();
 
-      // 2. Guard: already in class
-      if (existingUids.has(uid)) {
+      const response = await fetchWithAuth(
+        user,
+        `/api/classes/${encodeURIComponent(classId)}/members`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        student?: StudentRow;
+      } | null;
+
+      if (!response.ok || !payload?.student) {
+        const messages: Record<string, string> = {
+          STUDENT_NOT_FOUND: "Không tìm thấy tài khoản với email này. Học sinh phải đăng ký trước.",
+          STUDENT_ONLY: "Tài khoản này không phải tài khoản học sinh.",
+          ALREADY_MEMBER: "Học sinh này đã có trong lớp.",
+          FULL: "Lớp đã đủ số lượng học sinh tối đa.",
+          FORBIDDEN: "Bạn không có quyền quản lý lớp này.",
+          UNAUTHENTICATED: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+        };
+        setError(messages[payload?.error ?? ""] ?? "Không thể thêm học sinh. Vui lòng thử lại.");
+        return;
+      }
+
+      if (existingUids.has(payload.student.uid)) {
         setError("Học sinh này đã có trong lớp.");
         return;
       }
-
-      // 3. Add UID to classes/{classId}.studentIds
-      await updateDoc(doc(db, "classes", classId), {
-        studentIds: arrayUnion(uid),
-        updatedAt: serverTimestamp(),
-      });
-
-      // 4. Mirror to class_members collection (same pattern as joinClass service)
-      await setDoc(
-        doc(db, "class_members", `${classId}_${uid}`),
-        {
-          classId,
-          studentId: uid,
-          studentName: (userData.fullName ?? form.fullName.trim()) || "—",
-          studentEmail: email,
-          joinedAt: serverTimestamp(),
-          status: "active",
-        },
-        { merge: true }
-      );
-
-      // 5. Notify parent to update local state
-      onAdd({
-        uid,
-        fullName: String((userData.fullName ?? form.fullName.trim()) || "—"),
-        email,
-        school: userData.school ? String(userData.school) : "",
-      });
+      onAdd(payload.student);
     } catch (err) {
       console.error("[AddStudentModal]", err);
       setError("Đã xảy ra lỗi. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
-  }, [form, classId, existingUids, onAdd]);
+  }, [form, classId, existingUids, onAdd, user]);
 
   return (
     // Backdrop
@@ -313,6 +315,7 @@ interface DeleteConfirmModalProps {
 }
 
 function DeleteConfirmModal({ student, classId, onDeleted, onClose }: DeleteConfirmModalProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -327,19 +330,36 @@ function DeleteConfirmModal({ student, classId, onDeleted, onClose }: DeleteConf
     setLoading(true);
     setError(null);
     try {
-      // 1. Remove UID from classes/{classId}.studentIds
-      await updateDoc(doc(db, "classes", classId), {
-        studentIds: arrayRemove(student.uid),
-        updatedAt: serverTimestamp(),
-      });
-
-      // 2. Delete the mirror document in class_members
-      await deleteDoc(doc(db, "class_members", `${classId}_${student.uid}`));
+      if (!user) {
+        setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        return;
+      }
+      const response = await fetchWithAuth(
+        user,
+        `/api/classes/${encodeURIComponent(classId)}/members`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studentId: student.uid }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(
+          payload?.error === "FORBIDDEN"
+            ? "Bạn không có quyền quản lý lớp này."
+            : payload?.error === "UNAUTHENTICATED"
+              ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+              : "Xóa thất bại. Vui lòng thử lại.",
+        );
+        return;
+      }
 
       onDeleted(student.uid);
     } catch (err) {
       console.error("[DeleteConfirmModal]", err);
       setError("Xóa thất bại. Vui lòng thử lại.");
+    } finally {
       setLoading(false);
     }
   };
@@ -475,9 +495,10 @@ export default function TeacherClassDetailPage() {
         }
         if (!cancelled) setStudents(rows);
 
-        const membersResponse = await fetch(`/api/classes/${encodeURIComponent(classId)}/members`, {
-          headers: { Authorization: `Bearer ${await user.getIdToken()}` },
-        });
+        const membersResponse = await fetchWithAuth(
+          user,
+          `/api/classes/${encodeURIComponent(classId)}/members`,
+        );
         if (membersResponse.ok) {
           const payload = (await membersResponse.json()) as { members?: PendingStudent[] };
           if (!cancelled) setPendingStudents((payload.members ?? []).filter((member) => member.status === "pending"));
@@ -543,10 +564,9 @@ export default function TeacherClassDetailPage() {
     setReviewingStudentId(student.studentId);
     setReviewError(null);
     try {
-      const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/members`, {
+      const response = await fetchWithAuth(user, `/api/classes/${encodeURIComponent(classId)}/members`, {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${await user.getIdToken()}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ studentId: student.studentId, action }),

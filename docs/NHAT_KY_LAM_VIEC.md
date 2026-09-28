@@ -1,6 +1,23 @@
 # Nhật ký làm việc và đối chiếu lịch sử
 
-Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 27/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
+Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
+
+### 28/09/2026 — Sửa lỗi lưu hồ sơ học sinh lần đầu
+
+- Xác định trang onboarding ghi thẳng hồ sơ từ trình duyệt vào Firestore, khiến người dùng mới có thể bị từ chối khi rules đang triển khai chưa đồng bộ hoặc tài liệu hồ sơ tồn tại ở trạng thái chưa hoàn chỉnh.
+- Chuyển thao tác sang `POST /api/profile/onboarding`: máy chủ xác minh Firebase ID token, kiểm tra họ tên, trường, lớp và số điện thoại, rồi ghi bằng Firebase Admin SDK.
+- Bổ sung số điện thoại bắt buộc cho cả học sinh và giáo viên; chuẩn hóa số điện thoại, sinh từ khóa tìm kiếm và giữ nguyên vai trò của tài khoản đã tồn tại để tránh thay đổi quyền qua API onboarding.
+- Biểu mẫu dùng submit chuẩn, thử làm mới token một lần khi phiên cũ, đồng thời hiển thị riêng lỗi dữ liệu, hết phiên và lỗi máy chủ.
+- Kiểm tra cục bộ: ESLint hai file thay đổi đạt; TypeScript đạt; production build Next.js 16.3.6 đạt và nhận route `/api/profile/onboarding`; request không có token trả đúng HTTP 401 `UNAUTHENTICATED`.
+- Giới hạn: chưa ghi hồ sơ bằng một tài khoản học sinh thử nghiệm riêng vì phiên kiểm thử hiện tại không có token của người dùng mới; localhost đang chạy tại `http://localhost:3000` để người dùng thử lại luồng đăng nhập thật.
+
+### 28/09/2026 — Ổn định tạo lớp và các thao tác quản lý thành viên
+
+- Nhật ký trình duyệt ghi nhận Firestore WebChannel bị ngắt và đăng nhập Google có lúc trả `auth/network-request-failed`; kiểm tra trực tiếp xác nhận service account, truy vấn, ghi và xóa Firestore vẫn hoạt động.
+- Chuyển Firebase Admin sang HTTP/1.1 REST để tránh kết nối gRPC dài bị proxy, VPN hoặc mạng trường học ngắt. Firebase phía trình duyệt bật tự nhận diện long polling khi WebChannel không ổn định; thay đổi áp dụng cho toàn bộ API và các màn hình còn đọc Firestore trực tiếp.
+- Bổ sung làm mới Firebase ID token một lần cho tạo/xóa lớp, tham gia bằng mã/link, tải và duyệt thành viên.
+- Chuyển thêm học sinh và xóa học sinh khỏi hai lần ghi Firestore phía trình duyệt sang API thành viên có transaction. Danh sách UID trong lớp và tài liệu membership giờ được cập nhật nguyên tử, có kiểm tra quyền, tài khoản học sinh, trùng thành viên và sĩ số tối đa.
+- Kiểm tra cục bộ: truy vấn Firestore đạt; bản ghi chẩn đoán tạo/xóa thành công; ESLint phần thay đổi và TypeScript đạt; bốn phương thức GET/POST/PATCH/DELETE của API thành viên đều trả đúng HTTP 401 khi thiếu token.
 
 ### 27/09/2026 — Kết nối Cloudflare R2 cho bucket LMS
 

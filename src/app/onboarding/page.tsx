@@ -1,10 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { generateSearchKeywords } from "@/utils/searchKeywords";
 
 type Tab = "student" | "teacher";
 
@@ -19,45 +16,66 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!user) return;
     setError("");
 
     if (!fullName.trim()) { setError("Vui lòng nhập họ và tên."); return; }
     if (!school.trim()) { setError("Vui lòng nhập tên trường."); return; }
     if (tab === "student" && !classValue.trim()) { setError("Vui lòng nhập lớp."); return; }
-    if (tab === "teacher" && !phoneNumber.trim()) { setError("Vui lòng nhập số điện thoại."); return; }
+    if (!phoneNumber.trim()) { setError("Vui lòng nhập số điện thoại."); return; }
 
     setSaving(true);
     try {
       const role = tab === "student" ? "student" : "pending_teacher";
-      const data: Record<string, unknown> = {
-        uid: user.uid,
-        email: user.email,
-        fullName: fullName.trim(),
-        school: school.trim(),
-        role,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const saveProfile = async (forceRefresh = false) => {
+        const token = await user.getIdToken(forceRefresh);
+        return fetch("/api/profile/onboarding", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            role,
+            fullName,
+            school,
+            className: tab === "student" ? classValue : "",
+            phoneNumber,
+          }),
+        });
       };
-      if (tab === "student") data.class = classValue.trim();
 
-      if (tab === "teacher") {
-        const phone = phoneNumber.trim();
-        data.phoneNumber = phone;
-        data.searchKeywords = generateSearchKeywords(
-          fullName.trim(),
-          user.email ?? "",
-          phone
-        );
+      let response = await saveProfile();
+      if (response.status === 401) {
+        response = await saveProfile(true);
       }
 
-      await setDoc(doc(db, "users", user.uid), data, { merge: true });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        if (result?.error === "INVALID_INPUT") {
+          throw new Error("INVALID_INPUT");
+        }
+        if (result?.error === "UNAUTHENTICATED") {
+          throw new Error("UNAUTHENTICATED");
+        }
+        throw new Error("SAVE_FAILED");
+      }
+
       await refreshProfile();
       // AuthProvider route guard sẽ tự redirect về / sau khi profile đầy đủ
     } catch (err) {
       console.error("Lỗi lưu profile:", err);
-      setError("Có lỗi xảy ra. Vui lòng thử lại.");
+      const code = err instanceof Error ? err.message : "SAVE_FAILED";
+      if (code === "INVALID_INPUT") {
+        setError("Thông tin chưa hợp lệ. Kiểm tra lại họ tên, trường, lớp và số điện thoại.");
+      } else if (code === "UNAUTHENTICATED") {
+        setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      } else {
+        setError("Không thể lưu thông tin lúc này. Vui lòng thử lại.");
+      }
+    } finally {
       setSaving(false);
     }
   };
@@ -81,12 +99,13 @@ export default function OnboardingPage() {
           )}
         </div>
 
-        <div className="p-8">
+        <form className="p-8" onSubmit={handleSubmit}>
           {/* Tab switcher */}
           <div className="flex bg-gray-100 rounded-xl p-1 mb-6 gap-1">
             {(["student", "teacher"] as Tab[]).map((t) => (
               <button
                 key={t}
+                type="button"
                 onClick={() => setTab(t)}
                 className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                   tab === t
@@ -110,6 +129,9 @@ export default function OnboardingPage() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Nguyễn Văn A"
+                autoComplete="name"
+                maxLength={120}
+                required
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
               />
             </div>
@@ -122,29 +144,11 @@ export default function OnboardingPage() {
                 type="text"
                 value={school}
                 onChange={(e) => setSchool(e.target.value)}
+                maxLength={200}
+                required
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
               />
             </div>
-
-            {tab === "teacher" && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Số điện thoại <span className="text-danger-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="VD: 0901234567"
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
-                />
-                <p className="mt-1 text-[11px] text-gray-400">
-                  Dùng để học sinh tìm bạn và liên lạc khi tham gia lớp.
-                </p>
-              </div>
-            )}
 
             {tab === "student" && (
               <div>
@@ -156,10 +160,32 @@ export default function OnboardingPage() {
                   value={classValue}
                   onChange={(e) => setClassValue(e.target.value)}
                   placeholder="VD: 12A1"
+                  maxLength={80}
+                  required
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
                 />
               </div>
             )}
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                Số điện thoại <span className="text-danger-500">*</span>
+              </label>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="VD: 0901234567"
+                maxLength={20}
+                required
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Dùng để xác minh hồ sơ và hỗ trợ liên hệ khi cần.
+              </p>
+            </div>
 
             {/* Notice for teacher */}
             {tab === "teacher" && (
@@ -184,7 +210,7 @@ export default function OnboardingPage() {
 
             {/* Submit */}
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={saving}
               className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 text-sm mt-2"
             >
@@ -198,7 +224,7 @@ export default function OnboardingPage() {
               )}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB1-brKGr7zI5uZr9qTi3xXxmg_ldzYvsg",
@@ -15,6 +15,10 @@ const firebaseConfig = {
 // Khởi tạo Firebase (kiểm tra để tránh lỗi khởi tạo nhiều lần trong Next.js)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Automatically fall back to long polling when WebChannel is blocked or
+// interrupted by a proxy, browser extension, VPN or managed school network.
+const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
 
 export { auth, db };

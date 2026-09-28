@@ -46,7 +46,10 @@ export default function JoinClassByLinkPage() {
     setJoining(true);
     setResult(null);
     try {
-      const res = await joinClassById(classId, await user.getIdToken());
+      let res = await joinClassById(classId, await user.getIdToken());
+      if (!res.success && res.error === "UNAUTHENTICATED") {
+        res = await joinClassById(classId, await user.getIdToken(true));
+      }
       if (res.success) {
         setResult({ success: true, message: `Đã gửi yêu cầu vào lớp “${res.className}”. Giáo viên sẽ duyệt yêu cầu của bạn.` });
         setTimeout(() => router.push("/student/classes"), 1800);

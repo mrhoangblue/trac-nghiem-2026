@@ -28,7 +28,10 @@ export default function JoinClassSection({ user, onRequested }: Props) {
     setJoining(true);
     setResult(null);
     try {
-      const res = await joinClass(code, await user.getIdToken());
+      let res = await joinClass(code, await user.getIdToken());
+      if (!res.success && res.error === "UNAUTHENTICATED") {
+        res = await joinClass(code, await user.getIdToken(true));
+      }
       if (res.success) {
         setResult({
           success: true,

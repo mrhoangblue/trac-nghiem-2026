@@ -31,12 +31,15 @@ export default function CreateClassModal({ onClose, onCreated }: Props) {
         return;
       }
 
-      const idToken = await user.getIdToken();
-      const result = await createClass({
+      const input = {
         name: name.trim(),
         description: description.trim(),
         maxStudents: maxStudents ? parseInt(maxStudents, 10) : undefined,
-      }, idToken);
+      };
+      let result = await createClass(input, await user.getIdToken());
+      if (!result.success && result.error === "UNAUTHENTICATED") {
+        result = await createClass(input, await user.getIdToken(true));
+      }
       if (!result.success) {
         const errorMessages = {
           INVALID_INPUT: "Thông tin lớp chưa hợp lệ. Vui lòng kiểm tra lại.",

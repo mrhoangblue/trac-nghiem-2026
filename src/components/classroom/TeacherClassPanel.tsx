@@ -71,7 +71,10 @@ export default function TeacherClassPanel({ teacherId }: { teacherId: string }) 
     setDeleting(true);
     setDeleteError(null);
     try {
-      const result = await deleteClass(pendingDelete.id, await user.getIdToken());
+      let result = await deleteClass(pendingDelete.id, await user.getIdToken());
+      if (!result.success && result.error === "UNAUTHENTICATED") {
+        result = await deleteClass(pendingDelete.id, await user.getIdToken(true));
+      }
       if (!result.success) {
         setDeleteError(result.error === "FORBIDDEN" ? "Bạn không có quyền xóa lớp này." : "Không thể xóa lớp. Vui lòng thử lại.");
         return;
