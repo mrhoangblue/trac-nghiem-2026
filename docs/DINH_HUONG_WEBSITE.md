@@ -109,3 +109,11 @@ Video chỉ dùng link/embed, không upload MP4/WebM lên R2. Quyết định n�
 - tài nguyên upload lưu được metadata R2 để quản lý vòng đời file;
 - link video không thuộc YouTube, Vimeo hoặc Google Drive bị từ chối;
 - dữ liệu cũ không có trường `source` hoặc `storageKey` vẫn hiển thị được.
+
+## 9. Kiến trúc trải nghiệm khóa học — triển khai 28/09/2026
+
+Luồng lớp học dùng mô hình hai tầng: **trang lớp để khám phá** và **trang khóa học để tập trung học/quản lý**. Không mở nội dung dài ngay dưới lưới khóa học vì làm mất vị trí và khiến trang lớp tải quá nhiều dữ liệu.
+
+Trang khóa học desktop chia mục lục và vùng xem học liệu thành hai vùng cuộn độc lập. Học sinh vẫn học tuần tự theo trạng thái khóa/mở; giáo viên chỉnh bài học và tài nguyên trong cùng không gian. Trên mobile, nội dung xếp một cột để giữ vùng đọc đủ rộng.
+
+Bước UX tiếp theo nên ưu tiên: ghi nhớ tài nguyên đang đọc gần nhất, tìm kiếm trong mục lục khóa học, hiển thị thời lượng ước tính và cho giáo viên xem trước chính xác chế độ học sinh trước khi xuất bản.

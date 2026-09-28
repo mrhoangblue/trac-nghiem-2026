@@ -11,10 +11,16 @@ export async function GET(request: NextRequest) {
       adminDb.collection("class_members").where("studentId", "==", authUser.uid).get(),
       adminDb.collection("classes").where("studentIds", "array-contains", authUser.uid).get(),
     ]);
-    const memberships = await Promise.all(membershipSnapshot.docs.map(async (member) => {
-      const data = member.data();
-      const classSnapshot = await adminDb.collection("classes").doc(data.classId).get();
-      if (!classSnapshot.exists) return null;
+    const membershipRows = membershipSnapshot.docs.map((member) => ({
+      data: member.data(),
+      ref: adminDb.collection("classes").doc(String(member.data().classId ?? "")),
+    })).filter((item) => item.ref.id);
+    const classSnapshots = membershipRows.length > 0
+      ? await adminDb.getAll(...membershipRows.map((item) => item.ref))
+      : [];
+    const memberships = membershipRows.map(({ data }, index) => {
+      const classSnapshot = classSnapshots[index];
+      if (!classSnapshot?.exists) return null;
       const cls = classSnapshot.data() ?? {};
       return {
         id: classSnapshot.id,
@@ -26,7 +32,7 @@ export async function GET(request: NextRequest) {
         status: data.status ?? "pending",
         requestedAt: data.requestedAt?.toDate?.()?.toISOString?.() ?? null,
       };
-    }));
+    });
 
     const resolved = memberships.filter((item): item is NonNullable<typeof item> => item !== null);
     const knownIds = new Set(resolved.map((item) => item.id));

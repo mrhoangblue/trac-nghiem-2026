@@ -40,9 +40,9 @@ export default function TeacherClassPanel() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const loadClasses = useCallback(async () => {
+  const loadClasses = useCallback(async (showLoading = true) => {
     if (!user) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setLoadError(null);
     try {
       const request = async (forceRefresh = false) => fetch("/api/classes", {
@@ -59,18 +59,31 @@ export default function TeacherClassPanel() {
         throw new Error(payload?.error ?? "LOAD_FAILED");
       }
       setClasses(payload.classes);
+      window.sessionStorage.setItem(`teacher-classes:${user.uid}`, JSON.stringify(payload.classes));
     } catch (error) {
       console.error("Failed to load classes:", error);
-      setLoadError("Không thể tải danh sách lớp từ máy chủ. Vui lòng thử lại.");
+      if (showLoading) setLoadError("Không thể tải danh sách lớp từ máy chủ. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => { void loadClasses(); }, 0);
+    const cached = user ? window.sessionStorage.getItem(`teacher-classes:${user.uid}`) : null;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as ClassRow[];
+        queueMicrotask(() => {
+          setClasses(parsed);
+          setLoading(false);
+        });
+      } catch {
+        window.sessionStorage.removeItem(`teacher-classes:${user?.uid}`);
+      }
+    }
+    const timeoutId = window.setTimeout(() => { void loadClasses(!cached); }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadClasses]);
+  }, [loadClasses, user]);
 
   const handleConfirmDelete = async () => {
     if (!pendingDelete || !user || deleting) return;
@@ -86,6 +99,8 @@ export default function TeacherClassPanel() {
         return;
       }
       setClasses((current) => current.filter((item) => item.id !== pendingDelete.id));
+      const nextClasses = classes.filter((item) => item.id !== pendingDelete.id);
+      window.sessionStorage.setItem(`teacher-classes:${user.uid}`, JSON.stringify(nextClasses));
       setPendingDelete(null);
     } finally {
       setDeleting(false);
@@ -169,7 +184,11 @@ export default function TeacherClassPanel() {
       )}
 
       {showModal && <CreateClassModal onClose={() => setShowModal(false)} onCreated={(result) => {
-        setClasses((current) => [...current, { id: result.classId, name: result.name, classCode: result.classCode, description: "", teacherId: user?.uid ?? "", teacherName: userProfile?.fullName ?? "Giáo viên", studentCount: 0, isActive: true }].sort((a, b) => a.name.localeCompare(b.name, "vi")));
+        setClasses((current) => {
+          const nextClasses = [...current, { id: result.classId, name: result.name, classCode: result.classCode, description: "", teacherId: user?.uid ?? "", teacherName: userProfile?.fullName ?? "Giáo viên", studentCount: 0, isActive: true }].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+          if (user) window.sessionStorage.setItem(`teacher-classes:${user.uid}`, JSON.stringify(nextClasses));
+          return nextClasses;
+        });
         setShowModal(false);
       }} />}
     </section>

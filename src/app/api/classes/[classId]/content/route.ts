@@ -125,8 +125,8 @@ async function getCourse(classId: string, courseId: string) {
   return { courseRef, courseSnapshot };
 }
 
-function serializeCourse(document: FirebaseFirestore.QueryDocumentSnapshot) {
-  const data = document.data();
+function serializeCourse(document: FirebaseFirestore.DocumentSnapshot) {
+  const data = document.data() ?? {};
   return {
     id: document.id,
     title: String(data.title ?? "Khóa học chưa đặt tên"),
@@ -172,16 +172,95 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const access = await getAccess(request, classId);
     if (access instanceof NextResponse) return access;
 
+    const requestedCourseId = request.nextUrl.searchParams.get("courseId")?.trim() ?? "";
+    const classInfo = {
+      id: classId,
+      name: String(access.classData.name ?? "Lớp học"),
+      description: String(access.classData.description ?? ""),
+      teacherName: String(access.classData.teacherName ?? ""),
+    };
+
+    if (requestedCourseId) {
+      const course = await getCourse(classId, requestedCourseId);
+      if (!course || (!access.isTeacher && course.courseSnapshot.data()?.published !== true)) {
+        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      }
+
+      const serialized = serializeCourse(course.courseSnapshot);
+      const progress: Record<string, string[]> = {};
+      if (!access.isTeacher) {
+        const progressSnapshot = await adminDb
+          .collection("class_course_progress")
+          .doc(progressDocumentId(classId, serialized.id, access.authUser.uid))
+          .get();
+        const completed = progressSnapshot.data()?.completedResourceIds;
+        progress[serialized.id] = Array.isArray(completed) ? completed : [];
+      }
+
+      const responseCourse = access.isTeacher
+        ? serialized
+        : (() => {
+            const flattened = flattenCourseResources(serialized.lessons);
+            const completed = new Set(progress[serialized.id] ?? []);
+            return {
+              ...serialized,
+              lessons: serialized.lessons.map((lesson) => ({
+                ...lesson,
+                resources: lesson.resources.map((resource) => {
+                  const index = flattened.findIndex((item) => item.id === resource.id);
+                  const unlocked = flattened.slice(0, index).every((item) => completed.has(item.id));
+                  return unlocked ? resource : { ...resource, url: "", embedUrl: "" };
+                }),
+              })),
+            };
+          })();
+
+      return NextResponse.json({
+        class: classInfo,
+        viewerRole: access.isTeacher ? "teacher" : "student",
+        courses: [responseCourse],
+        exams: [],
+        progress,
+      });
+    }
+
     const [courseSnapshot, targetExamSnapshot, legacyExamSnapshot] = await Promise.all([
       adminDb.collection("class_courses").where("classId", "==", classId).get(),
       adminDb.collection("exams").where("targetClassIds", "array-contains", classId).get(),
       adminDb.collection("exams").where("classIds", "array-contains", classId).get(),
     ]);
 
-    const courses = courseSnapshot.docs
+    const fullCourses = courseSnapshot.docs
       .filter((course) => access.isTeacher || course.data().published === true)
       .map(serializeCourse)
       .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+
+    const progress: Record<string, string[]> = {};
+    if (!access.isTeacher && fullCourses.length > 0) {
+      const refs = fullCourses.map((course) => adminDb
+        .collection("class_course_progress")
+        .doc(progressDocumentId(classId, course.id, access.authUser.uid)));
+      const snapshots = await adminDb.getAll(...refs);
+      snapshots.forEach((snapshot, index) => {
+        const completed = snapshot.data()?.completedResourceIds;
+        progress[fullCourses[index].id] = Array.isArray(completed) ? completed : [];
+      });
+    }
+
+    const courses = fullCourses.map((course) => ({
+      id: course.id,
+      title: course.title,
+      description: course.description,
+      coverImageUrl: course.coverImageUrl,
+      coverImageKey: course.coverImageKey,
+      published: course.published,
+      lessons: [],
+      lessonCount: course.lessons.length,
+      resourceCount: flattenCourseResources(course.lessons).length,
+      completedResourceCount: (progress[course.id] ?? []).length,
+      createdAt: course.createdAt,
+      updatedAt: course.updatedAt,
+    }));
 
     const examDocuments = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
     [...targetExamSnapshot.docs, ...legacyExamSnapshot.docs].forEach((document) => {
@@ -223,60 +302,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         createdAt: toIso(data.createdAt),
         status: examStatus(data.startTime, data.endTime),
         submitted: Boolean(submission),
-        ...(submission && {
-          submissionId: submission.id,
-          totalScore: submission.totalScore,
-        }),
+        ...(submission && { submissionId: submission.id, totalScore: submission.totalScore }),
       };
     });
 
-    const progress: Record<string, string[]> = {};
-    if (!access.isTeacher) {
-      const progressSnapshots = await Promise.all(
-        courses.map((course) =>
-          adminDb
-            .collection("class_course_progress")
-            .doc(progressDocumentId(classId, course.id, access.authUser.uid))
-            .get(),
-        ),
-      );
-      progressSnapshots.forEach((snapshot, index) => {
-        const completed = snapshot.data()?.completedResourceIds;
-        progress[courses[index].id] = Array.isArray(completed) ? completed : [];
-      });
-    }
-
-    const responseCourses = access.isTeacher
-      ? courses
-      : courses.map((course) => {
-          const flattened = flattenCourseResources(course.lessons);
-          const completed = new Set(progress[course.id] ?? []);
-          return {
-            ...course,
-            lessons: course.lessons.map((lesson) => ({
-              ...lesson,
-              resources: lesson.resources.map((resource) => {
-                const index = flattened.findIndex((item) => item.id === resource.id);
-                const unlocked = flattened
-                  .slice(0, index)
-                  .every((item) => completed.has(item.id));
-                return unlocked
-                  ? resource
-                  : { ...resource, url: "", embedUrl: "" };
-              }),
-            })),
-          };
-        });
-
     return NextResponse.json({
-      class: {
-        id: classId,
-        name: String(access.classData.name ?? "Lớp học"),
-        description: String(access.classData.description ?? ""),
-        teacherName: String(access.classData.teacherName ?? ""),
-      },
+      class: classInfo,
       viewerRole: access.isTeacher ? "teacher" : "student",
-      courses: responseCourses,
+      courses,
       exams,
       progress,
     });

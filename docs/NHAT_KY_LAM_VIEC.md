@@ -267,6 +267,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Thay renderer văn bản bằng React node an toàn, bổ sung danh sách, chữ đậm/nghiêng, delimiter `\\(...\\)`/`\\[...\\]` và ảnh inline. Admin preview và trang sửa đề dùng chung pipeline với phòng thi/xem lại.
 - Báo cáo chi tiết: `docs/PIPELINE_WORD_OLE_VA_RA_SOAT_LOI_GIAI_LATEX.md`.
 
+### 28/09/2026 — Tối ưu trải nghiệm lớp học và trang khóa học riêng
+
+- Tách trang lớp và trang khóa học: trang lớp chỉ hiển thị thẻ tóm tắt khóa học cùng bài thi; nút “Quản lý/Bắt đầu/Học tiếp” mở route riêng theo đúng vai trò giáo viên hoặc học sinh.
+- Trang khóa học dùng bố cục LMS hai vùng trên desktop: mục lục bài học và vùng xem tài liệu cuộn độc lập; trên mobile trở về một cột cuộn tự nhiên. Tiêu đề, tiến độ và nút quay lại lớp luôn giữ ngữ cảnh rõ ràng.
+- API tổng quan không còn trả toàn bộ bài học/tài nguyên. API chi tiết chỉ đọc đúng một khóa học; các lượt đọc tiến độ và lớp của học sinh được gộp bằng `getAll` để loại bỏ chuỗi truy vấn N+1.
+- Danh sách lớp giáo viên và học sinh dùng cache theo UID trong phiên trình duyệt, hiển thị ngay dữ liệu gần nhất rồi làm mới nền. Phía học sinh bổ sung tự làm mới token khi API trả 401.
+- Khảo sát danh mục skill chính thức không thấy skill chuyên biệt cho LMS/course UX; không cài skill gần tên nhưng sai phạm vi. Thiết kế được áp dụng trực tiếp theo mô hình browse → course workspace → resource/progress.
+- Kiểm tra: ESLint trên toàn bộ file thay đổi đạt, TypeScript đạt, production build Next.js 16.3.6 bằng Webpack đạt và nhận hai route khóa học mới. Giới hạn: phiên trình duyệt kiểm thử không có đăng nhập nên chưa chạy thao tác dữ liệu thật bằng tài khoản giáo viên/học sinh.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

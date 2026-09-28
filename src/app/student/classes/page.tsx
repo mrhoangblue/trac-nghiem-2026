@@ -35,28 +35,45 @@ export default function StudentClassesPage() {
   const [classesLoading, setClassesLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
-  const fetchMemberships = useCallback(async () => {
+  const fetchMemberships = useCallback(async (showLoading = true) => {
     if (!user) return;
-    setClassesLoading(true);
+    if (showLoading) setClassesLoading(true);
     setLoadError(false);
     try {
-      const response = await fetch("/api/classes/memberships", {
-        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      const request = async (forceRefresh = false) => fetch("/api/classes/memberships", {
+        headers: { Authorization: `Bearer ${await user.getIdToken(forceRefresh)}` },
+        cache: "no-store",
       });
+      let response = await request();
+      if (response.status === 401) response = await request(true);
       if (!response.ok) throw new Error("Could not load memberships");
       const payload = (await response.json()) as { memberships?: MembershipClass[] };
-      setMemberships(payload.memberships ?? []);
+      const rows = payload.memberships ?? [];
+      setMemberships(rows);
+      window.sessionStorage.setItem(`student-classes:${user.uid}`, JSON.stringify(rows));
     } catch (error) {
       console.error("Failed to fetch classes:", error);
-      setLoadError(true);
+      if (showLoading) setLoadError(true);
     } finally {
       setClassesLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    queueMicrotask(() => void fetchMemberships());
-  }, [fetchMemberships]);
+    const cached = user ? window.sessionStorage.getItem(`student-classes:${user.uid}`) : null;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as MembershipClass[];
+        queueMicrotask(() => {
+          setMemberships(parsed);
+          setClassesLoading(false);
+        });
+      } catch {
+        window.sessionStorage.removeItem(`student-classes:${user?.uid}`);
+      }
+    }
+    queueMicrotask(() => void fetchMemberships(!cached));
+  }, [fetchMemberships, user]);
 
   if (authLoading) return <Spinner />;
   if (!user) {
@@ -135,7 +152,7 @@ export default function StudentClassesPage() {
 
       <div className="flex items-center gap-4"><div className="h-px flex-1 bg-gray-200" /><span className="text-xs font-extrabold uppercase tracking-[0.18em] text-gray-400">Tham gia lớp mới</span><div className="h-px flex-1 bg-gray-200" /></div>
       <div className="grid gap-5 md:grid-cols-2">
-        <JoinClassSection user={user} onRequested={fetchMemberships} />
+        <JoinClassSection user={user} onRequested={() => fetchMemberships(false)} />
         <FindTeacherSection />
       </div>
     </div>

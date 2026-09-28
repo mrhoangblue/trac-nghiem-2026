@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { flattenCourseResources } from "@/utils/courseProgress";
 import type {
@@ -21,6 +22,9 @@ interface CourseView {
   coverImageKey: string;
   published: boolean;
   lessons: ClassCourseLesson[];
+  lessonCount?: number;
+  resourceCount?: number;
+  completedResourceCount?: number;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -68,6 +72,7 @@ interface Props {
   classId: string;
   teacherMode?: boolean;
   showClassHeader?: boolean;
+  courseId?: string;
 }
 
 const STATUS_META: Record<ClassExamStatus, { label: string; classes: string; order: number }> = {
@@ -184,8 +189,10 @@ export default function ClassLearningContent({
   classId,
   teacherMode = false,
   showClassHeader = false,
+  courseId,
 }: Props) {
   const { user } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState<ContentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -206,7 +213,8 @@ export default function ClassLearningContent({
     setError(null);
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/content`, {
+      const courseQuery = courseId ? `?courseId=${encodeURIComponent(courseId)}` : "";
+      const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/content${courseQuery}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -220,7 +228,7 @@ export default function ClassLearningContent({
     } finally {
       setLoading(false);
     }
-  }, [classId, user]);
+  }, [classId, courseId, user]);
 
   useEffect(() => {
     queueMicrotask(() => void loadContent());
@@ -439,7 +447,11 @@ export default function ClassLearningContent({
     setSaving(true);
     try {
       await mutate("DELETE", undefined, `?courseId=${encodeURIComponent(course.id)}`);
-      await loadContent();
+      if (courseId) {
+        router.replace(teacherMode ? `/teacher/classes/${classId}` : `/student/classes/${classId}`);
+      } else {
+        await loadContent();
+      }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Không thể xóa khóa học.");
     } finally {
@@ -487,15 +499,19 @@ export default function ClassLearningContent({
     }
   };
 
-  const openCourse = (course: CourseView) => {
+  useEffect(() => {
+    if (!courseId || !data?.courses[0]) return;
+    const course = data.courses[0];
     const resources = flattenCourseResources(course.lessons);
     const completed = new Set(data?.progress[course.id] ?? []);
     const firstAvailable = resources.find((resource, index) =>
       !completed.has(resource.id) && resources.slice(0, index).every((item) => completed.has(item.id)),
     );
-    setSelectedCourseId(course.id);
-    setActiveResourceId(firstAvailable?.id ?? resources[0]?.id ?? null);
-  };
+    queueMicrotask(() => {
+      setSelectedCourseId(course.id);
+      setActiveResourceId(firstAvailable?.id ?? resources[0]?.id ?? null);
+    });
+  }, [courseId, data]);
 
   const completeResource = async (course: CourseView, resource: ClassCourseResource) => {
     if (!user) return;
@@ -537,8 +553,9 @@ export default function ClassLearningContent({
   };
 
   const selectedCourse = useMemo(
-    () => data?.courses.find((course) => course.id === selectedCourseId) ?? null,
-    [data?.courses, selectedCourseId],
+    () => data?.courses.find((course) => course.id === selectedCourseId)
+      ?? (courseId ? data?.courses[0] ?? null : null),
+    [courseId, data?.courses, selectedCourseId],
   );
   const activeResource = useMemo(
     () => selectedCourse
@@ -590,7 +607,7 @@ export default function ClassLearningContent({
       )}
 
       <section className="space-y-4" aria-labelledby="course-section-title">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        {!courseId && <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-700">Tài liệu học tập</p>
             <h2 id="course-section-title" className="mt-1 text-2xl font-extrabold text-gray-900">Khóa học trong lớp</h2>
@@ -605,7 +622,7 @@ export default function ClassLearningContent({
               + Tạo khóa học
             </button>
           )}
-        </div>
+        </div>}
 
         {courseDraft && (
           <form onSubmit={saveCourse} className="space-y-4 rounded-3xl border-2 border-brand-200 bg-brand-50/50 p-5">
@@ -680,7 +697,7 @@ export default function ClassLearningContent({
           </form>
         )}
 
-        {data.courses.length === 0 ? (
+        {!courseId && (data.courses.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
             <div className="text-4xl">📚</div>
             <p className="mt-3 font-bold text-gray-700">Chưa có khóa học nào</p>
@@ -690,10 +707,12 @@ export default function ClassLearningContent({
           <>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {data.courses.map((course) => {
-                const resources = flattenCourseResources(course.lessons);
-                const completed = new Set(data.progress[course.id] ?? []);
-                const completedCount = resources.filter((resource) => completed.has(resource.id)).length;
-                const progressPercent = resources.length ? Math.round((completedCount / resources.length) * 100) : 0;
+                const resourceCount = course.resourceCount ?? flattenCourseResources(course.lessons).length;
+                const completedCount = course.completedResourceCount ?? (data.progress[course.id] ?? []).length;
+                const progressPercent = resourceCount ? Math.round((completedCount / resourceCount) * 100) : 0;
+                const courseHref = teacherMode
+                  ? `/teacher/classes/${classId}/courses/${course.id}`
+                  : `/student/classes/${classId}/courses/${course.id}`;
                 return (
                   <article key={course.id} className={`group overflow-hidden rounded-3xl border bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${selectedCourseId === course.id ? "border-brand-400 ring-2 ring-brand-100" : "border-gray-200"}`}>
                     <div
@@ -701,7 +720,7 @@ export default function ClassLearningContent({
                       style={course.coverImageUrl ? { backgroundImage: `linear-gradient(180deg, transparent 30%, rgba(69,35,15,.68)), url(${JSON.stringify(course.coverImageUrl)})` } : undefined}
                     >
                       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white">
-                        <span className="rounded-full bg-black/30 px-3 py-1 text-xs font-bold backdrop-blur-sm">{course.lessons.length} bài học</span>
+                        <span className="rounded-full bg-black/30 px-3 py-1 text-xs font-bold backdrop-blur-sm">{course.lessonCount ?? course.lessons.length} bài học</span>
                         {canEdit && <span className={`rounded-full px-3 py-1 text-xs font-bold backdrop-blur-sm ${course.published ? "bg-success-600/90" : "bg-gray-700/90"}`}>{course.published ? "Đã xuất bản" : "Bản nháp"}</span>}
                       </div>
                     </div>
@@ -715,10 +734,10 @@ export default function ClassLearningContent({
                         </div>
                       )}
                       <div className="mt-5 flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
-                        <span className="text-xs text-gray-400">{resources.length} tài nguyên</span>
+                        <span className="text-xs text-gray-400">{resourceCount} tài nguyên</span>
                         <div className="flex gap-2">
                           {canEdit && <button type="button" onClick={() => setCourseDraft({ id: course.id, title: course.title, description: course.description, coverImageUrl: course.coverImageUrl, coverImageKey: course.coverImageKey, published: course.published })} className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200">Sửa</button>}
-                          <button type="button" onClick={() => openCourse(course)} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700">{canEdit ? "Quản lý" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu"}</button>
+                          <Link href={courseHref} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700">{canEdit ? "Quản lý" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu"}</Link>
                         </div>
                       </div>
                     </div>
@@ -726,8 +745,10 @@ export default function ClassLearningContent({
                 );
               })}
             </div>
+          </>
+        ))}
 
-            {selectedCourse && (() => {
+        {selectedCourse && (() => {
               const resources = flattenCourseResources(selectedCourse.lessons);
               const completedIds = new Set(data.progress[selectedCourse.id] ?? []);
               const completedCount = resources.filter((resource) => completedIds.has(resource.id)).length;
@@ -735,12 +756,12 @@ export default function ClassLearningContent({
               const activeIndex = resources.findIndex((resource) => resource.id === activeResource?.id);
               const activeCompleted = activeResource ? completedIds.has(activeResource.id) : false;
               return (
-                <div className="mt-8 overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl">
-                  <div className="relative overflow-hidden bg-brand-900 px-6 py-7 text-white sm:px-8">
+                <div className={`${courseId ? "lg:grid lg:h-[calc(100dvh-8rem)] lg:max-h-[920px] lg:grid-cols-[22rem_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden" : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
+                  <div className="relative overflow-hidden bg-brand-900 px-6 py-7 text-white sm:px-8 lg:col-span-2 lg:row-start-1">
                     {selectedCourse.coverImageUrl && <div className="absolute inset-0 bg-cover bg-center opacity-25" style={{ backgroundImage: `url(${JSON.stringify(selectedCourse.coverImageUrl)})` }} />}
                     <div className="relative flex flex-wrap items-start justify-between gap-5">
                       <div className="max-w-2xl">
-                        <button type="button" onClick={() => { setSelectedCourseId(null); setActiveResourceId(null); }} className="mb-4 text-xs font-bold text-brand-100 hover:text-white">← Danh sách khóa học</button>
+                        {courseId && <Link href={teacherMode ? `/teacher/classes/${classId}` : `/student/classes/${classId}`} className="mb-4 inline-flex text-xs font-bold text-brand-100 hover:text-white">← Quay lại lớp học</Link>}
                         <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-200">Lộ trình học tuần tự</p>
                         <h3 className="mt-2 text-2xl font-extrabold sm:text-3xl">{selectedCourse.title}</h3>
                         {selectedCourse.description && <p className="mt-3 text-sm leading-7 text-brand-100">{selectedCourse.description}</p>}
@@ -761,7 +782,7 @@ export default function ClassLearningContent({
                   </div>
 
                   {activeResource && (
-                    <div className="border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7">
+                    <div className="border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7 lg:col-start-2 lg:row-start-2 lg:overflow-y-auto lg:overscroll-contain lg:border-b-0">
                       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Nội dung {activeIndex + 1}/{resources.length} · {RESOURCE_META[activeResource.type].label}</p>
@@ -788,7 +809,7 @@ export default function ClassLearningContent({
                     </div>
                   )}
 
-                  <div className="space-y-4 p-5 sm:p-7">
+                  <div className={`space-y-4 p-5 sm:p-7 ${courseId ? `${activeResource ? "lg:col-start-1 lg:row-start-2 lg:border-r" : "lg:col-span-2 lg:row-start-2"} lg:overflow-y-auto lg:overscroll-contain` : ""}`}>
                     <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Chương trình học</p><h4 className="mt-1 text-xl font-extrabold text-gray-900">Nội dung khóa học</h4></div>{canEdit && <button type="button" onClick={() => setLessonDraft({ courseId: selectedCourse.id, title: "", description: "" })} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white">+ Bài học</button>}</div>
                     {selectedCourse.lessons.map((lesson, lessonIndex) => (
                       <section key={lesson.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/60">
@@ -819,9 +840,7 @@ export default function ClassLearningContent({
                   </div>
                 </div>
               );
-            })()}
-          </>
-        )}
+        })()}
 
         {lessonDraft && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Biểu mẫu bài học">
@@ -970,7 +989,7 @@ export default function ClassLearningContent({
         )}
       </section>
 
-      <section className="space-y-4 border-t border-gray-200 pt-8" aria-labelledby="exam-section-title">
+      {!courseId && <section className="space-y-4 border-t border-gray-200 pt-8" aria-labelledby="exam-section-title">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-700">Được giao cho lớp</p>
@@ -1032,7 +1051,7 @@ export default function ClassLearningContent({
             })}
           </div>
         )}
-      </section>
+      </section>}
     </div>
   );
 }
