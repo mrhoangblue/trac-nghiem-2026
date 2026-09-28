@@ -1,8 +1,37 @@
-import { createPrivateKey } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function configurationFingerprint(projectId: string, clientEmail: string, privateKey: string): string {
+  const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "der" });
+  const publicKeyFingerprint = createHash("sha256").update(publicKey).digest("hex");
+  return createHash("sha256")
+    .update(`${projectId}\0${clientEmail}\0${publicKeyFingerprint}`)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function connectionFailureCode(error: unknown): string {
+  const record = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : {};
+  const code = String(record.code ?? "").toLowerCase();
+  const message = String(record.message ?? error ?? "").toLowerCase();
+  const details = `${code} ${message}`;
+  if (details.includes("invalid_grant") || details.includes("invalid jwt") || details.includes("unauthenticated")) {
+    return "CREDENTIAL_REJECTED";
+  }
+  if (details.includes("permission-denied") || details.includes("permission_denied") || code === "7") {
+    return "FIRESTORE_PERMISSION_DENIED";
+  }
+  if (details.includes("not-found") || details.includes("not_found") || code === "5") {
+    return "FIRESTORE_DATABASE_NOT_FOUND";
+  }
+  if (details.includes("deadline-exceeded") || details.includes("deadline_exceeded") || code === "4") {
+    return "FIRESTORE_TIMEOUT";
+  }
+  return "FIREBASE_CONNECTION_FAILED";
+}
 
 function normalize(value: string | undefined): string {
   if (!value) return "";
@@ -42,8 +71,10 @@ export async function GET() {
     );
   }
 
+  let fingerprint = "";
   try {
     createPrivateKey(privateKey);
+    fingerprint = configurationFingerprint(projectId, clientEmail, privateKey);
   } catch {
     return NextResponse.json(
       { status: "error", code: "INVALID_PRIVATE_KEY" },
@@ -55,13 +86,13 @@ export async function GET() {
     const { adminDb } = await import("@/lib/firebaseAdmin");
     await adminDb.collection("classes").limit(1).get();
     return NextResponse.json(
-      { status: "ok", code: "FIREBASE_READY" },
+      { status: "ok", code: "FIREBASE_READY", fingerprint },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     console.error("Firebase health check failed:", error);
     return NextResponse.json(
-      { status: "error", code: "FIREBASE_CONNECTION_FAILED" },
+      { status: "error", code: connectionFailureCode(error), fingerprint },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
