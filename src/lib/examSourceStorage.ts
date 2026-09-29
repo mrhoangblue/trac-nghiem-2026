@@ -37,10 +37,7 @@ function normalizeEncryptionSecret(value: string | undefined): string | undefine
 }
 
 function encryptionKey(): Buffer {
-  const secret =
-    normalizeEncryptionSecret(process.env.EXAM_SOURCE_ENCRYPTION_KEY) ||
-    normalizeEncryptionSecret(process.env.R2_SECRET_ACCESS_KEY) ||
-    normalizeEncryptionSecret(process.env.FIREBASE_PRIVATE_KEY);
+  const secret = normalizeEncryptionSecret(process.env.EXAM_SOURCE_ENCRYPTION_KEY);
   if (!secret) throw new Error("EXAM_SOURCE_ENCRYPTION_KEY_MISSING");
   return createHash("sha256").update(secret).digest();
 }

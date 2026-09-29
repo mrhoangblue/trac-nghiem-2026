@@ -16,7 +16,7 @@ Nguồn LaTeX đầy đủ không còn được ghi trực tiếp vào tài li�
 4. Chỉ lưu `key`, kích thước, SHA-256, phiên bản và thời điểm cập nhật trong Firestore.
 5. Giải mã nguồn qua API đã xác thực khi giáo viên mở trang sửa đề.
 
-Khóa mã hóa được lấy theo thứ tự `EXAM_SOURCE_ENCRYPTION_KEY`, `R2_SECRET_ACCESS_KEY`, rồi `FIREBASE_PRIVATE_KEY`. Khi hệ thống đang có dữ liệu trong `exam-sources/`, không thay đồng thời các khóa này nếu chưa có kế hoạch mã hóa lại dữ liệu. Nên cấu hình một `EXAM_SOURCE_ENCRYPTION_KEY` ổn định trên mọi môi trường trong giai đoạn vận hành tiếp theo.
+Khóa mã hóa được lấy riêng từ `EXAM_SOURCE_ENCRYPTION_KEY`. Biến này phải có cùng giá trị trên localhost và môi trường production, chỉ tồn tại ở phía máy chủ và không được commit. Khi hệ thống đang có dữ liệu trong `exam-sources/`, không thay khóa nếu chưa có kế hoạch mã hóa lại dữ liệu.
 
 ## Giới hạn an toàn
 

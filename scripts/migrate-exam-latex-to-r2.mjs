@@ -35,11 +35,7 @@ function normalizeRawLatex(value) {
 }
 
 function sourceEncryptionKey() {
-  const secret = (
-    normalizeEncryptionSecret(process.env.EXAM_SOURCE_ENCRYPTION_KEY) ||
-    normalizeEncryptionSecret(process.env.R2_SECRET_ACCESS_KEY) ||
-    normalizeEncryptionSecret(process.env.FIREBASE_PRIVATE_KEY)
-  );
+  const secret = normalizeEncryptionSecret(process.env.EXAM_SOURCE_ENCRYPTION_KEY);
   if (!secret) throw new Error("Missing source encryption secret");
   return createHash("sha256").update(secret).digest();
 }
@@ -130,15 +126,12 @@ if (!apply) {
 
 let migrated = 0;
 for (const { document, data, rawLatex } of candidates) {
-  if (data.rawLatexSource?.key) {
-    await document.ref.update({ rawLatex: FieldValue.delete() });
-    migrated += 1;
-    continue;
-  }
-
   const encrypted = encryptedPayload(rawLatex);
   const date = new Date().toISOString().slice(0, 10);
   const key = `exam-sources/${date}/${randomUUID()}-${document.id}-latex-source.json.enc`;
+  const previousKey = typeof data.rawLatexSource?.key === "string"
+    ? data.rawLatexSource.key
+    : null;
   await r2.send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,
@@ -165,6 +158,11 @@ for (const { document, data, rawLatex } of candidates) {
       updatedAt: FieldValue.serverTimestamp(),
     });
     migrated += 1;
+    if (previousKey?.startsWith("exam-sources/") && previousKey !== key) {
+      await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: previousKey })).catch((error) => {
+        console.warn(`Could not delete previous R2 source for ${document.id}:`, error?.message ?? error);
+      });
+    }
   } catch (error) {
     await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => undefined);
     throw error;
