@@ -24,7 +24,7 @@ interface R2Config {
   publicBaseUrl?: string;
 }
 
-export type R2ObjectFolder = "exam-imports" | "exam-assets" | "learning-materials" | "course-assets" | "tikz-renders";
+export type R2ObjectFolder = "exam-imports" | "exam-assets" | "exam-sources" | "learning-materials" | "course-assets" | "tikz-renders";
 
 let cachedClient: S3Client | null = null;
 
@@ -174,7 +174,7 @@ export async function deleteFromR2(key: string): Promise<void> {
   const config = getConfig();
   if (!config) throw new Error("R2_NOT_CONFIGURED");
   const normalizedKey = key.trim().replace(/^\/+/, "");
-  const allowedPrefix = ["exam-imports/", "exam-assets/", "learning-materials/", "course-assets/", "tikz-renders/"]
+  const allowedPrefix = ["exam-imports/", "exam-assets/", "exam-sources/", "learning-materials/", "course-assets/", "tikz-renders/"]
     .some((prefix) => normalizedKey.startsWith(prefix));
   if (!normalizedKey || !allowedPrefix) throw new Error("R2_OBJECT_KEY_INVALID");
   await getClient(config).send(new DeleteObjectCommand({ Bucket: config.bucket, Key: normalizedKey }));

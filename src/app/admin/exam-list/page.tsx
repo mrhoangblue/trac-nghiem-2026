@@ -11,8 +11,6 @@ import {
   getDocs,
   query,
   orderBy,
-  deleteDoc,
-  doc,
   where,
   Timestamp,
   QueryDocumentSnapshot,
@@ -130,7 +128,7 @@ function ExamListContent() {
             part3Count: data.part3Count ?? 0,
             questionCount: data.questionCount ?? 0,
             submissionCount: subSnap.size,
-            hasRawLatex: !!data.rawLatex,
+            hasRawLatex: Boolean(data.rawLatex || data.rawLatexSource),
             authorEmail: data.authorEmail ?? "",
             isShared: data.isShared ?? false,
             isClonedFromShared: data.isClonedFromShared ?? false,
@@ -146,16 +144,23 @@ function ExamListContent() {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, isAdmin, isMod, userEmail, authLoading]);
 
-  useEffect(() => { fetchExams(); }, [fetchExams]);
+  useEffect(() => {
+    queueMicrotask(() => void fetchExams());
+  }, [fetchExams]);
 
   const handleDelete = async (examId: string, title: string) => {
     if (!window.confirm(`Bạn có chắc muốn XÓA vĩnh viễn bài thi:\n"${title}"?\n\nHành động này KHÔNG thể hoàn tác.`)) return;
     setDeleting(examId);
     try {
-      await deleteDoc(doc(db, "exams", examId));
+      const token = await user?.getIdToken();
+      if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
+      const response = await fetch(`/api/exams/${encodeURIComponent(examId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Không thể xóa bài thi.");
       setExams((prev) => prev.filter((e) => e.id !== examId));
     } catch (err) {
       console.error(err);

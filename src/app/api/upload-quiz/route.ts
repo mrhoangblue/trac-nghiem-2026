@@ -5,12 +5,19 @@ import { FieldValue } from "firebase-admin/firestore";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { hashExamPassword, validateExamPassword } from "@/lib/examAccess";
 import {
+  deleteExamSource,
+  normalizeRawLatex,
+  storeExamSource,
+} from "@/lib/examSourceStorage";
+import {
   convertTikzToStoredImage,
   processTikzToImagesWithStats,
   storeTikzDataUri,
 } from "@/utils/tikzToImage";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
+const MAX_FIRESTORE_QUESTIONS_BYTES = 850 * 1024;
 
 interface UploadQuizRequest {
   title?: string;
@@ -168,12 +175,21 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    if (body.questions.length === 0 || body.questions.length > 300) {
+      return NextResponse.json({ error: "INVALID_QUESTION_COUNT" }, { status: 400 });
+    }
 
     const results = await Promise.all(
       body.questions.map((question) => processQuestionTikz(question, body.timeoutMs)),
     );
 
     const questionsToSave = results.map((result) => result.question);
+    if (Buffer.byteLength(JSON.stringify(questionsToSave), "utf8") > MAX_FIRESTORE_QUESTIONS_BYTES) {
+      return NextResponse.json(
+        { error: "EXAM_DOCUMENT_TOO_LARGE", message: "Nội dung câu hỏi vượt giới hạn an toàn của Firestore." },
+        { status: 413 },
+      );
+    }
     const convertedCount = results.reduce((sum, result) => sum + result.convertedCount, 0);
     const failedCount = results.reduce((sum, result) => sum + result.failedCount, 0);
     const p1Questions = questionsToSave.filter((q) => q.type === "multiple_choice");
@@ -190,6 +206,7 @@ export async function POST(request: NextRequest) {
 
     const docRef = adminDb.collection("exams").doc();
     const batch = adminDb.batch();
+    const normalizedRawLatex = normalizeRawLatex(body.rawLatex);
     const importSourceObject = body.importSourceObject?.key?.startsWith("exam-imports/")
       ? {
           key: body.importSourceObject.key,
@@ -206,6 +223,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "INVALID_COVER_IMAGE_URL" }, { status: 400 });
       }
     }
+    const rawLatexSource = normalizedRawLatex
+      ? await storeExamSource({
+          examId: docRef.id,
+          rawLatex: normalizedRawLatex,
+          uploadedBy: authUser.uid,
+        })
+      : null;
     batch.set(docRef, {
       title: body.title,
       description: body.description ?? "",
@@ -221,7 +245,7 @@ export async function POST(request: NextRequest) {
       duration: Number(body.duration ?? 90),
       startTime: body.startTime || null,
       endTime: body.endTime || null,
-      rawLatex: body.rawLatex ?? null,
+      rawLatexSource,
       tikzProcessed: true,
       tikzImageCount: convertedCount,
       tikzFailedCount: failedCount,
@@ -244,7 +268,12 @@ export async function POST(request: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (error) {
+      await deleteExamSource(rawLatexSource).catch(() => undefined);
+      throw error;
+    }
 
     return NextResponse.json({
       id: docRef.id,

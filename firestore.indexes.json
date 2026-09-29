@@ -9,5 +9,31 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "exams",
+      "fieldPath": "rawLatex",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "exams",
+      "fieldPath": "questions",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "submissions",
+      "fieldPath": "answersJson",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "submissions",
+      "fieldPath": "activityLog",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "submissions",
+      "fieldPath": "questionTimings",
+      "indexes": []
+    }
+  ]
 }

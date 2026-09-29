@@ -105,7 +105,7 @@ export default function EditExamPage() {
 
   // ── Load from Firestore ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
     const load = async () => {
       try {
         const snap = await getDoc(doc(db, "exams", id));
@@ -126,24 +126,30 @@ export default function EditExamPage() {
         setTargetType(data.targetType ?? "all");
         setTargetClassIds(data.targetClassIds ?? []);
 
-        if (data.rawLatex) {
-          setPart1(data.rawLatex.part1 ?? "");
-          setPart2(data.rawLatex.part2 ?? "");
-          setPart3(data.rawLatex.part3 ?? "");
-        } else {
-          setLoadError(
-            "Bài thi này chưa có rawLatex (tạo trước khi tính năng Sửa ra mắt). Vui lòng tạo lại đề mới."
-          );
+        const token = await user.getIdToken();
+        const sourceResponse = await fetch(`/api/exams/${encodeURIComponent(id)}/source`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const sourcePayload = await sourceResponse.json().catch(() => null) as {
+          rawLatex?: { part1?: string; part2?: string; part3?: string };
+          error?: string;
+        } | null;
+        if (!sourceResponse.ok || !sourcePayload?.rawLatex) {
+          throw new Error(sourcePayload?.error ?? "SOURCE_NOT_FOUND");
         }
+        setPart1(sourcePayload.rawLatex.part1 ?? "");
+        setPart2(sourcePayload.rawLatex.part2 ?? "");
+        setPart3(sourcePayload.rawLatex.part3 ?? "");
       } catch (err) {
         console.error(err);
-        setLoadError("Lỗi khi tải bài thi. Vui lòng thử lại.");
+        setLoadError("Không thể tải nguồn LaTeX của bài thi. Vui lòng thử lại.");
       } finally {
         setPageLoading(false);
       }
     };
     load();
-  }, [id]);
+  }, [id, user]);
 
   // Load teacher's classes when switching to "classes" mode
   useEffect(() => {
