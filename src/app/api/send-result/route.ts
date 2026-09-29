@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/verifyAuth";
 import nodemailer from "nodemailer";
 
+const DEFAULT_SITE_URL = "https://toanthayhoang.bluemath.app";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type P2Key = "a" | "b" | "c" | "d";
@@ -327,9 +329,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
-      req.nextUrl.origin;
+    const siteUrl = DEFAULT_SITE_URL;
 
     const transporter = createTransporter();
     const html = buildHtml(body, siteUrl);

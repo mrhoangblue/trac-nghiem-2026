@@ -76,6 +76,44 @@ interface Props {
   courseId?: string;
 }
 
+interface StoredUpload {
+  key: string;
+  url: string;
+  contentType: string;
+}
+
+const SERVER_UPLOAD_LIMIT = 4 * 1024 * 1024;
+
+async function uploadFileThroughServer(
+  file: File,
+  folder: "learning-materials" | "course-assets",
+  token: string,
+): Promise<StoredUpload> {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("folder", folder);
+  const response = await fetch("/api/storage/upload", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const payload = (await response.json().catch(() => null)) as Partial<StoredUpload> & { error?: string } | null;
+  if (!response.ok || !payload?.key || !payload.url) {
+    const messages: Record<string, string> = {
+      R2_NOT_READY: "Cloudflare R2 chưa được cấu hình đầy đủ hoặc chưa có public URL.",
+      FILE_SIZE_INVALID: "Kích thước file vượt quá giới hạn.",
+      FILE_TYPE_UNSUPPORTED: "Định dạng file này chưa được hỗ trợ.",
+      DIRECT_UPLOAD_REQUIRED: "File lớn cần upload trực tiếp; hãy cấu hình CORS cho bucket R2.",
+    };
+    throw new Error(messages[payload?.error ?? ""] ?? "Máy chủ không thể upload file lên R2.");
+  }
+  return {
+    key: payload.key,
+    url: payload.url,
+    contentType: payload.contentType || file.type || "application/octet-stream",
+  };
+}
+
 const STATUS_META: Record<ClassExamStatus, { label: string; classes: string; order: number }> = {
   open: { label: "Đang mở", classes: "bg-success-100 text-success-700", order: 0 },
   upcoming: { label: "Sắp mở", classes: "bg-brand-100 text-brand-800", order: 1 },
@@ -345,7 +383,7 @@ export default function ClassLearningContent({
         body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, folder: "learning-materials" }),
       });
       const payload = (await response.json().catch(() => null)) as { uploadUrl?: string; url?: string; key?: string; contentType?: string; error?: string } | null;
-      if (!response.ok || !payload?.uploadUrl || !payload.url) {
+      if (!response.ok || !payload?.uploadUrl || !payload.url || !payload.key) {
         const messages: Record<string, string> = {
           R2_NOT_READY: "Cloudflare R2 chưa được cấu hình đầy đủ hoặc chưa có public URL.",
           FILE_SIZE_INVALID: "File phải nhỏ hơn 100 MB.",
@@ -353,21 +391,35 @@ export default function ClassLearningContent({
         };
         throw new Error(messages[payload?.error ?? ""] ?? "Không thể upload file lên R2.");
       }
-      const uploadResponse = await fetch(payload.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": payload.contentType || "application/octet-stream" },
-        body: file,
-      });
-      if (!uploadResponse.ok) throw new Error("R2 từ chối file. Hãy kiểm tra CORS và quyền ghi của bucket.");
+      let stored: StoredUpload = {
+        key: payload.key,
+        url: payload.url,
+        contentType: payload.contentType || file.type || "application/octet-stream",
+      };
+      try {
+        const uploadResponse = await fetch(payload.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": stored.contentType },
+          body: file,
+        });
+        if (!uploadResponse.ok) throw new Error(`R2_UPLOAD_${uploadResponse.status}`);
+      } catch (directUploadError) {
+        const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
+        if (!isLocalhost && file.size > SERVER_UPLOAD_LIMIT) {
+          console.error("Direct learning-material upload failed:", directUploadError);
+          throw new Error("R2 đang chặn upload trực tiếp. File lớn cần thêm tên miền website vào CORS của bucket R2.");
+        }
+        stored = await uploadFileThroughServer(file, "learning-materials", token);
+      }
       const inferredType: ClassResourceType = /\.pptx?$/i.test(file.name) ? "slides" : "pdf";
       setResourceDraft((current) => current ? {
         ...current,
-        url: payload.url ?? current.url,
+        url: stored.url,
         type: inferredType,
         source: "upload",
-        storageKey: payload.key ?? "",
+        storageKey: stored.key,
         fileName: file.name,
-        contentType: payload.contentType || file.type || "application/octet-stream",
+        contentType: stored.contentType,
         size: file.size,
         title: current.title || file.name.replace(/\.[^.]+$/, ""),
       } : current);
@@ -404,16 +456,30 @@ export default function ClassLearningContent({
         };
         throw new Error(messages[payload?.error ?? ""] ?? "Không thể chuẩn bị vùng upload ảnh bìa.");
       }
-      const uploadResponse = await fetch(payload.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": payload.contentType || file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!uploadResponse.ok) throw new Error("R2 từ chối ảnh bìa. Hãy kiểm tra CORS và quyền ghi của bucket.");
+      let stored: StoredUpload = {
+        key: payload.key,
+        url: payload.url,
+        contentType: payload.contentType || file.type || "application/octet-stream",
+      };
+      try {
+        const uploadResponse = await fetch(payload.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": stored.contentType },
+          body: file,
+        });
+        if (!uploadResponse.ok) throw new Error(`R2_UPLOAD_${uploadResponse.status}`);
+      } catch (directUploadError) {
+        const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
+        if (!isLocalhost && file.size > SERVER_UPLOAD_LIMIT) {
+          console.error("Direct course-cover upload failed:", directUploadError);
+          throw new Error("R2 đang chặn upload trực tiếp. Ảnh lớn cần thêm tên miền website vào CORS của bucket R2.");
+        }
+        stored = await uploadFileThroughServer(file, "course-assets", token);
+      }
       setCourseDraft((current) => current ? {
         ...current,
-        coverImageUrl: payload.url ?? current.coverImageUrl,
-        coverImageKey: payload.key ?? "",
+        coverImageUrl: stored.url,
+        coverImageKey: stored.key,
       } : current);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Không thể upload ảnh bìa.");
@@ -906,6 +972,11 @@ export default function ClassLearningContent({
               <h3 className="font-extrabold text-gray-900">{resourceDraft.resourceId ? "Chỉnh sửa tài nguyên" : "Thêm tài nguyên"}</h3>
               <button type="button" onClick={() => setResourceDraft(null)} className="text-sm font-bold text-gray-500">Đóng</button>
             </div>
+            {error && (
+              <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-700" role="alert">
+                {error}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-bold text-gray-700">Loại tài nguyên
                 <select value={resourceDraft.type} onChange={(event) => {
