@@ -25,6 +25,7 @@ type AssetUploader = (input: {
 const IMAGE_TOKEN_RE = /\[\[EXAM_IMAGE:([^\]]+)\]\]/g;
 const INLINE_IMAGE_TOKEN = (url: string) => `[[EXAM_INLINE_IMAGE:${url}]]`;
 let metafileFontsPromise: ReturnType<typeof loadSystemFonts> | null = null;
+const blueMathLatexCache = new WeakMap<XmlNode, string | null>();
 
 function getMetafileFonts() {
   metafileFontsPromise ??= loadSystemFonts({
@@ -67,6 +68,7 @@ function descendantsNamed(node: XmlNode, name: string): XmlElement[] {
 }
 
 function blueMathLatex(node: XmlNode): string | null {
+  if (blueMathLatexCache.has(node)) return blueMathLatexCache.get(node) ?? null;
   const candidates = [node, ...descendantsNamed(node, "docPr"), ...descendantsNamed(node, "cNvPr")];
   for (const candidate of candidates) {
     if (candidate.nodeType !== 1) continue;
@@ -75,12 +77,16 @@ function blueMathLatex(node: XmlNode): string | null {
       const value = element.attributes.item(index)?.value ?? "";
       if (!value.startsWith("BlueMathLatex:")) continue;
       try {
-        return Buffer.from(value.slice("BlueMathLatex:".length), "base64").toString("utf8").trim();
+        const latex = Buffer.from(value.slice("BlueMathLatex:".length), "base64").toString("utf8").trim();
+        blueMathLatexCache.set(node, latex);
+        return latex;
       } catch {
+        blueMathLatexCache.set(node, null);
         return null;
       }
     }
   }
+  blueMathLatexCache.set(node, null);
   return null;
 }
 
@@ -194,6 +200,22 @@ function contentTypeFor(fileName: string): string {
     emf: "image/emf",
     wmf: "image/wmf",
   } as Record<string, string>)[ext ?? ""] ?? "application/octet-stream";
+}
+
+async function forEachConcurrent<T>(
+  values: T[],
+  concurrency: number,
+  worker: (value: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(values[index]);
+    }
+  });
+  await Promise.all(runners);
 }
 
 async function prepareOfficeAsset(
@@ -391,6 +413,34 @@ function mergeAnswerKeys(primary: AnswerKey, fallback: AnswerKey): AnswerKey {
   };
 }
 
+function extractPdfAnswerKey(text: string): AnswerKey {
+  const key: AnswerKey = { multipleChoice: [], trueFalse: [], shortAnswer: [] };
+  const trueFalseRows: boolean[][] = [];
+  for (const line of text.split("\n")) {
+    const chosen = /^\s*Chọn\s+(.+)$/i.exec(line)?.[1];
+    if (chosen) {
+      const values = chosen.trim().split(/\s+/).filter(Boolean);
+      if (values.length >= 8 && values.every((value) => /^[A-D]$/i.test(value))) {
+        key.multipleChoice = values.map((value) => value.toUpperCase());
+      } else if (values.length >= 4 && values.some((value) => /\d/.test(value))) {
+        key.shortAnswer = values;
+      }
+    }
+
+    const truthValues = Array.from(line.matchAll(/[a-d]\)\s*([ĐS])/gi), (match) =>
+      match[1].toUpperCase() === "Đ",
+    );
+    if (truthValues.length >= 2) trueFalseRows.push(truthValues);
+  }
+  if (trueFalseRows.length >= 4) {
+    const columnCount = Math.max(...trueFalseRows.slice(0, 4).map((row) => row.length));
+    key.trueFalse = Array.from({ length: columnCount }, (_, column) =>
+      trueFalseRows.slice(0, 4).map((row) => row[column] ?? false),
+    );
+  }
+  return key;
+}
+
 function applyAnswerKey(questions: ParsedQuestion[], key: AnswerKey): void {
   let multipleChoiceIndex = 0;
   let trueFalseIndex = 0;
@@ -450,9 +500,12 @@ export async function importDocx(
   const allElements = document.getElementsByTagName("*");
   for (let index = 0; index < allElements.length; index += 1) {
     const element = allElements.item(index);
-    if (!element || blueMathLatexFromAncestors(element)) continue;
+    if (!element) continue;
     const name = localName(element);
     if (name !== "blip" && name !== "imagedata") continue;
+    // Only image nodes need the ancestor check. Running it for every OOXML
+    // element makes BlueMath-heavy documents grow quadratically and time out.
+    if (blueMathLatexFromAncestors(element)) continue;
     const relationshipId = element.getAttribute("r:embed") || element.getAttribute("r:id");
     const target = relationshipId ? relationships.get(relationshipId) : null;
     if (target) referencedAssetPaths.add(target);
@@ -461,21 +514,30 @@ export async function importDocx(
   if (uploadAsset) {
     let legacyVectorCount = 0;
     let convertedMetafileCount = 0;
-    for (const path of referencedAssetPaths) {
+    let failedAssetCount = 0;
+    await forEachConcurrent(Array.from(referencedAssetPaths), 4, async (path) => {
       const mediaBytes = zip[path];
-      if (!mediaBytes) continue;
+      if (!mediaBytes) return;
       const mediaName = path.split("/").pop() ?? "image";
-      const prepared = await prepareOfficeAsset(mediaBytes, mediaName);
-      if (prepared.convertedMetafile) convertedMetafileCount += 1;
-      else if (["image/emf", "image/wmf"].includes(prepared.contentType)) legacyVectorCount += 1;
-      const url = await uploadAsset(prepared);
-      if (url) imageUrls.set(path, url);
-    }
+      try {
+        const prepared = await prepareOfficeAsset(mediaBytes, mediaName);
+        if (prepared.convertedMetafile) convertedMetafileCount += 1;
+        else if (["image/emf", "image/wmf"].includes(prepared.contentType)) legacyVectorCount += 1;
+        const url = await uploadAsset(prepared);
+        if (url) imageUrls.set(path, url);
+        else failedAssetCount += 1;
+      } catch {
+        failedAssetCount += 1;
+      }
+    });
     if (convertedMetafileCount > 0) {
       warnings.push(`Đã chuyển ${convertedMetafileCount} ảnh xem trước WMF/EMF của Word và MathType sang PNG/SVG dùng được trên web.`);
     }
     if (legacyVectorCount > 0) {
       warnings.push(`${legacyVectorCount} hình minh họa là WMF/EMF; trình duyệt có thể không hiển thị, nên đổi sang SVG hoặc PNG.`);
+    }
+    if (failedAssetCount > 0) {
+      warnings.push(`${failedAssetCount} hình hoặc công thức không tải được lên kho lưu trữ; các vị trí này cần được kiểm tra lại.`);
     }
   } else if (referencedAssetPaths.size > 0) {
     warnings.push(`Tài liệu có ${referencedAssetPaths.size} hình minh họa nhưng chưa cấu hình nơi lưu; ảnh chưa được đưa vào đề.`);
@@ -649,7 +711,53 @@ export async function importPdf(bytes: Uint8Array, fileName: string): Promise<Im
   if (text.trim().length < 30) {
     warnings.push("PDF có rất ít văn bản có thể đọc; đây có thể là bản scan và cần OCR trước khi nhập.");
   }
-  const questions = parseQuestionBlocks(text, warnings);
+  const answerHeading = /^(?:PHẦN\s+II\s*:\s*)?ĐÁP ÁN\s*$/im.exec(text);
+  const solutionHeading = /^(?:PHẦN\s+III\s*:\s*GIẢI\s+CHI\s+TIẾT|LỜI\s+GIẢI\s+CHI\s+TIẾT)\s*$/im.exec(text);
+  const examEnd = Math.min(
+    answerHeading?.index ?? Number.POSITIVE_INFINITY,
+    solutionHeading?.index ?? Number.POSITIVE_INFINITY,
+    text.length,
+  );
+  const examText = text.slice(0, examEnd);
+  const answerText = answerHeading
+    ? text.slice(
+        answerHeading.index + answerHeading[0].length,
+        solutionHeading?.index ?? text.length,
+      )
+    : "";
+  const solutionText = solutionHeading
+    ? text.slice(solutionHeading.index + solutionHeading[0].length)
+    : "";
+  const questions = parseQuestionBlocks(examText, warnings);
+  const solutionQuestions = solutionText ? parseQuestionBlocks(solutionText, []) : [];
+  questions.forEach((question, index) => {
+    if (solutionQuestions[index]?.explanation) {
+      question.explanation = solutionQuestions[index].explanation;
+    }
+  });
+  const answerKey = extractPdfAnswerKey(answerText);
+  applyAnswerKey(questions, answerKey);
+  const expectedMultipleChoice = questions.filter((question) => question.type === "multiple_choice").length;
+  const expectedTrueFalse = questions.filter((question) => question.type === "true_false").length;
+  const expectedShortAnswer = questions.filter((question) => question.type === "short_answer").length;
+  if (answerHeading && answerKey.multipleChoice.length < expectedMultipleChoice) {
+    warnings.push("Bảng đáp án trắc nghiệm trong PDF không có lớp chữ đầy đủ; cần nhập hoặc kiểm tra lại đáp án phần I.");
+  }
+  if (answerHeading && answerKey.trueFalse.length < expectedTrueFalse) {
+    warnings.push("Bảng đáp án đúng/sai trong PDF không có lớp chữ đầy đủ; cần kiểm tra lại đáp án phần II.");
+  }
+  if (answerHeading && answerKey.shortAnswer.length < expectedShortAnswer) {
+    warnings.push("Đáp án ngắn trong PDF không có lớp chữ đầy đủ; cần nhập lại để hệ thống chấm tự động.");
+  }
+  if (solutionHeading && solutionQuestions.length !== questions.length) {
+    warnings.push(`Ghép được lời giải cho ${Math.min(solutionQuestions.length, questions.length)}/${questions.length} câu; cần rà soát các câu còn lại.`);
+  }
+  if (!answerHeading) {
+    warnings.push("Không tìm thấy mục “ĐÁP ÁN” trong PDF; giáo viên cần kiểm tra đáp án sau khi nhập.");
+  }
+  if (questions.length === 0) {
+    warnings.push("PDF không tách được câu hỏi. Nếu đây là bản scan, cần OCR; nếu là PDF xuất từ Word, nên nhập file DOCX gốc.");
+  }
   return {
     title: fileName.replace(/\.pdf$/i, ""),
     questions,

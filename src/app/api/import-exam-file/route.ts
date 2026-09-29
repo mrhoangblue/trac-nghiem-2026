@@ -7,6 +7,7 @@ import { importDocx, importPdf, importTex } from "@/lib/examFileImport";
 import { downloadFromR2, getR2ObjectMetadata, getR2Status, uploadToR2 } from "@/lib/r2Storage";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

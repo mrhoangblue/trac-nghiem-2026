@@ -213,6 +213,15 @@ export default function CreateExamPage() {
     setImportSourceObject(null);
     try {
       const token = await user.getIdToken();
+      const importThroughServer = async () => {
+        const formData = new FormData();
+        formData.set("file", file);
+        return fetch("/api/import-exam-file", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+      };
       const presignResponse = await fetch("/api/storage/presign", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -221,25 +230,33 @@ export default function CreateExamPage() {
       const presigned = (await presignResponse.json().catch(() => null)) as { uploadUrl?: string; key?: string; contentType?: string; error?: string } | null;
       let response: Response;
       if (presignResponse.ok && presigned?.uploadUrl && presigned.key) {
-        const directUpload = await fetch(presigned.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": presigned.contentType || "application/octet-stream" },
-          body: file,
-        });
-        if (!directUpload.ok) throw new Error("R2 từ chối file. Hãy kiểm tra CORS của bucket.");
-        response = await fetch("/api/import-exam-file", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ key: presigned.key, fileName: file.name, contentType: file.type, size: file.size }),
-        });
+        try {
+          const directUpload = await fetch(presigned.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": presigned.contentType || "application/octet-stream" },
+            body: file,
+          });
+          if (!directUpload.ok) throw new Error(`R2_UPLOAD_${directUpload.status}`);
+          response = await fetch("/api/import-exam-file", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ key: presigned.key, fileName: file.name, contentType: file.type, size: file.size }),
+          });
+        } catch (directUploadError) {
+          // Local Next.js can accept the full 25 MB. On Vercel, keep the fallback
+          // below its request body limit; larger files require R2 bucket CORS.
+          const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+          if (isLocalhost || file.size <= 4 * 1024 * 1024) {
+            response = await importThroughServer();
+          } else {
+            console.error("Direct R2 upload failed:", directUploadError);
+            throw new Error(
+              "R2 đang chặn upload trực tiếp từ trình duyệt. Hãy cho phép origin của website trong CORS bucket R2, rồi thử lại file lớn này.",
+            );
+          }
+        }
       } else if (presigned?.error === "R2_NOT_READY") {
-        const formData = new FormData();
-        formData.set("file", file);
-        response = await fetch("/api/import-exam-file", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
+        response = await importThroughServer();
       } else {
         throw new Error(presigned?.error === "FILE_SIZE_INVALID" ? "File phải nhỏ hơn 25 MB." : "Không thể chuẩn bị vùng upload R2.");
       }
@@ -249,8 +266,9 @@ export default function CreateExamPage() {
           FILE_SIZE_INVALID: "File phải nhỏ hơn 25 MB.",
           FILE_TYPE_UNSUPPORTED: "Chỉ hỗ trợ file DOCX, PDF hoặc TEX.",
           DOCX_INVALID: "File DOCX không hợp lệ hoặc đã bị hỏng.",
+          IMPORT_TIMEOUT: "File có quá nhiều công thức hoặc hình ảnh nên xử lý quá thời gian. Hãy thử lại sau khi tối ưu file.",
         };
-        throw new Error(messages[payload?.error ?? ""] ?? "Không thể đọc file đề thi.");
+        throw new Error(messages[payload?.error ?? ""] ?? payload?.error ?? "Không thể đọc file đề thi.");
       }
 
       const classified = smartParseLatex(payload.latex);
