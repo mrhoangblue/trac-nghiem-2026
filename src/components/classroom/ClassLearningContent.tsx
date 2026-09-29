@@ -565,6 +565,12 @@ export default function ClassLearningContent({
       : null,
     [activeResourceId, selectedCourse],
   );
+  const activeLesson = useMemo(
+    () => selectedCourse?.lessons.find((lesson) =>
+      lesson.resources.some((resource) => resource.id === activeResourceId),
+    ) ?? null,
+    [activeResourceId, selectedCourse],
+  );
 
   const visibleExams = useMemo(() => {
     const filtered = (data?.exams ?? []).filter((exam) => examFilter === "all" || exam.status === examFilter);
@@ -758,7 +764,7 @@ export default function ClassLearningContent({
               const activeIndex = resources.findIndex((resource) => resource.id === activeResource?.id);
               const activeCompleted = activeResource ? completedIds.has(activeResource.id) : false;
               return (
-                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-8rem)] lg:max-h-[920px] ${curriculumOpen ? "lg:grid-cols-[22rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
+                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-7rem)] lg:max-h-[980px] ${curriculumOpen ? "lg:grid-cols-[18.5rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
                   <div className={`relative overflow-hidden bg-[linear-gradient(120deg,#351c12_0%,#61341f_58%,#8b542d_100%)] px-6 py-6 text-white sm:px-8 ${courseId && curriculumOpen ? "lg:col-span-2" : "lg:col-span-1"} lg:row-start-1`}>
                     <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[54px] border-white/[0.04]" />
                     <div className="pointer-events-none absolute bottom-0 right-[22%] h-32 w-48 skew-x-[-24deg] border-l border-t border-brand-200/10" />
@@ -809,6 +815,18 @@ export default function ClassLearningContent({
                           </button>
                         )}
                       </div>
+                      {activeLesson && (
+                        <div className="mt-7 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                          <LessonDiscussion
+                            key={activeLesson.id}
+                            classId={classId}
+                            courseId={selectedCourse.id}
+                            lessonId={activeLesson.id}
+                            contextLabel={activeLesson.title}
+                            defaultOpen
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -836,7 +854,6 @@ export default function ClassLearningContent({
                           {lesson.resources.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">Bài học chưa có tài nguyên.</p>}
                           {canEdit && <button type="button" onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id))} className="m-3 rounded-xl border-2 border-dashed border-brand-200 px-4 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-50">+ Thêm nội dung</button>}
                         </div>
-                        <LessonDiscussion classId={classId} courseId={selectedCourse.id} lessonId={lesson.id} />
                       </section>
                     ))}
                     {selectedCourse.lessons.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">Khóa học chưa có bài học.</div>}

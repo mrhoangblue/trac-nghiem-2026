@@ -2,6 +2,12 @@
 
 Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
 
+### 29/09/2026 — Mở rộng vùng học liệu và hỏi đáp theo bài đang xem
+
+- Mở rộng trang chi tiết khóa học lên 1700px và thu cột chương trình từ 22rem xuống 18,5rem để PDF, Word, ảnh và slide có thêm không gian.
+- Chuyển hỏi đáp khỏi danh sách bên trái xuống dưới trình xem tài liệu.
+- Liên kết hỏi đáp với bài học chứa tài nguyên đang chọn; khi đổi file sang bài khác, hệ thống tự đổi và tải đúng luồng trao đổi của bài đó.
+
 ### 28/09/2026 — Sửa lưu đề qua API và chuẩn hóa giao diện toàn hệ thống
 
 - Xác định lỗi “Missing or insufficient permissions” xuất hiện sau bước xử lý TikZ do trang chỉnh sửa gọi Firestore trực tiếp từ trình duyệt.

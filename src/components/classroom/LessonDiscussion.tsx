@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MessageCircle, Send, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -17,6 +17,8 @@ interface Props {
   classId: string;
   courseId: string;
   lessonId: string;
+  contextLabel?: string;
+  defaultOpen?: boolean;
 }
 
 function formatTime(value: string | null): string {
@@ -25,9 +27,9 @@ function formatTime(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "Vừa xong" : date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
-export default function LessonDiscussion({ classId, courseId, lessonId }: Props) {
+export default function LessonDiscussion({ classId, courseId, lessonId, contextLabel, defaultOpen = false }: Props) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,7 +41,7 @@ export default function LessonDiscussion({ classId, courseId, lessonId }: Props)
 
   const endpoint = `/api/classes/${encodeURIComponent(classId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/comments`;
 
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     if (!user || loading) return;
     setLoading(true);
     setError("");
@@ -57,12 +59,16 @@ export default function LessonDiscussion({ classId, courseId, lessonId }: Props)
     } finally {
       setLoading(false);
     }
-  };
+  }, [endpoint, loading, user]);
+
+  useEffect(() => {
+    if (!open || loaded || loading) return;
+    queueMicrotask(() => void loadComments());
+  }, [loadComments, loaded, loading, open]);
 
   const toggle = () => {
     const next = !open;
     setOpen(next);
-    if (next && !loaded) void loadComments();
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -110,7 +116,7 @@ export default function LessonDiscussion({ classId, courseId, lessonId }: Props)
   return (
     <div className="border-t border-gray-100 bg-[#fffdf9]">
       <button type="button" onClick={toggle} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-brand-800 hover:bg-brand-50 sm:px-5">
-        <span className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Hỏi đáp bài học</span>
+        <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Hỏi đáp{contextLabel ? ` · ${contextLabel}` : " bài học"}</span></span>
         <span className="text-xs text-gray-400">{loaded ? `${comments.length} trao đổi` : open ? "Đang mở" : "Mở"}</span>
       </button>
       {open && (
