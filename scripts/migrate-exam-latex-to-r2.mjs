@@ -89,8 +89,7 @@ const app = getApps()[0] ?? initializeApp({
 });
 const db = initializeFirestore(app, { preferRest: true });
 const bucket = env("R2_BUCKET_NAME");
-const endpoint = process.env.R2_ENDPOINT?.trim().replace(/\/+$/, "")
-  || `https://${env("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`;
+const endpoint = `https://${env("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`;
 const r2 = new S3Client({
   region: "auto",
   endpoint,

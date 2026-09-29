@@ -28,34 +28,55 @@ export type R2ObjectFolder = "exam-imports" | "exam-assets" | "exam-sources" | "
 
 let cachedClient: S3Client | null = null;
 
+function cleanEnvValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) ? trimmed.slice(1, -1).trim() : trimmed;
+}
+
 function cleanBaseUrl(value: string | undefined): string | undefined {
-  const trimmed = value?.trim().replace(/\/+$/, "");
+  const trimmed = cleanEnvValue(value)?.replace(/\/+$/, "");
   return trimmed || undefined;
 }
 
+function s3Endpoint(accountId: string): string {
+  const defaultEndpoint = `https://${accountId}.r2.cloudflarestorage.com`;
+  const configured = cleanBaseUrl(process.env.R2_ENDPOINT);
+  if (!configured) return defaultEndpoint;
+  try {
+    const parsed = new URL(configured);
+    return parsed.protocol === "https:" && parsed.hostname === `${accountId}.r2.cloudflarestorage.com`
+      ? configured
+      : defaultEndpoint;
+  } catch {
+    return defaultEndpoint;
+  }
+}
+
 function getConfig(): R2Config | null {
-  const missing = R2_ENV_KEYS.filter((key) => !process.env[key]?.trim());
+  const missing = R2_ENV_KEYS.filter((key) => !cleanEnvValue(process.env[key]));
   if (missing.length > 0) return null;
 
-  const accountId = process.env.R2_ACCOUNT_ID!.trim();
+  const accountId = cleanEnvValue(process.env.R2_ACCOUNT_ID)!;
   return {
-    endpoint:
-      cleanBaseUrl(process.env.R2_ENDPOINT) ??
-      `https://${accountId}.r2.cloudflarestorage.com`,
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!.trim(),
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!.trim(),
-    bucket: process.env.R2_BUCKET_NAME!.trim(),
+    endpoint: s3Endpoint(accountId),
+    accessKeyId: cleanEnvValue(process.env.R2_ACCESS_KEY_ID)!,
+    secretAccessKey: cleanEnvValue(process.env.R2_SECRET_ACCESS_KEY)!,
+    bucket: cleanEnvValue(process.env.R2_BUCKET_NAME)!,
     publicBaseUrl: cleanBaseUrl(process.env.R2_PUBLIC_BASE_URL),
   };
 }
 
 export function getR2Status(): R2Status {
-  const missing = R2_ENV_KEYS.filter((key) => !process.env[key]?.trim());
+  const missing = R2_ENV_KEYS.filter((key) => !cleanEnvValue(process.env[key]));
   return {
     configured: missing.length === 0,
     publicAccessConfigured: Boolean(cleanBaseUrl(process.env.R2_PUBLIC_BASE_URL)),
     missing,
-    bucket: process.env.R2_BUCKET_NAME?.trim() || null,
+    bucket: cleanEnvValue(process.env.R2_BUCKET_NAME) || null,
   };
 }
 
