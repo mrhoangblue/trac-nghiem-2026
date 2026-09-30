@@ -154,7 +154,7 @@ function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCou
       <iframe
         src={`${resource.embedUrl}#toolbar=1&navpanes=0&view=FitH`}
         title={resource.title}
-        className={fillViewport ? "h-full min-h-60 w-full bg-white" : "h-[520px] w-full bg-white sm:h-[720px]"}
+        className={fillViewport ? "h-[68dvh] min-h-[560px] w-full bg-white lg:h-full lg:min-h-0" : "h-[620px] w-full bg-white sm:h-[780px]"}
         loading="lazy"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
@@ -167,7 +167,7 @@ function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCou
       <iframe
         src={resource.embedUrl}
         title={resource.title}
-        className={fillViewport ? "h-full min-h-60 w-full bg-white" : "h-[520px] w-full bg-white sm:h-[720px]"}
+        className={fillViewport ? "h-[68dvh] min-h-[560px] w-full bg-white lg:h-full lg:min-h-0" : "h-[620px] w-full bg-white sm:h-[780px]"}
         loading="lazy"
         allow="clipboard-read; clipboard-write; fullscreen"
         allowFullScreen
@@ -180,7 +180,7 @@ function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCou
     <iframe
       src={resource.embedUrl}
       title={resource.title}
-      className={fillViewport ? "h-full min-h-60 w-full" : "h-[440px] w-full sm:h-[620px]"}
+      className={fillViewport ? "h-[62dvh] min-h-[480px] w-full lg:h-full lg:min-h-0" : "h-[520px] w-full sm:h-[680px]"}
       loading="lazy"
       allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
       allowFullScreen
@@ -830,7 +830,8 @@ export default function ClassLearningContent({
               const activeIndex = resources.findIndex((resource) => resource.id === activeResource?.id);
               const activeCompleted = activeResource ? completedIds.has(activeResource.id) : false;
               return (
-                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-6.25rem)] lg:min-h-[680px] ${curriculumOpen ? "lg:grid-cols-[18.5rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
+                <>
+                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-5rem)] lg:min-h-[860px] ${curriculumOpen ? "lg:grid-cols-[18.5rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
                   <div className={`relative overflow-hidden bg-[linear-gradient(120deg,#351c12_0%,#61341f_58%,#8b542d_100%)] px-6 py-5 text-white sm:px-8 ${courseId && curriculumOpen ? "lg:col-span-2" : "lg:col-span-1"} lg:row-start-1 lg:py-4`}>
                     <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[54px] border-white/[0.04]" />
                     <div className="pointer-events-none absolute bottom-0 right-[22%] h-32 w-48 skew-x-[-24deg] border-l border-t border-brand-200/10" />
@@ -881,20 +882,6 @@ export default function ClassLearningContent({
                           </button>
                         )}
                       </div>
-                      {activeLesson && (
-                        <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:h-[clamp(180px,20vh,230px)] lg:shrink-0">
-                          <LessonDiscussion
-                            key={`${activeLesson.id}:${activeResource.id}`}
-                            classId={classId}
-                            courseId={selectedCourse.id}
-                            lessonId={activeLesson.id}
-                            resourceId={activeResource.id}
-                            contextLabel={activeResource.title}
-                            defaultOpen
-                            persistent={Boolean(courseId)}
-                          />
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -927,6 +914,24 @@ export default function ClassLearningContent({
                     {selectedCourse.lessons.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">Khóa học chưa có bài học.</div>}
                   </div>
                 </div>
+                {activeLesson && activeResource && (
+                  <section className="mt-6 overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-soft" aria-label={`Hỏi đáp về ${activeResource.title}`}>
+                    <div className="border-b border-brand-100 bg-gradient-to-r from-brand-50 to-white px-5 py-4 sm:px-7">
+                      <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-600">Trao đổi theo nội dung đang xem</p>
+                      <h4 className="mt-1 text-lg font-extrabold text-brand-950">Hỏi đáp · {activeResource.title}</h4>
+                    </div>
+                    <LessonDiscussion
+                      key={`${activeLesson.id}:${activeResource.id}`}
+                      classId={classId}
+                      courseId={selectedCourse.id}
+                      lessonId={activeLesson.id}
+                      resourceId={activeResource.id}
+                      contextLabel={activeResource.title}
+                      defaultOpen
+                    />
+                  </section>
+                )}
+                </>
               );
         })()}
 
