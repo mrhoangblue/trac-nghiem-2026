@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, BookOpen, ChevronRight, GraduationCap, Search, Shapes, FileText, RotateCcw } from "lucide-react";
+import { ArrowRight, BookOpen, ChevronRight, Clock3, FileQuestion, GraduationCap, LockKeyhole, RotateCcw, Search, Shapes } from "lucide-react";
 import { GRADE_LEVELS } from "@/components/Sidebar";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
@@ -18,6 +18,8 @@ interface Exam {
   gradeLevel?: string;
   examType?: string;
   coverImageUrl?: string;
+  duration?: number;
+  requiresPassword?: boolean;
   /** "all" = mọi học sinh; "classes" = chỉ HS thuộc targetClassIds. Mặc định "all". */
   targetType?: "all" | "classes";
   targetClassIds?: string[];
@@ -60,28 +62,47 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 // ── Exam Card ─────────────────────────────────────────────────────────────────
 
 function ExamCard({ exam }: { exam: Exam }) {
+  const gradeTheme = exam.gradeLevel === "Lớp 10"
+    ? { shell: "from-sky-950 via-sky-900 to-cyan-700", glow: "bg-cyan-300", ink: "text-sky-800", soft: "bg-sky-50", short: "10" }
+    : exam.gradeLevel === "Lớp 11"
+      ? { shell: "from-emerald-950 via-emerald-900 to-teal-700", glow: "bg-emerald-300", ink: "text-emerald-800", soft: "bg-emerald-50", short: "11" }
+      : exam.gradeLevel === "Lớp 12"
+        ? { shell: "from-amber-950 via-brand-900 to-amber-700", glow: "bg-amber-300", ink: "text-amber-900", soft: "bg-amber-50", short: "12" }
+        : { shell: "from-rose-950 via-red-950 to-brand-800", glow: "bg-rose-300", ink: "text-rose-900", soft: "bg-rose-50", short: "TN" };
+
   return (
-    <article className="exam-card group flex flex-col overflow-hidden rounded-3xl bg-white transition-all duration-200">
-      {exam.coverImageUrl && (
-        <div className="relative aspect-[16/7] overflow-hidden bg-brand-50">
-          <Image src={exam.coverImageUrl} alt={`Ảnh minh họa ${exam.title}`} fill unoptimized sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-300 group-hover:scale-[1.03]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+    <article className="exam-card group flex min-h-[27rem] flex-col overflow-hidden rounded-[1.75rem] bg-white transition-all duration-300">
+      <div className={`relative h-36 shrink-0 overflow-hidden bg-gradient-to-br ${gradeTheme.shell}`}>
+        {exam.coverImageUrl ? (
+          <Image src={exam.coverImageUrl} alt={`Ảnh minh họa ${exam.title}`} fill unoptimized sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-[1.04]" />
+        ) : (
+          <>
+            <div className="absolute -right-8 -top-16 h-44 w-44 rounded-full border border-white/15" />
+            <div className="absolute right-8 top-3 h-28 w-28 rounded-full border border-white/10" />
+            <div className={`absolute -bottom-12 -left-8 h-32 w-32 rounded-full ${gradeTheme.glow} opacity-20 blur-2xl`} />
+            <span className="absolute bottom-2 right-5 font-serif text-[5.5rem] font-black leading-none text-white/10">{gradeTheme.short}</span>
+          </>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">
+          <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.15em] text-white backdrop-blur">{exam.gradeLevel || "Môn Toán"}</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-white backdrop-blur"><FileQuestion size={20} /></span>
         </div>
-      )}
+      </div>
       <div className="flex flex-1 flex-col p-6">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-earth"><FileText size={23} /></span>
-        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{exam.gradeLevel || "Môn Toán"}</span>
-      </div>
-      <p className="mb-2 text-xs font-semibold text-brand-700">{exam.examType || "Đề ôn tập"}</p>
-      <h3 className="mb-3 text-lg font-bold leading-relaxed text-gray-900">{exam.title}</h3>
-      <p className="mb-6 line-clamp-2 text-sm leading-7 text-gray-500">{exam.description || "Đọc kỹ câu hỏi và chọn đáp án phù hợp để hoàn thành bài ôn tập."}</p>
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-gray-100 pt-5">
-        <span className="text-xs font-medium text-gray-500">{exam.questionCount ?? 0} câu hỏi</span>
-        <Link href={`/quiz/${exam.id}`} className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-brand-100">
-          Làm bài <ArrowRight size={16} />
-        </Link>
-      </div>
+        <p className={`mb-2 text-[11px] font-extrabold uppercase tracking-[.12em] ${gradeTheme.ink}`}>{exam.examType || "Đề ôn tập"}</p>
+        <h3 className="line-clamp-2 min-h-[3.5rem] text-lg font-extrabold leading-7 text-brand-950 transition-colors group-hover:text-brand-700">{exam.title}</h3>
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-gray-500">{exam.description || "Luyện tập có mục tiêu, xem kết quả và củng cố phần kiến thức còn yếu."}</p>
+        <div className="mt-auto pt-6">
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-500">
+            <span className="inline-flex items-center gap-1.5"><FileQuestion size={15} />{exam.questionCount ?? 0} câu</span>
+            <span className="inline-flex items-center gap-1.5"><Clock3 size={15} />{exam.duration || 90} phút</span>
+            {exam.requiresPassword && <span className="inline-flex items-center gap-1.5"><LockKeyhole size={14} />Có mật khẩu</span>}
+          </div>
+          <Link href={`/quiz/${exam.id}`} className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-extrabold transition ${gradeTheme.soft} ${gradeTheme.ink} group-hover:brightness-95`}>
+            <span>Bắt đầu làm bài</span><ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
+          </Link>
+        </div>
       </div>
     </article>
   );
@@ -154,6 +175,8 @@ function HomeContent() {
             gradeLevel: raw.gradeLevel ?? undefined,
             examType: raw.examType ?? undefined,
             coverImageUrl: raw.coverImageUrl ?? undefined,
+            duration: Number(raw.duration ?? 90),
+            requiresPassword: Boolean(raw.requiresPassword),
             targetType: raw.targetType ?? "all",
             targetClassIds: Array.isArray(raw.targetClassIds) ? raw.targetClassIds : [],
           } as Exam;

@@ -168,6 +168,10 @@ export async function POST(request: NextRequest) {
     if (!body.title?.trim()) {
       return NextResponse.json({ error: "Missing quiz title." }, { status: 400 });
     }
+    const description = body.description?.trim() ?? "";
+    if (description.length > 1000) {
+      return NextResponse.json({ error: "DESCRIPTION_TOO_LONG" }, { status: 400 });
+    }
 
     if (!Array.isArray(body.questions)) {
       return NextResponse.json(
@@ -231,8 +235,8 @@ export async function POST(request: NextRequest) {
         })
       : null;
     batch.set(docRef, {
-      title: body.title,
-      description: body.description ?? "",
+      title: body.title.trim(),
+      description,
       questions: questionsToSave,
       questionCount: questionsToSave.length,
       part1Count: p1Questions.length,

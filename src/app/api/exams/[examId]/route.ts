@@ -17,6 +17,7 @@ const MAX_FIRESTORE_QUESTIONS_BYTES = 850 * 1024;
 
 interface UpdateExamBody {
   title?: unknown;
+  description?: unknown;
   questions?: unknown;
   scoringConfig?: { part1TotalScore?: unknown; part3TotalScore?: unknown };
   duration?: unknown;
@@ -63,8 +64,12 @@ export async function PATCH(
 
     const body = await request.json() as UpdateExamBody;
     const title = typeof body.title === "string" ? body.title.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : "";
     if (!title || title.length > 240 || !Array.isArray(body.questions)) {
       return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    }
+    if (description.length > 1000) {
+      return NextResponse.json({ error: "DESCRIPTION_TOO_LONG" }, { status: 400 });
     }
     const questions = body.questions as ParsedQuestion[];
     if (questions.length === 0 || questions.length > 300) {
@@ -105,6 +110,7 @@ export async function PATCH(
       : [];
     const updates: Record<string, unknown> = {
       title,
+      description,
       questions,
       questionCount: questions.length,
       part1Count: part1,

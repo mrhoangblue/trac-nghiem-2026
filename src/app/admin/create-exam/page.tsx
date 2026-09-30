@@ -324,7 +324,7 @@ export default function CreateExamPage() {
         },
         body: JSON.stringify({
           title: examTitle.trim(),
-          description,
+          description: description.trim(),
           questions: previewData.questions,
           scoringConfig: {
             part1TotalScore: Number(scoringConfig.part1TotalScore),
@@ -404,7 +404,8 @@ export default function CreateExamPage() {
                 </div>
                 <div>
                   <label htmlFor="exam-description" className="mb-2 block text-sm font-bold text-gray-700">Mô tả <span className="font-normal text-gray-400">(không bắt buộc)</span></label>
-                  <textarea id="exam-description" rows={3} className="w-full resize-y rounded-xl border-2 border-gray-200 p-3.5 text-sm leading-6 outline-none transition focus:border-brand-500" placeholder="Nội dung trọng tâm, hướng dẫn hoặc lưu ý cho học sinh…" value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <textarea id="exam-description" rows={4} maxLength={1000} className="w-full resize-y rounded-xl border-2 border-gray-200 p-3.5 text-sm leading-6 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" placeholder="Nêu nội dung trọng tâm, phạm vi kiến thức hoặc hướng dẫn trước khi làm bài…" value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-gray-400"><span>Nội dung này sẽ xuất hiện trên card đề thi và trang làm bài.</span><span className="shrink-0 tabular-nums">{description.length}/1000</span></div>
                 </div>
               </div>
             </section>

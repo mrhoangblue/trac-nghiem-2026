@@ -72,6 +72,7 @@ export default function EditExamPage() {
 
   // LaTeX parts
   const [examTitle, setExamTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [part1, setPart1] = useState("");
   const [part2, setPart2] = useState("");
   const [part3, setPart3] = useState("");
@@ -113,6 +114,7 @@ export default function EditExamPage() {
         const data = snap.data();
 
         setExamTitle(data.title ?? "");
+        setDescription(data.description ?? "");
         setScoringConfig(data.scoringConfig ?? { part1TotalScore: 3, part3TotalScore: 1 });
         setDuration(data.duration ?? 90);
         setStartTime(toDateTimeLocal(data.startTime));
@@ -241,6 +243,7 @@ export default function EditExamPage() {
 
       const examPayload = {
         title: previewData.title,
+        description: description.trim(),
         questions: questionsToSave,
         questionCount: questionsToSave.length,
         part1Count: p1Qs.length,
@@ -337,15 +340,16 @@ export default function EditExamPage() {
 
   return (
     <AdminGuard>
-      <div className="workspace-page max-w-6xl mx-auto px-4 py-8 sm:py-10 w-full">
+      <div className="workspace-page mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 rounded-[2rem] border border-brand-200 bg-gradient-to-br from-white via-brand-50/60 to-orange-50 p-6 shadow-soft sm:p-8">
           <div>
-            <Link href="/admin/exam-list" className="text-sm text-gray-400 hover:text-brand-600 transition-colors mb-2 inline-block">
+            <Link href="/admin/exam-list" className="mb-3 inline-block text-sm font-semibold text-brand-700 transition hover:text-brand-900">
               ← Quay lại danh sách
             </Link>
-            <h1 className="text-3xl font-extrabold text-gray-900">Chỉnh sửa bài thi</h1>
-            <p className="text-gray-500 mt-1 text-sm font-mono opacity-60">{id}</p>
+            <p className="text-xs font-extrabold uppercase tracking-[.18em] text-brand-700">Không gian biên soạn đề</p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-950 sm:text-4xl">Chỉnh sửa bài thi</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-600">Cập nhật thông tin, nội dung và cách tổ chức bài thi trong cùng quy trình với trang tạo đề.</p>
             {!isOwnExam && (
               <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
                 ⚠️ Đây là đề của giáo viên khác — lưu sẽ tạo bản sao cho bạn.
@@ -354,67 +358,49 @@ export default function EditExamPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,.85fr)]">
           {/* ── Editor ─────────────────────────────────────────────────── */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 space-y-6">
+          <div className="space-y-6">
             {/* Tên */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Tên bài thi</label>
-              <input
-                type="text"
-                className="w-full p-4 border-2 border-gray-200 rounded-xl font-medium focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-              />
-            </div>
-
-            {/* ── Phân loại đề ────────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-5 space-y-4">
-              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-brand-500">🗂️</span> Phân loại đề thi
-              </h3>
-              <div>
-                <label className="text-sm font-semibold text-gray-600 mb-2 block">Cấp học</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {GRADE_LEVELS.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setGradeLevel(g)}
-                      className={`py-2.5 px-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-                        gradeLevel === g
-                          ? "border-brand-500 bg-brand-50 text-brand-700"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
+            <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="edit-basic-info-heading">
+              <div className="mb-5 flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-700 text-sm font-extrabold text-white">1</span>
+                <div><h2 id="edit-basic-info-heading" className="font-extrabold text-gray-900">Thông tin đề thi</h2><p className="text-xs text-gray-500">Những nội dung học sinh nhìn thấy trong kho đề.</p></div>
+              </div>
+              <div className="space-y-5">
+                <div>
+                  <label htmlFor="edit-exam-title" className="mb-2 block text-sm font-bold text-gray-700">Tên bài thi</label>
+                  <input id="edit-exam-title" type="text" className="w-full rounded-xl border-2 border-gray-200 p-3.5 font-medium outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="edit-exam-description" className="mb-2 block text-sm font-bold text-gray-700">Mô tả <span className="font-normal text-gray-400">(không bắt buộc)</span></label>
+                  <textarea id="edit-exam-description" rows={4} maxLength={1000} className="w-full resize-y rounded-xl border-2 border-gray-200 p-3.5 text-sm leading-6 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" placeholder="Nêu nội dung trọng tâm, phạm vi kiến thức hoặc hướng dẫn trước khi làm bài…" value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-gray-400"><span>Nội dung này sẽ xuất hiện trên card đề thi và trang làm bài.</span><span className="shrink-0 tabular-nums">{description.length}/1000</span></div>
                 </div>
               </div>
+            </section>
 
-              {gradeLevel !== "Thi Thử TN THPT" && (
+            {/* ── Phân loại đề ────────────────────────────────────────── */}
+            <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7">
+              <h3 className="flex items-center gap-2 font-extrabold text-gray-800">
+                <span className="text-brand-500">🗂️</span> Phân loại đề thi
+              </h3>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-semibold text-gray-600 mb-2 block">Loại đề</label>
-                  <div className="space-y-1.5">
-                    {EXAM_TYPES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setExamType(t)}
-                        className={`w-full text-left py-2 px-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-                          examType === t
-                            ? "border-brand-400 bg-brand-50 text-brand-700"
-                            : "border-gray-200 text-gray-600 hover:border-gray-300"
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
+                  <label htmlFor="edit-grade-level" className="mb-2 block text-sm font-semibold text-gray-600">Phân loại đề thi</label>
+                  <select id="edit-grade-level" value={gradeLevel} onChange={(event) => setGradeLevel(event.target.value)} className="w-full rounded-xl border-2 border-gray-200 bg-white p-3.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-brand-500">
+                    {GRADE_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                  </select>
                 </div>
-              )}
-            </div>
+                <div>
+                  <label htmlFor="edit-exam-type" className="mb-2 block text-sm font-semibold text-gray-600">Loại đề</label>
+                  <select id="edit-exam-type" value={examType} onChange={(event) => setExamType(event.target.value)} disabled={gradeLevel === "Thi Thử TN THPT"} className="w-full rounded-xl border-2 border-gray-200 bg-white p-3.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-brand-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
+                    {EXAM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </div>
+              </div>
+              {gradeLevel === "Thi Thử TN THPT" && <p className="mt-2 text-xs text-gray-400">Loại đề được ẩn với nhóm Thi thử TN THPT.</p>}
+            </section>
 
             {/* ── Cấu hình làm bài ────────────────────────────────────── */}
             <div className="bg-gradient-to-br from-danger-50 to-orange-50 border border-danger-100 rounded-2xl p-5 space-y-4">
@@ -689,6 +675,7 @@ export default function EditExamPage() {
               <div className="space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
                 <div className="text-center border-b border-gray-100 pb-6 mb-6">
                   <h1 className="text-2xl font-extrabold text-gray-900">{previewData.title}</h1>
+                  {description.trim() && <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500">{description.trim()}</p>}
                   <p className="text-gray-400 text-sm mt-1">{previewData.questions.length} câu hỏi</p>
                 </div>
                 {previewData.questions.map((q, index) => (
