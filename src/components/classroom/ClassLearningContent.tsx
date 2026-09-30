@@ -131,7 +131,7 @@ function resourceExtension(resource: ClassCourseResource): string {
   return candidate.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() ?? "";
 }
 
-function ResourceViewer({ resource }: { resource: ClassCourseResource }) {
+function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCourseResource; fillViewport?: boolean }) {
   const extension = resourceExtension(resource);
   const contentType = resource.contentType?.toLowerCase() ?? "";
   const isImage = contentType.startsWith("image/")
@@ -142,9 +142,9 @@ function ResourceViewer({ resource }: { resource: ClassCourseResource }) {
 
   if (isImage) {
     return (
-      <div className="flex min-h-72 items-center justify-center bg-[linear-gradient(45deg,#f3f4f6_25%,transparent_25%),linear-gradient(-45deg,#f3f4f6_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f3f4f6_75%),linear-gradient(-45deg,transparent_75%,#f3f4f6_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] p-4 sm:min-h-[620px]">
+      <div className={`flex items-center justify-center bg-[linear-gradient(45deg,#f3f4f6_25%,transparent_25%),linear-gradient(-45deg,#f3f4f6_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f3f4f6_75%),linear-gradient(-45deg,transparent_75%,#f3f4f6_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] p-4 ${fillViewport ? "h-full min-h-60" : "min-h-72 sm:min-h-[620px]"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={resource.embedUrl} alt={resource.title} className="max-h-[580px] max-w-full rounded-lg object-contain shadow-sm" loading="lazy" />
+        <img src={resource.embedUrl} alt={resource.title} className={`${fillViewport ? "max-h-full" : "max-h-[580px]"} max-w-full rounded-lg object-contain shadow-sm`} loading="lazy" />
       </div>
     );
   }
@@ -154,7 +154,7 @@ function ResourceViewer({ resource }: { resource: ClassCourseResource }) {
       <iframe
         src={`${resource.embedUrl}#toolbar=1&navpanes=0&view=FitH`}
         title={resource.title}
-        className="h-[520px] w-full bg-white sm:h-[720px]"
+        className={fillViewport ? "h-full min-h-60 w-full bg-white" : "h-[520px] w-full bg-white sm:h-[720px]"}
         loading="lazy"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
@@ -167,7 +167,7 @@ function ResourceViewer({ resource }: { resource: ClassCourseResource }) {
       <iframe
         src={resource.embedUrl}
         title={resource.title}
-        className="h-[520px] w-full bg-white sm:h-[720px]"
+        className={fillViewport ? "h-full min-h-60 w-full bg-white" : "h-[520px] w-full bg-white sm:h-[720px]"}
         loading="lazy"
         allow="clipboard-read; clipboard-write; fullscreen"
         allowFullScreen
@@ -180,7 +180,7 @@ function ResourceViewer({ resource }: { resource: ClassCourseResource }) {
     <iframe
       src={resource.embedUrl}
       title={resource.title}
-      className="h-[440px] w-full sm:h-[620px]"
+      className={fillViewport ? "h-full min-h-60 w-full" : "h-[440px] w-full sm:h-[620px]"}
       loading="lazy"
       allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
       allowFullScreen
@@ -830,8 +830,8 @@ export default function ClassLearningContent({
               const activeIndex = resources.findIndex((resource) => resource.id === activeResource?.id);
               const activeCompleted = activeResource ? completedIds.has(activeResource.id) : false;
               return (
-                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-7rem)] lg:max-h-[980px] ${curriculumOpen ? "lg:grid-cols-[18.5rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
-                  <div className={`relative overflow-hidden bg-[linear-gradient(120deg,#351c12_0%,#61341f_58%,#8b542d_100%)] px-6 py-6 text-white sm:px-8 ${courseId && curriculumOpen ? "lg:col-span-2" : "lg:col-span-1"} lg:row-start-1`}>
+                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-6.25rem)] lg:min-h-[680px] ${curriculumOpen ? "lg:grid-cols-[18.5rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
+                  <div className={`relative overflow-hidden bg-[linear-gradient(120deg,#351c12_0%,#61341f_58%,#8b542d_100%)] px-6 py-5 text-white sm:px-8 ${courseId && curriculumOpen ? "lg:col-span-2" : "lg:col-span-1"} lg:row-start-1 lg:py-4`}>
                     <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[54px] border-white/[0.04]" />
                     <div className="pointer-events-none absolute bottom-0 right-[22%] h-32 w-48 skew-x-[-24deg] border-l border-t border-brand-200/10" />
                     <div className="relative">
@@ -842,14 +842,14 @@ export default function ClassLearningContent({
                           {canEdit && <><button onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, coverImageKey: selectedCourse.coverImageKey, published: selectedCourse.published })} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25">Sửa khóa học</button><button disabled={saving} onClick={() => void deleteCourse(selectedCourse)} className="rounded-xl bg-danger-500/80 px-4 py-2 text-sm font-bold hover:bg-danger-500">Xóa</button></>}
                         </div>
                       </div>
-                      <div className="mt-5 max-w-3xl">
+                      <div className="mt-4 max-w-4xl lg:mt-3">
                         <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#f4d58b]">Lộ trình học tuần tự</p>
-                        <h3 className="mt-2 text-2xl font-extrabold sm:text-3xl">{selectedCourse.title}</h3>
-                        {selectedCourse.description && <p className="mt-3 text-sm leading-7 text-brand-100">{selectedCourse.description}</p>}
+                        <h3 className="mt-1.5 text-2xl font-extrabold leading-tight">{selectedCourse.title}</h3>
+                        {selectedCourse.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-brand-100">{selectedCourse.description}</p>}
                       </div>
                     </div>
                     {isStudentViewer && (
-                      <div className="relative mt-6 max-w-xl">
+                      <div className="relative mt-3 max-w-xl">
                         <div className="mb-2 flex justify-between text-xs font-bold text-brand-100"><span>{completedCount}/{resources.length} nội dung đã hoàn thành</span><span>{progressPercent}%</span></div>
                         <div className="h-2.5 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-sunset transition-all" style={{ width: `${progressPercent}%` }} /></div>
                       </div>
@@ -857,8 +857,8 @@ export default function ClassLearningContent({
                   </div>
 
                   {activeResource && (
-                    <div className={`border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7 ${curriculumOpen ? "lg:col-start-2" : "lg:col-start-1"} lg:row-start-2 lg:overflow-y-auto lg:overscroll-contain lg:border-b-0`}>
-                      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div className={`border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7 ${curriculumOpen ? "lg:col-start-2" : "lg:col-start-1"} lg:row-start-2 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:p-4`}>
+                      <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Nội dung {activeIndex + 1}/{resources.length} · {RESOURCE_META[activeResource.type].label}</p>
                           <h4 className="mt-1 text-xl font-extrabold text-gray-900">{activeResource.title}</h4>
@@ -866,14 +866,14 @@ export default function ClassLearningContent({
                         </div>
                         {activeCompleted && <span className="rounded-full bg-success-100 px-3 py-1.5 text-xs font-bold text-success-700">✓ Đã hoàn thành</span>}
                       </div>
-                      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-inner">
+                      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-inner lg:min-h-0 lg:flex-1">
                         {activeResource.embedUrl ? (
-                          <ResourceViewer resource={activeResource} />
+                          <ResourceViewer resource={activeResource} fillViewport={Boolean(courseId)} />
                         ) : (
                           <div className="flex h-64 flex-col items-center justify-center gap-3 px-5 text-center text-gray-500"><span className="text-3xl">🔒</span><p className="text-sm font-semibold">Hoàn thành nội dung trước để mở tài liệu này.</p></div>
                         )}
                       </div>
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
                         {activeResource.url ? <a href={activeResource.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-brand-700 hover:underline">Mở liên kết gốc ↗</a> : <span />}
                         {isStudentViewer && (
                           <button type="button" disabled={saving || activeCompleted || !activeResource.embedUrl} onClick={() => void completeResource(selectedCourse, activeResource)} className="rounded-xl bg-gradient-to-r from-brand-700 to-brand-600 px-5 py-3 text-sm font-bold text-white shadow-sm disabled:bg-none disabled:bg-success-600 disabled:opacity-80">
@@ -882,14 +882,16 @@ export default function ClassLearningContent({
                         )}
                       </div>
                       {activeLesson && (
-                        <div className="mt-7 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:h-[clamp(180px,20vh,230px)] lg:shrink-0">
                           <LessonDiscussion
-                            key={activeLesson.id}
+                            key={`${activeLesson.id}:${activeResource.id}`}
                             classId={classId}
                             courseId={selectedCourse.id}
                             lessonId={activeLesson.id}
-                            contextLabel={activeLesson.title}
+                            resourceId={activeResource.id}
+                            contextLabel={activeResource.title}
                             defaultOpen
+                            persistent={Boolean(courseId)}
                           />
                         </div>
                       )}

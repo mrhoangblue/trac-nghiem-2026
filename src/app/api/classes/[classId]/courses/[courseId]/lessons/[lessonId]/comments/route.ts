@@ -14,6 +14,8 @@ interface DiscussionAccess {
   isTeacher: boolean;
   authorName: string;
   lessonKey: string;
+  discussionKey: string;
+  resourceId: string | null;
 }
 
 function toIso(value: unknown): string | null {
@@ -26,6 +28,7 @@ async function getAccess(
   classId: string,
   courseId: string,
   lessonId: string,
+  resourceId: string | null,
 ): Promise<DiscussionAccess | NextResponse> {
   const authUser = await verifyAuth(request);
   if (!authUser) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
@@ -43,9 +46,13 @@ async function getAccess(
   const courseData = courseSnapshot.data() ?? {};
   const isTeacher = classData.teacherId === authUser.uid || authUser.role === "admin";
   const isStudent = Array.isArray(classData.studentIds) && classData.studentIds.includes(authUser.uid);
-  const lessonExists = Array.isArray(courseData.lessons)
-    && courseData.lessons.some((lesson: { id?: unknown }) => lesson?.id === lessonId);
-  if (courseData.classId !== classId || !lessonExists) {
+  const lesson = Array.isArray(courseData.lessons)
+    ? (courseData.lessons as Array<{ id?: unknown; resources?: Array<{ id?: unknown }> }>)
+      .find((candidate) => candidate?.id === lessonId)
+    : null;
+  const resourceExists = !resourceId || (lesson && Array.isArray(lesson.resources)
+    && lesson.resources.some((resource: { id?: unknown }) => resource?.id === resourceId));
+  if (courseData.classId !== classId || !lesson || !resourceExists) {
     return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }
   if (!isTeacher && (!isStudent || courseData.published !== true)) {
@@ -56,7 +63,15 @@ async function getAccess(
   const authorName = typeof profile.fullName === "string" && profile.fullName.trim()
     ? profile.fullName.trim()
     : authUser.email || (isTeacher ? "Giáo viên" : "Học sinh");
-  return { authUser, isTeacher, authorName, lessonKey: `${classId}:${courseId}:${lessonId}` };
+  const lessonKey = `${classId}:${courseId}:${lessonId}`;
+  return {
+    authUser,
+    isTeacher,
+    authorName,
+    lessonKey,
+    discussionKey: resourceId ? `${lessonKey}:${resourceId}` : lessonKey,
+    resourceId,
+  };
 }
 
 function serializeComment(document: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
@@ -75,10 +90,11 @@ function serializeComment(document: FirebaseFirestore.QueryDocumentSnapshot | Fi
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { classId, courseId, lessonId } = await params;
-    const access = await getAccess(request, classId, courseId, lessonId);
+    const resourceId = request.nextUrl.searchParams.get("resourceId")?.trim() || null;
+    const access = await getAccess(request, classId, courseId, lessonId, resourceId);
     if (access instanceof NextResponse) return access;
     const snapshot = await adminDb.collection("class_lesson_comments")
-      .where("lessonKey", "==", access.lessonKey)
+      .where(access.resourceId ? "discussionKey" : "lessonKey", "==", access.resourceId ? access.discussionKey : access.lessonKey)
       .limit(200)
       .get();
     const comments = snapshot.docs
@@ -94,7 +110,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { classId, courseId, lessonId } = await params;
-    const access = await getAccess(request, classId, courseId, lessonId);
+    const resourceId = request.nextUrl.searchParams.get("resourceId")?.trim() || null;
+    const access = await getAccess(request, classId, courseId, lessonId, resourceId);
     if (access instanceof NextResponse) return access;
     const payload = await request.json() as { body?: unknown };
     const body = typeof payload.body === "string" ? payload.body.trim() : "";
@@ -104,9 +121,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const commentRef = adminDb.collection("class_lesson_comments").doc();
     await commentRef.set({
       lessonKey: access.lessonKey,
+      discussionKey: access.discussionKey,
       classId,
       courseId,
       lessonId,
+      resourceId: access.resourceId,
       body,
       authorId: access.authUser.uid,
       authorName: access.authorName,
@@ -125,14 +144,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { classId, courseId, lessonId } = await params;
-    const access = await getAccess(request, classId, courseId, lessonId);
+    const resourceId = request.nextUrl.searchParams.get("resourceId")?.trim() || null;
+    const access = await getAccess(request, classId, courseId, lessonId, resourceId);
     if (access instanceof NextResponse) return access;
     const commentId = request.nextUrl.searchParams.get("commentId")?.trim();
     if (!commentId) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
     const commentRef = adminDb.collection("class_lesson_comments").doc(commentId);
     const comment = await commentRef.get();
     const data = comment.data();
-    if (!comment.exists || data?.lessonKey !== access.lessonKey) {
+    const storedDiscussionKey = typeof data?.discussionKey === "string" ? data.discussionKey : data?.lessonKey;
+    if (!comment.exists || storedDiscussionKey !== access.discussionKey) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
     if (!access.isTeacher && data?.authorId !== access.authUser.uid) {

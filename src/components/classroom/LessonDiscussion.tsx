@@ -17,8 +17,10 @@ interface Props {
   classId: string;
   courseId: string;
   lessonId: string;
+  resourceId?: string;
   contextLabel?: string;
   defaultOpen?: boolean;
+  persistent?: boolean;
 }
 
 function formatTime(value: string | null): string {
@@ -27,9 +29,9 @@ function formatTime(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "Vừa xong" : date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
-export default function LessonDiscussion({ classId, courseId, lessonId, contextLabel, defaultOpen = false }: Props) {
+export default function LessonDiscussion({ classId, courseId, lessonId, resourceId, contextLabel, defaultOpen = false, persistent = false }: Props) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || persistent);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,7 +41,7 @@ export default function LessonDiscussion({ classId, courseId, lessonId, contextL
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
 
-  const endpoint = `/api/classes/${encodeURIComponent(classId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/comments`;
+  const endpoint = `/api/classes/${encodeURIComponent(classId)}/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/comments${resourceId ? `?resourceId=${encodeURIComponent(resourceId)}` : ""}`;
 
   const loadComments = useCallback(async () => {
     if (!user || loading) return;
@@ -100,7 +102,8 @@ export default function LessonDiscussion({ classId, courseId, lessonId, contextL
     setError("");
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`${endpoint}?commentId=${encodeURIComponent(commentId)}`, {
+      const separator = endpoint.includes("?") ? "&" : "?";
+      const response = await fetch(`${endpoint}${separator}commentId=${encodeURIComponent(commentId)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -114,30 +117,39 @@ export default function LessonDiscussion({ classId, courseId, lessonId, contextL
   };
 
   return (
-    <div className="border-t border-gray-100 bg-[#fffdf9]">
+    <div className={`border-t border-gray-100 bg-[#fffdf9] ${persistent ? "flex h-full min-h-0 flex-col" : ""}`}>
+      {persistent ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-brand-800 sm:px-5">
+          <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Hỏi đáp{contextLabel ? ` · ${contextLabel}` : " bài học"}</span></span>
+          <span className="text-xs text-gray-400">{loaded ? `${comments.length} trao đổi` : "Đang tải"}</span>
+        </div>
+      ) : (
       <button type="button" onClick={toggle} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-brand-800 hover:bg-brand-50 sm:px-5">
         <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Hỏi đáp{contextLabel ? ` · ${contextLabel}` : " bài học"}</span></span>
         <span className="text-xs text-gray-400">{loaded ? `${comments.length} trao đổi` : open ? "Đang mở" : "Mở"}</span>
       </button>
+      )}
       {open && (
-        <div className="space-y-3 border-t border-gray-100 px-4 py-4 sm:px-5">
-          {loading && <p className="text-sm text-gray-400">Đang tải trao đổi…</p>}
-          {!loading && comments.length === 0 && <p className="rounded-xl bg-white px-4 py-3 text-sm text-gray-400">Chưa có câu hỏi. Bạn có thể bắt đầu trao đổi về bài học này.</p>}
-          {comments.map((comment) => (
-            <article key={comment.id} className="rounded-2xl border border-gray-100 bg-white p-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><p className="truncate text-sm font-extrabold text-gray-800">{comment.authorName} {comment.authorRole === "teacher" && <span className="ml-1 rounded-full bg-brand-100 px-2 py-0.5 text-[10px] uppercase text-brand-800">Giáo viên</span>}</p><p className="mt-0.5 text-[11px] text-gray-400">{formatTime(comment.createdAt)}</p></div>
-                {(canModerate || viewerId === comment.authorId) && <button type="button" disabled={saving} onClick={() => void remove(comment.id)} title="Xóa bình luận" className="rounded-lg p-2 text-gray-400 hover:bg-danger-50 hover:text-danger-600"><Trash2 className="h-4 w-4" /></button>}
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">{comment.body}</p>
-            </article>
-          ))}
-          <form onSubmit={submit} className="flex items-end gap-2">
-            <label className="sr-only" htmlFor={`comment-${lessonId}`}>Câu hỏi hoặc phản hồi</label>
-            <textarea id={`comment-${lessonId}`} value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={1500} rows={2} placeholder="Đặt câu hỏi hoặc phản hồi về bài học…" className="min-h-20 flex-1 resize-y rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400" />
+        <div className={`border-t border-gray-100 ${persistent ? "flex min-h-0 flex-1 flex-col" : "space-y-3 px-4 py-4 sm:px-5"}`}>
+          <div className={persistent ? "min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5" : "contents"}>
+            {loading && <p className="text-sm text-gray-400">Đang tải trao đổi…</p>}
+            {!loading && comments.length === 0 && <p className="rounded-xl bg-white px-4 py-3 text-sm text-gray-400">Chưa có câu hỏi. Bạn có thể bắt đầu trao đổi về nội dung này.</p>}
+            {comments.map((comment) => (
+              <article key={comment.id} className="rounded-2xl border border-gray-100 bg-white p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><p className="truncate text-sm font-extrabold text-gray-800">{comment.authorName} {comment.authorRole === "teacher" && <span className="ml-1 rounded-full bg-brand-100 px-2 py-0.5 text-[10px] uppercase text-brand-800">Giáo viên</span>}</p><p className="mt-0.5 text-[11px] text-gray-400">{formatTime(comment.createdAt)}</p></div>
+                  {(canModerate || viewerId === comment.authorId) && <button type="button" disabled={saving} onClick={() => void remove(comment.id)} title="Xóa bình luận" className="rounded-lg p-2 text-gray-400 hover:bg-danger-50 hover:text-danger-600"><Trash2 className="h-4 w-4" /></button>}
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">{comment.body}</p>
+              </article>
+            ))}
+          </div>
+          <form onSubmit={submit} className={`flex items-end gap-2 ${persistent ? "shrink-0 border-t border-gray-100 bg-white/80 px-4 py-3 sm:px-5" : ""}`}>
+            <label className="sr-only" htmlFor={`comment-${lessonId}-${resourceId ?? "lesson"}`}>Câu hỏi hoặc phản hồi</label>
+            <textarea id={`comment-${lessonId}-${resourceId ?? "lesson"}`} value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={1500} rows={persistent ? 1 : 2} placeholder="Đặt câu hỏi về nội dung đang xem…" className={`${persistent ? "min-h-11 resize-none" : "min-h-20 resize-y"} flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400`} />
             <button disabled={saving || !draft.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white disabled:opacity-40" title="Gửi"><Send className="h-4 w-4" /></button>
           </form>
-          {error && <p className="text-xs font-semibold text-danger-600">{error}</p>}
+          {error && <p className={`text-xs font-semibold text-danger-600 ${persistent ? "shrink-0 px-4 pb-2 sm:px-5" : ""}`}>{error}</p>}
         </div>
       )}
     </div>
