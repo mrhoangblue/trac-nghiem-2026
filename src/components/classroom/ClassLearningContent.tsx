@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import LessonDiscussion from "@/components/classroom/LessonDiscussion";
+import ClassActivityHub from "@/components/classroom/ClassActivityHub";
 import { flattenCourseResources } from "@/utils/courseProgress";
 import type {
   ClassCourseLesson,
@@ -679,6 +680,8 @@ export default function ClassLearningContent({
       {error && (
         <div className="rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</div>
       )}
+
+      {!courseId && <ClassActivityHub classId={classId} teacherMode={teacherMode} />}
 
       <section className="space-y-4" aria-labelledby="course-section-title">
         {!courseId && <div className="flex flex-wrap items-end justify-between gap-4">

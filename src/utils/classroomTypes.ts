@@ -105,6 +105,49 @@ export interface ClassExamSummary {
   totalScore?: number;
 }
 
+export interface ClassAnnouncementView {
+  id: string;
+  title: string;
+  body: string;
+  kind: "general" | "assignment";
+  assignmentId?: string;
+  createdAt: string | null;
+}
+
+export interface AssignmentFileView {
+  key: string;
+  name: string;
+  contentType: string;
+  size: number;
+  downloadUrl?: string;
+}
+
+export interface AssignmentSubmissionView {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  files: AssignmentFileView[];
+  note: string;
+  submittedAt: string | null;
+}
+
+export interface ClassAssignmentView {
+  id: string;
+  title: string;
+  description: string;
+  dueAt: string | null;
+  acceptingSubmissions: boolean;
+  status: "open" | "closed";
+  attachment?: AssignmentFileView;
+  createdAt: string | null;
+  submittedCount?: number;
+  totalStudents?: number;
+  submissions?: AssignmentSubmissionView[];
+  missingStudents?: Array<{ studentId: string; studentName: string; studentEmail: string }>;
+  mySubmission?: AssignmentSubmissionView | null;
+}
+
 /** Extra fields merged into `users/{uid}` for MOD/Teacher role. */
 export interface ModUserExtension {
   phoneNumber?: string;

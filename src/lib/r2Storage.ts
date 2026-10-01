@@ -178,6 +178,22 @@ export async function downloadFromR2(key: string): Promise<Uint8Array> {
   return response.Body.transformToByteArray();
 }
 
+export async function createR2DownloadUrl(key: string, expiresIn = 10 * 60): Promise<string> {
+  const config = getConfig();
+  if (!config) throw new Error("R2_NOT_CONFIGURED");
+  const normalizedKey = key.trim().replace(/^\/+/, "");
+  const allowed = ["learning-materials/", "course-assets/", "exam-assets/", "tikz-renders/"]
+    .some((prefix) => normalizedKey.startsWith(prefix));
+  if (!normalizedKey || !allowed || normalizedKey.includes("..")) {
+    throw new Error("R2_OBJECT_KEY_INVALID");
+  }
+  return getSignedUrl(
+    getClient(config),
+    new GetObjectCommand({ Bucket: config.bucket, Key: normalizedKey }),
+    { expiresIn: Math.max(60, Math.min(expiresIn, 60 * 60)) },
+  );
+}
+
 export async function getR2ObjectMetadata(key: string): Promise<{
   size: number;
   contentType: string | null;
