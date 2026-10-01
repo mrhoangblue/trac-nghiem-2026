@@ -68,6 +68,7 @@ export default function EditExamPage() {
 
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // LaTeX parts
@@ -187,6 +188,74 @@ export default function EditExamPage() {
     }
   };
 
+  const handleSaveSettings = async () => {
+    const isOwnExam = !originalAuthorEmail || originalAuthorEmail === user?.email;
+    if (!isOwnExam) {
+      alert("Bạn cần tạo bản sao trước khi thay đổi cấu hình của đề này.");
+      return;
+    }
+    if (!examTitle.trim()) {
+      alert("Vui lòng nhập tên bài thi.");
+      return;
+    }
+    const timeError = validateTimeRange(startTime, endTime);
+    if (timeError) {
+      alert(timeError);
+      return;
+    }
+    if (targetType === "classes" && targetClassIds.length === 0) {
+      alert("Vui lòng chọn ít nhất một lớp được phép làm bài.");
+      return;
+    }
+    if (newPassword && newPassword.normalize("NFKC").length < 4) {
+      alert("Mật khẩu đề thi phải có ít nhất 4 ký tự.");
+      return;
+    }
+
+    setSavingSettings(true);
+    try {
+      const token = await user?.getIdToken();
+      if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
+      const passwordAction = removePassword ? "remove" : newPassword ? "set" : "keep";
+      const response = await fetch(`/api/exams/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          mode: "settings",
+          title: examTitle.trim(),
+          description: description.trim(),
+          scoringConfig: {
+            part1TotalScore: Number(scoringConfig.part1TotalScore),
+            part3TotalScore: Number(scoringConfig.part3TotalScore),
+          },
+          duration: Number(duration),
+          startTime: toStoredDateTime(startTime),
+          endTime: toStoredDateTime(endTime),
+          maxRetries: Number(maxRetries),
+          gradeLevel,
+          examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
+          targetType,
+          targetClassIds: targetType === "classes" ? targetClassIds : [],
+          isShared,
+          passwordAction,
+          ...(newPassword ? { password: newPassword } : {}),
+        }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+      if (!response.ok) throw new Error(payload?.message ?? payload?.error ?? "Không thể lưu cấu hình.");
+      if (passwordAction === "set") setHasPassword(true);
+      if (passwordAction === "remove") setHasPassword(false);
+      setNewPassword("");
+      setRemovePassword(false);
+      alert("✓ Đã lưu cấu hình. Nội dung LaTeX và các ảnh TikZ không bị biên dịch lại.");
+    } catch (error) {
+      console.error(error);
+      alert(`❌ ${error instanceof Error ? error.message : "Không thể lưu cấu hình."}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   // ── Save: update own exam OR clone shared exam ────────────────────────────
   const handleUpdate = async () => {
     if (!previewData) {
@@ -196,14 +265,16 @@ export default function EditExamPage() {
 
     // Determine if this is someone else's exam (clone operation)
     const isOwnExam = !originalAuthorEmail || originalAuthorEmail === user?.email;
-    const timeError = validateTimeRange(startTime, endTime);
-    if (timeError) {
-      alert(timeError);
-      return;
-    }
-    if (newPassword && newPassword.normalize("NFKC").length < 4) {
-      alert("Mật khẩu đề thi phải có ít nhất 4 ký tự.");
-      return;
+    if (!isOwnExam) {
+      const timeError = validateTimeRange(startTime, endTime);
+      if (timeError) {
+        alert(timeError);
+        return;
+      }
+      if (newPassword && newPassword.normalize("NFKC").length < 4) {
+        alert("Mật khẩu đề thi phải có ít nhất 4 ký tự.");
+        return;
+      }
     }
 
     setSaving(true);
@@ -227,13 +298,10 @@ export default function EditExamPage() {
         const failureDetails = (processed.failures ?? []).slice(0, 6).map((failure) =>
           `• Câu ${failure.questionNumber} (${failure.field === "question" ? "đề bài" : "lời giải"}): ${failure.error}`
         ).join("\n");
-        const ok = window.confirm(
-          `Có ${processed.failedCount} hình TikZ không chuyển được sang ảnh. ` +
-          "Các hình này sẽ được lưu bằng cơ chế TikZ cũ và vẫn có thể nặng trên mobile." +
-          (failureDetails ? `\n\nChi tiết:\n${failureDetails}` : "") +
-          "\n\nVẫn lưu bài thi?"
+        throw new Error(
+          `Có ${processed.failedCount} hình TikZ chưa biên dịch được. Nội dung chưa bị ghi đè.` +
+          (failureDetails ? `\n\n${failureDetails}` : "")
         );
-        if (!ok) return;
       }
 
       const questionsToSave = processed.questions;
@@ -284,20 +352,21 @@ export default function EditExamPage() {
         router.push("/admin/exam-list?tab=shared");
       } else {
         // ── UPDATE: ghi đè đề của chính mình ────────────────────────────
-        if (!window.confirm("Bạn có chắc muốn LƯU ĐÈ bài thi này không?")) {
+        if (!window.confirm("Biên dịch lại LaTeX/TikZ và thay nội dung câu hỏi hiện tại?\n\nĐiểm, thời gian, mật khẩu và lớp được giao sẽ được giữ nguyên.")) {
           setSaving(false);
           return;
         }
 
-        const passwordAction = removePassword ? "remove" : newPassword ? "set" : "keep";
         const updateResponse = await fetch(`/api/exams/${encodeURIComponent(id)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
-          ...examPayload,
-          isShared,
-            passwordAction,
-            ...(newPassword ? { password: newPassword } : {}),
+            mode: "content",
+            title: examTitle.trim(),
+            questions: questionsToSave,
+            rawLatex: { part1, part2, part3 },
+            tikzProcessed: processed.tikzProcessed,
+            tikzImageCount: processed.convertedCount,
           }),
         });
         if (!updateResponse.ok) {
@@ -305,8 +374,7 @@ export default function EditExamPage() {
           throw new Error(payload?.message ?? payload?.error ?? "Không thể cập nhật bài thi.");
         }
 
-        alert("✓ Cập nhật bài thi thành công!");
-        router.push("/admin/exam-list?tab=mine");
+        alert("✓ Đã biên dịch và cập nhật nội dung LaTeX/TikZ. Cấu hình bài thi được giữ nguyên.");
       }
     } catch (err) {
       console.error(err);
@@ -358,11 +426,26 @@ export default function EditExamPage() {
           </div>
         </div>
 
+        <div className="mb-8 grid gap-4 md:grid-cols-2" aria-label="Hai khu vực chỉnh sửa độc lập">
+          <a href="#exam-settings" className="group rounded-2xl border border-success-200 bg-success-50 p-5 transition hover:-translate-y-0.5 hover:shadow-soft">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-black uppercase tracking-[.16em] text-success-700">Cấu hình bài thi</p><h2 className="mt-1 font-extrabold text-gray-900">Sửa điểm, thời gian, lớp và mật khẩu</h2><p className="mt-2 text-xs leading-5 text-gray-600">Lưu ngay, không chạy trình biên dịch và không chạm vào câu hỏi hoặc ảnh TikZ.</p></div>
+              <span className="rounded-xl bg-white px-3 py-2 text-success-700 shadow-sm transition group-hover:translate-x-0.5">↓</span>
+            </div>
+          </a>
+          <a href="#latex-content" className="group rounded-2xl border border-brand-200 bg-brand-50 p-5 transition hover:-translate-y-0.5 hover:shadow-soft">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-black uppercase tracking-[.16em] text-brand-700">Nội dung LaTeX / TikZ</p><h2 className="mt-1 font-extrabold text-gray-900">Biên dịch lại câu hỏi và hình vẽ</h2><p className="mt-2 text-xs leading-5 text-gray-600">Chỉ dùng khi mã đề thay đổi. Hình TikZ được render tuần tự và lưu lên R2.</p></div>
+              <span className="rounded-xl bg-white px-3 py-2 text-brand-700 shadow-sm transition group-hover:translate-x-0.5">↓</span>
+            </div>
+          </a>
+        </div>
+
         <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,.85fr)]">
           {/* ── Editor ─────────────────────────────────────────────────── */}
           <div className="space-y-6">
             {/* Tên */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="edit-basic-info-heading">
+            <section id="exam-settings" className="scroll-mt-24 rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="edit-basic-info-heading">
               <div className="mb-5 flex items-center gap-3">
                 <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-700 text-sm font-extrabold text-white">1</span>
                 <div><h2 id="edit-basic-info-heading" className="font-extrabold text-gray-900">Thông tin đề thi</h2><p className="text-xs text-gray-500">Những nội dung học sinh nhìn thấy trong kho đề.</p></div>
@@ -545,7 +628,11 @@ export default function EditExamPage() {
             </div>
 
             {/* LaTeX textareas */}
-            <div className="space-y-6">
+            <div id="latex-content" className="scroll-mt-24 space-y-6 rounded-3xl border border-brand-200 bg-white p-6 shadow-soft sm:p-7">
+              <div className="rounded-2xl bg-slate-950 p-4 text-slate-100">
+                <p className="text-xs font-black uppercase tracking-[.16em] text-amber-300">Nội dung nguồn</p>
+                <p className="mt-1 text-sm font-extrabold">LaTeX và TikZ chỉ được cập nhật bằng nút biên dịch ở cuối khu vực này.</p>
+              </div>
               {([
                 { label: "Phần 1: Trắc nghiệm nhiều phương án (\\choice)", value: part1, set: setPart1 },
                 { label: "Phần 2: Trắc nghiệm Đúng/Sai (\\choiceTF)",    value: part2, set: setPart2 },
@@ -641,13 +728,23 @@ export default function EditExamPage() {
               </div>
             </div>
 
+            <div className="rounded-2xl border border-success-200 bg-success-50 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div><p className="font-extrabold text-success-900">Lưu cấu hình bài thi</p><p className="mt-1 text-xs leading-5 text-success-800/80">Lưu điểm, thời gian, phân loại, lớp và mật khẩu mà không biên dịch lại LaTeX/TikZ.</p></div>
+                <button type="button" onClick={handleSaveSettings} disabled={savingSettings || !isOwnExam} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-success-600 px-6 text-sm font-extrabold text-white shadow-sm transition hover:bg-success-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {savingSettings && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                  {savingSettings ? "Đang lưu…" : "Lưu cấu hình"}
+                </button>
+              </div>
+            </div>
+
             {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={handlePreview}
                 className="flex-1 py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5"
               >
-                🔄 Biên dịch lại
+                Xem trước LaTeX
               </button>
               <button
                 onClick={handleUpdate}
@@ -655,11 +752,11 @@ export default function EditExamPage() {
                 className="flex-1 py-4 bg-success-500 hover:bg-success-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2"
               >
                 {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {isOwnExam ? "💾 Cập nhật bài thi" : "📋 Tạo bản sao"}
+                {isOwnExam ? "Biên dịch TikZ & lưu nội dung" : "📋 Tạo bản sao"}
               </button>
             </div>
             {!previewData && (
-              <p className="text-xs text-center text-amber-600 italic">⚠️ Cần bấm &quot;Biên dịch lại&quot; trước khi lưu.</p>
+              <p className="text-xs text-center text-amber-600 italic">Cần xem trước LaTeX trước khi biên dịch TikZ và lưu nội dung.</p>
             )}
           </div>
 
@@ -669,7 +766,7 @@ export default function EditExamPage() {
             {!previewData ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-gray-400 gap-4">
                 <div className="text-5xl">👀</div>
-                <p className="text-sm">Bấm &quot;Biên dịch lại&quot; để xem trước nội dung đề thi.</p>
+                <p className="text-sm">Bấm &quot;Xem trước LaTeX&quot; để kiểm tra nội dung trước khi lưu.</p>
               </div>
             ) : (
               <div className="space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">

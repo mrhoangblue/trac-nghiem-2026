@@ -4,7 +4,7 @@ import { uploadToR2 } from "@/lib/r2Storage";
 const TIKZ_RENDER_ENDPOINT =
   process.env.TIKZ_RENDER_ENDPOINT ?? "https://frankii1990-tikz-render.hf.space/render";
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 90_000;
 
 // ── Regexes ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,12 @@ const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
     pattern: /pattern\s*=\s*(?:north\s+east\s+lines|north\s+west\s+lines|horizontal\s+lines|vertical\s+lines|crosshatch|dots|bricks|checkerboard)/,
     preamble: "\\usetikzlibrary{patterns}",
   },
+  { pattern: /(?:>=|arrow|stealth|latex|Latex)/i, preamble: "\\usetikzlibrary{arrows.meta}" },
+  { pattern: /\b(?:above|below|left|right)\s*=\s*(?:of|\d)/, preamble: "\\usetikzlibrary{positioning}" },
+  { pattern: /name\s+intersections|intersection\s+of=/, preamble: "\\usetikzlibrary{intersections}" },
+  { pattern: /pic\s*\{|angle\s*=|quotes/, preamble: "\\usetikzlibrary{angles,quotes}" },
+  { pattern: /decoration\s*=|postaction\s*=\s*\{decorate\}/, preamble: "\\usetikzlibrary{decorations.markings,decorations.pathmorphing}" },
+  { pattern: /shape\s*=|(?:diamond|trapezium|regular polygon)/, preamble: "\\usetikzlibrary{shapes.geometric}" },
 ];
 
 /**

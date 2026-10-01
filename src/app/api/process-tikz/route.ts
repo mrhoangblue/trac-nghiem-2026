@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { ParsedQuestion } from "@/utils/latexParser";
 import { convertTikzToStoredImage, storeTikzDataUri } from "@/utils/tikzToImage";
+import { mapWithConcurrency } from "@/utils/asyncPool";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 interface ProcessTikzRequest {
   questions?: ParsedQuestion[];
@@ -99,14 +101,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results = await Promise.all(
-      questions.map((question) => convertQuestionTikz(question, body.timeoutMs)),
+    const results = await mapWithConcurrency(
+      questions,
+      2,
+      (question) => convertQuestionTikz(question, body.timeoutMs),
     );
+    const failedCount = results.reduce((sum, result) => sum + result.failedCount, 0);
 
     return NextResponse.json({
       questions: results.map((result) => result.question),
       convertedCount: results.reduce((sum, result) => sum + result.convertedCount, 0),
-      failedCount: results.reduce((sum, result) => sum + result.failedCount, 0),
+      failedCount,
       failures: results.flatMap((result, index) => [
         ...(result.question.tikzConversionError
           ? [{ questionNumber: index + 1, field: "question", error: result.question.tikzConversionError }]
@@ -115,7 +120,7 @@ export async function POST(request: NextRequest) {
           ? [{ questionNumber: index + 1, field: "explanation", error: result.question.explanationTikzConversionError }]
           : []),
       ]),
-      tikzProcessed: true,
+      tikzProcessed: failedCount === 0,
     });
   } catch (error) {
     console.error("TikZ processing failed:", error);

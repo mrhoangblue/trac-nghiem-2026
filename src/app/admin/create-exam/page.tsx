@@ -347,18 +347,15 @@ export default function CreateExamPage() {
         }),
       });
 
-      const uploaded = (await uploadResponse.json()) as UploadQuizResponse;
+      const uploaded = (await uploadResponse.json()) as UploadQuizResponse & { message?: string; failures?: Array<{ questionNumber: number; field: string; error: string }> };
       if (!uploadResponse.ok) {
-        throw new Error(uploaded.error ?? "Không thể lưu bài thi.");
-      }
-      if ((uploaded.failedCount ?? 0) > 0) {
-        alert(
-          `Đã lưu bài thi, nhưng có ${uploaded.failedCount} hình TikZ không chuyển được. ` +
-          "Các hình lỗi được giữ nguyên bằng cơ chế TikZ cũ."
-        );
+        const details = uploaded.failures?.slice(0, 5).map((failure) =>
+          `Câu ${failure.questionNumber} (${failure.field === "question" ? "đề bài" : "lời giải"}): ${failure.error}`
+        ).join("\n");
+        throw new Error(`${uploaded.message ?? uploaded.error ?? "Không thể lưu bài thi."}${details ? `\n\n${details}` : ""}`);
       }
 
-      alert("✓ Đã lưu bài thi lên Firestore thành công!");
+      alert(`✓ Đã lưu bài thi. ${uploaded.convertedCount ?? 0} hình TikZ đã được lưu lên R2.`);
       setExamTitle(""); setDescription(""); setCoverImageUrl(""); setPart1(""); setPart2(""); setPart3("");
       setSmartInput(""); setSmartResult(null); setPreviewData(null);
       setScoringConfig({ part1TotalScore: 3, part3TotalScore: 3 });

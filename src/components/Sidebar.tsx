@@ -86,9 +86,10 @@ export default function Sidebar() {
   return (
     <aside className={`site-sidebar sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 overflow-y-auto border-r border-[#eee6de] bg-[#fffdfb] transition-[width] duration-300 md:block ${collapsed ? "w-[5rem]" : "w-[17rem]"}`}>
       <nav className={collapsed ? "p-2" : "p-3.5"}>
-        <div className={`mb-2 flex ${collapsed ? "justify-center" : "justify-end"}`}>
-          <button type="button" onClick={toggleCollapsed} title={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#eadfd5] bg-white text-[#765b49] shadow-sm hover:bg-[#f7efe7]">
+        <div className={`sticky top-0 z-20 -mx-1 mb-3 flex bg-[#fffdfb]/95 py-1 backdrop-blur ${collapsed ? "justify-center" : "justify-end"}`}>
+          <button type="button" onClick={toggleCollapsed} title={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} className={`flex h-10 items-center justify-center gap-2 rounded-xl border border-[#dfcfc1] bg-white font-bold text-[#765b49] shadow-sm transition hover:border-brand-300 hover:bg-[#f7efe7] ${collapsed ? "w-10" : "px-3 text-xs"}`}>
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {!collapsed && <span>Thu gọn menu</span>}
           </button>
         </div>
         <ProfileCard name={userProfile.fullName || user.email || "Người dùng"} teacher={teacherView} collapsed={collapsed} />

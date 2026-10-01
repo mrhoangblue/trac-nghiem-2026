@@ -14,6 +14,7 @@ import {
   processTikzToImagesWithStats,
   storeTikzDataUri,
 } from "@/utils/tikzToImage";
+import { mapWithConcurrency } from "@/utils/asyncPool";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -183,8 +184,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "INVALID_QUESTION_COUNT" }, { status: 400 });
     }
 
-    const results = await Promise.all(
-      body.questions.map((question) => processQuestionTikz(question, body.timeoutMs)),
+    const results = await mapWithConcurrency(
+      body.questions,
+      2,
+      (question) => processQuestionTikz(question, body.timeoutMs),
     );
 
     const questionsToSave = results.map((result) => result.question);
@@ -196,6 +199,25 @@ export async function POST(request: NextRequest) {
     }
     const convertedCount = results.reduce((sum, result) => sum + result.convertedCount, 0);
     const failedCount = results.reduce((sum, result) => sum + result.failedCount, 0);
+    if (failedCount > 0) {
+      const failures = results.flatMap((result, index) => {
+        const question = result.question;
+        return [
+          ...(question.tikzConversionError
+            ? [{ questionNumber: index + 1, field: "question", error: question.tikzConversionError }]
+            : []),
+          ...(question.explanationTikzConversionError
+            ? [{ questionNumber: index + 1, field: "explanation", error: question.explanationTikzConversionError }]
+            : []),
+        ];
+      });
+      return NextResponse.json({
+        error: "TIKZ_CONVERSION_FAILED",
+        message: `Có ${failedCount} hình TikZ chưa biên dịch được. Bài thi chưa được lưu để tránh mất hình.`,
+        failedCount,
+        failures,
+      }, { status: 422 });
+    }
     const p1Questions = questionsToSave.filter((q) => q.type === "multiple_choice");
     const p2Questions = questionsToSave.filter((q) => q.type === "true_false");
     const p3Questions = questionsToSave.filter((q) => q.type === "short_answer");
@@ -250,7 +272,7 @@ export async function POST(request: NextRequest) {
       startTime: body.startTime || null,
       endTime: body.endTime || null,
       rawLatexSource,
-      tikzProcessed: true,
+      tikzProcessed: failedCount === 0,
       tikzImageCount: convertedCount,
       tikzFailedCount: failedCount,
       authorEmail: authUser.email,
@@ -283,7 +305,7 @@ export async function POST(request: NextRequest) {
       id: docRef.id,
       convertedCount,
       failedCount,
-      tikzProcessed: true,
+      tikzProcessed: failedCount === 0,
     });
   } catch (error) {
     console.error("Upload quiz failed:", error);
