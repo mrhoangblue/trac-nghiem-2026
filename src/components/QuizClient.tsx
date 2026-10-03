@@ -1106,7 +1106,7 @@ export default function QuizClient({
   ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6 lg:py-10">
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 py-4 sm:px-5 lg:py-6">
       {CheatWarningModal}
 
       {/* ── Exit-confirmation modal ───────────────────────────────────────────── */}
@@ -1190,7 +1190,7 @@ export default function QuizClient({
             </div>
           </div>
 
-          <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_16px_45px_-28px_rgba(30,64,175,.35)] sm:p-7 md:p-8">
+          <div className="quiz-question-shell flex-1 rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_16px_45px_-28px_rgba(30,64,175,.35)] sm:p-5 md:p-6">
             <QuestionCard
               key={currentQ.id}
               question={currentQ}
@@ -1446,7 +1446,7 @@ const QuestionCard = memo(
         : { label: "Trả lời ngắn", cls: "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200" };
 
     return (
-      <div>
+      <div className="exam-reading">
         <div className="mb-5 flex items-center gap-2">
           <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
             Câu {questionNumber}
@@ -1457,14 +1457,14 @@ const QuestionCard = memo(
         </div>
 
         {tikzCode || tikzImageUrl ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
-            <div className="text-gray-900 leading-relaxed font-medium">
+          <div className="exam-question-visual mb-4 grid grid-cols-1 items-center gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(15rem,.9fr)]">
+            <div className="text-gray-900 font-medium">
               {renderedQuestion}
             </div>
             {/* TikzRenderer is React.memo — never re-renders on answer clicks.    */}
             {/* key={currentQ.id} on QuestionCard (parent) ensures a fresh iframe  */}
             {/* is mounted when navigating, so TikZJax WebAssembly is fully freed. */}
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
+            <div className="exam-figure flex min-h-28 flex-col items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-2 sm:p-3">
               {tikzImageUrl ? (
                 <Image
                   src={tikzImageUrl}
@@ -1472,7 +1472,7 @@ const QuestionCard = memo(
                   width={960}
                   height={640}
                   unoptimized
-                  className="max-w-full h-auto"
+                  className="h-auto w-full object-contain"
                 />
               ) : (
                 <TikzRenderer code={tikzCode as string} />
@@ -1480,16 +1480,16 @@ const QuestionCard = memo(
             </div>
           </div>
         ) : (
-          <div className="text-gray-900 leading-relaxed font-medium mb-6">
+          <div className="mb-4 text-gray-900 font-medium">
             {renderedQuestion}
           </div>
         )}
 
         {imageUrls && imageUrls.length > 0 && (
-          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
             {imageUrls.map((url, index) => (
-              <div key={`${url}-${index}`} className="flex min-h-36 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <Image src={url} alt={`Hình minh họa câu ${questionNumber}.${index + 1}`} width={960} height={640} unoptimized className="max-h-80 max-w-full object-contain" />
+              <div key={`${url}-${index}`} className="exam-figure flex min-h-28 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                <Image src={url} alt={`Hình minh họa câu ${questionNumber}.${index + 1}`} width={960} height={640} unoptimized className="h-auto w-full object-contain" />
               </div>
             ))}
           </div>
@@ -1504,7 +1504,7 @@ const QuestionCard = memo(
                 <button
                   key={i}
                   onClick={() => onP1(id, i)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition-all ${
+                  className={`flex w-full items-center gap-3 rounded-2xl border-2 px-3 py-3 text-left transition-all sm:px-4 ${
                     selected ? "border-blue-500 bg-blue-50 shadow-sm ring-2 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
                   }`}
                 >
@@ -1524,7 +1524,7 @@ const QuestionCard = memo(
         {/* P2 — True / False table */}
         {type === "true_false" && options && (
           <div className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full border-collapse text-sm">
+            <table className="exam-true-false w-full border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="w-10 border-r border-slate-200 px-3 py-3 text-center font-bold text-violet-700">Ý</th>
@@ -1652,27 +1652,43 @@ const QuestionPalette = memo(
 // ── ShortAnswerInput ──────────────────────────────────────────────────────────
 
 const NUM_CELLS = 4;
-const ALLOWED_RE = /^[0-9,]$/;
+const ALLOWED_RE = /^[0-9,-]$/;
 
 function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [isNegative, setIsNegative] = useState(() => value.startsWith("-"));
   const [cells, setCells] = useState<string[]>(() => {
-    const chars = value.replace(/^-/, "").split("").slice(0, NUM_CELLS);
+    const chars = value
+      .replace(/\./g, ",")
+      .split("")
+      .filter((char) => ALLOWED_RE.test(char))
+      .slice(0, NUM_CELLS);
     return Array.from({ length: NUM_CELLS }, (_, i) => chars[i] ?? "");
   });
   const refs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const commit = (next: string[], negative = isNegative) => {
+  const commit = (next: string[]) => {
     setCells(next);
     const answer = next.filter(Boolean).join("");
-    onChange(answer ? `${negative ? "-" : ""}${answer}` : "");
+    onChange(answer);
   };
 
   const toggleMinus = () => {
-    const nextNegative = !isNegative;
-    setIsNegative(nextNegative);
-    commit(cells, nextNegative);
-    refs.current[0]?.focus();
+    const compact = cells.filter(Boolean).filter((char) => char !== "-");
+    const next = cells[0] === "-" ? compact : ["-", ...compact].slice(0, NUM_CELLS);
+    commit(Array.from({ length: NUM_CELLS }, (_, index) => next[index] ?? ""));
+    refs.current[cells[0] === "-" ? 0 : Math.min(1, NUM_CELLS - 1)]?.focus();
+  };
+
+  const hasDigit = cells.some((char) => /\d/.test(char));
+  const lastFilledIndex = cells.reduce((last, char, index) => char ? index : last, -1);
+  const canInsertComma = hasDigit && !cells.includes(",") && lastFilledIndex < NUM_CELLS - 1;
+
+  const insertComma = () => {
+    if (!canInsertComma) return;
+    const next = [...cells];
+    const index = lastFilledIndex + 1;
+    next[index] = ",";
+    commit(next);
+    refs.current[Math.min(index + 1, NUM_CELLS - 1)]?.focus();
   };
 
   // Tầng 1: chặn tại nguồn trước khi ký tự vào DOM (iOS Safari)
@@ -1706,32 +1722,55 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
     // Cho phép phím điều hướng và phím hệ thống đi qua
     if (e.key.length > 1) return;
     const mapped = e.key === "." ? "," : e.key;
+    if (mapped === "," && (!cells.slice(0, idx).some((char) => /\d/.test(char)) || cells.includes(","))) {
+      e.preventDefault();
+      return;
+    }
     if (!ALLOWED_RE.test(mapped)) e.preventDefault();
   };
 
   // Tầng 3: safety net — đổi dấu chấm thành phẩy, lọc ký tự lạ còn sót
   const handleChange = (idx: number, raw: string) => {
-    const char = raw.replace(/\./g, ",").replace(/[^0-9,]/g, "").slice(-1);
+    let char = raw.replace(/\./g, ",").replace(/[^0-9,-]/g, "").slice(-1);
+    if (char === "-") {
+      toggleMinus();
+      return;
+    }
+    if (char === "," && (!cells.slice(0, idx).some((item) => /\d/.test(item)) || cells.includes(","))) {
+      char = "";
+    }
     const next = [...cells]; next[idx] = char; commit(next);
     if (char && idx < NUM_CELLS - 1) refs.current[idx + 1]?.focus();
   };
 
-  const digits = cells.filter(Boolean).join("");
-  const joined = `${isNegative ? "-" : ""}${digits}`;
+  const joined = cells.filter(Boolean).join("");
+  const isNegative = cells[0] === "-";
 
   return (
     <div className="mt-3 rounded-3xl border border-cyan-100 bg-cyan-50/45 p-4 sm:p-5">
       <p className="mb-3 text-sm font-semibold text-slate-700">Nhập đáp án của bạn</p>
 
-      <button
-        type="button"
-        onClick={toggleMinus}
-        aria-pressed={isNegative}
-        className={`mb-4 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${isNegative ? "border-rose-300 bg-rose-50 text-rose-700 ring-2 ring-rose-100" : "border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:text-rose-700"}`}
-      >
-        <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-lg leading-none ${isNegative ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-600"}`}>−</span>
-        {isNegative ? "Đang dùng dấu âm" : "Thêm dấu âm"}
-      </button>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleMinus}
+          aria-pressed={isNegative}
+          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${isNegative ? "border-rose-300 bg-rose-50 text-rose-700 ring-2 ring-rose-100" : "border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:text-rose-700"}`}
+        >
+          <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-lg leading-none ${isNegative ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-600"}`}>−</span>
+          {isNegative ? "Bỏ dấu âm" : "Dấu âm"}
+        </button>
+        <button
+          type="button"
+          onClick={insertComma}
+          disabled={!canInsertComma}
+          title={!hasDigit ? "Nhập ít nhất một chữ số trước dấu phẩy" : undefined}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-all hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-50 text-lg leading-none text-blue-700">,</span>
+          Dấu phẩy
+        </button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-2">
@@ -1756,14 +1795,14 @@ function ShortAnswerInput({ value, onChange }: { value: string; onChange: (v: st
             />
           ))}
         </div>
-        {digits && (
+        {joined && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
             <span className="text-xs font-medium text-emerald-700">Đáp án</span>
             <span className="text-lg font-extrabold leading-none text-emerald-900">{joined}</span>
           </div>
         )}
       </div>
-      <p className="mt-3 text-[11px] text-slate-500">Mỗi ô nhập một chữ số hoặc dấu phẩy thập phân.</p>
+      <p className="mt-3 text-[11px] text-slate-500">Dấu âm và dấu phẩy được điền trực tiếp vào ô. Dấu phẩy chỉ dùng sau ít nhất một chữ số.</p>
     </div>
   );
 }

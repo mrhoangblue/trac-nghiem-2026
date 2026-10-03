@@ -181,3 +181,58 @@ body {
 .katex-html {
   max-width: 100%;
 }
+
+/* Exam typography: STIX Two Text pairs naturally with KaTeX's Computer Modern
+   glyphs and keeps Vietnamese prose, symbols and equations on one baseline. */
+.exam-reading {
+  font-family: var(--font-stix-two-text), "Times New Roman", serif;
+  font-size: clamp(1rem, .35vw + .92rem, 1.125rem);
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+.exam-reading .katex {
+  font-size: 1.04em;
+  line-height: 1.15;
+  vertical-align: -0.1em;
+}
+
+.exam-reading .katex-display {
+  margin: .45em 0;
+  padding-bottom: .1rem;
+  vertical-align: initial;
+}
+
+.exam-figure img,
+.exam-figure svg,
+.exam-tikz-frame iframe {
+  max-height: min(40dvh, 24rem);
+}
+
+.exam-figure img {
+  object-fit: contain;
+}
+
+.exam-true-false {
+  font-size: clamp(.82rem, .25vw + .78rem, .95rem);
+}
+
+@media (orientation: portrait) {
+  .exam-figure img,
+  .exam-figure svg,
+  .exam-tikz-frame iframe {
+    max-height: min(32dvh, 20rem);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 760px) {
+  .quiz-question-shell { padding: .875rem; }
+  .exam-reading { font-size: clamp(.9rem, 1.8vh, 1rem); line-height: 1.38; }
+  .exam-question-visual { gap: .75rem; margin-bottom: .75rem; }
+  .exam-figure img,
+  .exam-figure svg,
+  .exam-tikz-frame iframe {
+    max-height: min(34dvh, 16rem);
+  }
+  .exam-reading :where(button) { padding-top: .55rem; padding-bottom: .55rem; }
+}

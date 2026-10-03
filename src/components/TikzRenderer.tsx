@@ -43,8 +43,16 @@ const TikzRenderer = memo(function TikzRenderer({ code, caption }: TikzRendererP
       justify-content: center;
       align-items: center;
       min-height: 100%;
+      width: 100%;
+      overflow: hidden;
     }
-    svg { max-width: 100%; height: auto; }
+    svg {
+      display: block;
+      max-width: 100%;
+      max-height: min(40vh, 360px);
+      width: auto;
+      height: auto;
+    }
   </style>
   <script>
     // Once TikZJax finishes it replaces <script type="text/tikz"> with <svg>.
@@ -57,7 +65,7 @@ const TikzRenderer = memo(function TikzRenderer({ code, caption }: TikzRendererP
           // Small delay to let SVG finish painting before measuring
           setTimeout(function () {
             window.parent.postMessage(
-              { type: 'tikz-height', height: document.body.scrollHeight },
+              { type: 'tikz-height', height: Math.min(document.body.scrollHeight, window.innerHeight * 0.4, 376) },
               '*'
             );
           }, 100);
@@ -89,7 +97,7 @@ const TikzRenderer = memo(function TikzRenderer({ code, caption }: TikzRendererP
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-2 w-full">
+    <div className="exam-tikz-frame flex w-full flex-col items-center gap-2">
       <iframe
         ref={iframeRef}
         srcDoc={htmlContent}

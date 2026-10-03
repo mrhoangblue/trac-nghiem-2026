@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro, Geist_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, Geist_Mono, STIX_Two_Text } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import "katex/dist/katex.min.css";
@@ -23,6 +23,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const stixTwoText = STIX_Two_Text({
+  variable: "--font-stix-two-text",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Hệ thống Ôn tập Toán",
   description: "Website trắc nghiệm toán dành cho học sinh",
@@ -37,7 +44,7 @@ export default function RootLayout({
     <html
       lang="vi"
       data-scroll-behavior="smooth"
-      className={`${beVietnam.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${beVietnam.variable} ${geistMono.variable} ${stixTwoText.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <a href="#main-content" className="skip-link">Đến nội dung chính</a>
