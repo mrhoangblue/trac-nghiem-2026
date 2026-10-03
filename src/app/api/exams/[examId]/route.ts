@@ -9,7 +9,7 @@ import {
   type ExamSourceReference,
 } from "@/lib/examSourceStorage";
 import { verifyAuth } from "@/lib/verifyAuth";
-import type { ParsedQuestion } from "@/utils/latexParser";
+import { getMissingShortAnswerQuestionNumbers, type ParsedQuestion } from "@/utils/latexParser";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -87,6 +87,14 @@ export async function PATCH(
           { error: "EXAM_DOCUMENT_TOO_LARGE", message: "Nội dung câu hỏi vượt giới hạn an toàn của Firestore." },
           { status: 413 },
         );
+      }
+      const missingShortAnswers = getMissingShortAnswerQuestionNumbers(questions);
+      if (missingShortAnswers.length > 0) {
+        return NextResponse.json({
+          error: "MISSING_SHORT_ANSWERS",
+          message: `Câu ${missingShortAnswers.join(", ")} chưa có đáp án trả lời ngắn.`,
+          questionNumbers: missingShortAnswers,
+        }, { status: 422 });
       }
       const hasUnprocessedTikz = questions.some((question) =>
         Boolean(

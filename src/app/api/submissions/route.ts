@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAuth } from "@/lib/verifyAuth";
+import { normalizeAnswer } from "@/utils/examTypes";
 
 export const runtime = "nodejs";
 
@@ -27,15 +28,6 @@ function asRecord(value: unknown): AnswerMap {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as AnswerMap
     : {};
-}
-
-function normalizeAnswer(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .trim()
-    .replace(/\s+/g, "")
-    .replace(/,/g, ".")
-    .toLowerCase();
 }
 
 function finiteNumber(value: unknown, fallback = 0): number {

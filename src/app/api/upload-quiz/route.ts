@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
-import { ParsedQuestion } from "@/utils/latexParser";
+import { getMissingShortAnswerQuestionNumbers, ParsedQuestion } from "@/utils/latexParser";
 import { hashExamPassword, validateExamPassword } from "@/lib/examAccess";
 import {
   deleteExamSource,
@@ -221,6 +221,14 @@ export async function POST(request: NextRequest) {
     const p1Questions = questionsToSave.filter((q) => q.type === "multiple_choice");
     const p2Questions = questionsToSave.filter((q) => q.type === "true_false");
     const p3Questions = questionsToSave.filter((q) => q.type === "short_answer");
+    const missingShortAnswers = getMissingShortAnswerQuestionNumbers(questionsToSave);
+    if (missingShortAnswers.length > 0) {
+      return NextResponse.json({
+        error: "MISSING_SHORT_ANSWERS",
+        message: `Câu ${missingShortAnswers.join(", ")} chưa có đáp án trả lời ngắn.`,
+        questionNumbers: missingShortAnswers,
+      }, { status: 422 });
+    }
 
     const password = body.password ?? "";
     if (password) {

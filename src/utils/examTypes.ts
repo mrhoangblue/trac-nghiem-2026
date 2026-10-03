@@ -52,6 +52,8 @@ export const P2_TABLE = [0, 0.1, 0.25, 0.5, 1.0];
 
 export function normalizeAnswer(s: unknown): string {
   return String(s ?? "")
+    .normalize("NFKC")
+    .trim()
     .toLowerCase()
     .replace(/\s+/g, "")
     .replace(/\$/g, "")

@@ -16,6 +16,13 @@ export interface ParsedQuestion {
   imageUrls?: string[];
 }
 
+export function getMissingShortAnswerQuestionNumbers(questions: ParsedQuestion[]): number[] {
+  return questions.flatMap((question, index) => {
+    if (question.type !== 'short_answer') return [];
+    return String(question.correctAnswer ?? '').trim() ? [] : [index + 1];
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CORE PRIMITIVE — Brace-balanced block extractor
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -121,6 +128,12 @@ function extractShortAns(text: string, command: string) {
   const idx = text.indexOf(command);
   const questionText = text.slice(0, idx).trim();
   let pos = idx + command.length;
+  while (pos < text.length && text[pos] <= ' ') pos++;
+
+  // Vietnamese exam packages commonly emit \shortans[00]{$20$}. The
+  // optional argument configures the answer boxes and must be skipped before
+  // reading the required brace-balanced answer argument.
+  pos = skipOptionalArg(text, pos);
   while (pos < text.length && text[pos] <= ' ') pos++;
 
   let answer = '';

@@ -16,7 +16,7 @@ import {
   where,
 } from "firebase/firestore";
 import AdminGuard from "@/components/AdminGuard";
-import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
+import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import TikzRenderer from "@/components/TikzRenderer";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import { useAuth } from "@/lib/AuthContext";
@@ -182,6 +182,10 @@ export default function EditExamPage() {
         ...parseLatexExam(part3),
       ].map((q, idx) => ({ ...q, id: idx + 1 }));
       setPreviewData({ title: examTitle, questions: all });
+      const missingAnswers = getMissingShortAnswerQuestionNumbers(all);
+      if (missingAnswers.length > 0) {
+        alert(`Cảnh báo: câu ${missingAnswers.join(", ")} chưa có đáp án trả lời ngắn. Hệ thống sẽ không cho cập nhật nội dung cho đến khi bổ sung đáp án.`);
+      }
     } catch (err) {
       console.error(err);
       alert("Có lỗi khi biên dịch LaTeX. Vui lòng kiểm tra lại cú pháp.");
@@ -260,6 +264,11 @@ export default function EditExamPage() {
   const handleUpdate = async () => {
     if (!previewData) {
       alert("Vui lòng biên dịch trước khi cập nhật.");
+      return;
+    }
+    const missingAnswers = getMissingShortAnswerQuestionNumbers(previewData.questions);
+    if (missingAnswers.length > 0) {
+      alert(`Không thể cập nhật: câu ${missingAnswers.join(", ")} đang thiếu đáp án trả lời ngắn.`);
       return;
     }
 
@@ -840,11 +849,14 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
     );
   }
   if (q.type === "short_answer") {
+    const missingAnswer = !String(q.correctAnswer ?? "").trim();
     return (
       <div className="pl-8">
-        <div className="inline-block p-3 rounded-xl border border-brand-200 bg-brand-50 text-brand-900 text-sm">
+        <div className={`inline-block p-3 rounded-xl border text-sm ${missingAnswer ? "border-danger-300 bg-danger-50 text-danger-800" : "border-brand-200 bg-brand-50 text-brand-900"}`}>
           <span className="font-bold mr-1">Đáp án:</span>
-          {q.correctAnswerImageUrl ? (
+          {missingAnswer ? (
+            <span className="font-bold">Thiếu đáp án — cần bổ sung trước khi lưu</span>
+          ) : q.correctAnswerImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={q.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-20 max-w-full align-middle" />
           ) : (

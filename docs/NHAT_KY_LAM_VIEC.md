@@ -306,6 +306,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Pipeline tự phát hiện các màu Hoàng Blue được sử dụng và gửi đúng `\\definecolor` qua `extra_preamble`. Biên dịch cục bộ bằng `pdflatex` xác nhận cả 4/4 hình của câu 9, 13, lời giải câu 15 và câu 16 thành PDF thành công.
 - API đọc nội dung lỗi HTTP từ renderer thay vì chỉ ghi “Bad Request”; màn hình sửa đề chỉ rõ câu nào và phần đề bài/lời giải nào bị lỗi để lần sau có thể chẩn đoán macro hoặc thư viện thiếu.
 
+### 03/10/2026 — Khôi phục đáp án trả lời ngắn và chấm lại bài đã nộp
+
+- Điều tra đề `lC3yxob3W3OlS7DoQ3H2` (“Đề khảo sát chất lượng Lân 1”): nguồn LaTeX mã hóa trên R2 có đủ sáu đáp án `0, 20, 554, 1, 500, 60`, nhưng parser cũ không bỏ qua tham số tùy chọn `[00]` trong cú pháp `\shortans[00]{...}`, khiến Firestore lưu cả sáu `correctAnswer` thành chuỗi rỗng.
+- Sửa parser để đọc cả `\shortans{...}`, `\shortans[...]{...}` và `\dapso`; đồng bộ chuẩn hóa đáp án ở API nộp bài để chấm đúng các giá trị có dấu `$`, dấu phẩy thập phân hoặc dấu trừ Unicode.
+- Thêm cảnh báo trực quan tại trang tạo/sửa đề, chặn lưu ở cả giao diện và API nếu câu trả lời ngắn còn thiếu đáp án tự động.
+- Khôi phục sáu đáp án từ nguồn R2 vào document đề và chấm lại toàn bộ bài đã hoàn thành của đề. Bài `5Qy4oguIh7dAPjsAoBWg` đúng 5/6 câu phần III, điểm tăng từ `5,5` lên `8,0`; dữ liệu được đánh dấu thời điểm và nguyên nhân chấm lại.
+- Thêm công cụ vận hành `scripts/repair-exam-short-answers.mjs`, mặc định chạy dry-run và chỉ ghi dữ liệu khi có `--apply`, để phục hồi đáp án từ nguồn LaTeX mã hóa rồi chấm lại nhất quán.
+- Kiểm tra: ESLint đạt, TypeScript đạt, production build Next.js 16.3.6 bằng Webpack đạt; dry-run sau cập nhật xác nhận điểm lưu và điểm tính lại cùng bằng `8,0`.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

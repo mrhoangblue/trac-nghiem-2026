@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
-import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
+import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import TikzRenderer from "@/components/TikzRenderer";
 import AdminGuard from "@/components/AdminGuard";
@@ -174,6 +174,10 @@ export default function CreateExamPage() {
       ...parseLatexExam(result.part3),
     ].map((question, index) => ({ ...question, id: index + 1 }));
     setPreviewData({ title: examTitle.trim() || "Đề thi chưa đặt tên", questions });
+    const missingAnswers = getMissingShortAnswerQuestionNumbers(questions);
+    if (missingAnswers.length > 0) {
+      alert(`Cảnh báo: câu ${missingAnswers.join(", ")} chưa có đáp án trả lời ngắn. Hệ thống sẽ không cho lưu cho đến khi bổ sung đáp án.`);
+    }
   };
 
   const handleCoverImage = async (file: File | null) => {
@@ -298,6 +302,11 @@ export default function CreateExamPage() {
     }
     if (previewData.questions.length === 0) {
       alert("Đề thi chưa có câu hỏi hợp lệ. Vui lòng kiểm tra Smart Input.");
+      return;
+    }
+    const missingAnswers = getMissingShortAnswerQuestionNumbers(previewData.questions);
+    if (missingAnswers.length > 0) {
+      alert(`Không thể lưu: câu ${missingAnswers.join(", ")} đang thiếu đáp án trả lời ngắn.`);
       return;
     }
     if (targetType === "classes" && targetClassIds.length === 0) {
@@ -852,11 +861,14 @@ function AnswerPreview({ q }: { q: ParsedQuestion }) {
     );
   }
   if (q.type === "short_answer") {
+    const missingAnswer = !String(q.correctAnswer ?? "").trim();
     return (
       <div className="pl-8">
-        <div className="inline-block p-3 rounded-xl border border-brand-200 bg-brand-50 text-brand-900">
+        <div className={`inline-block p-3 rounded-xl border ${missingAnswer ? "border-danger-300 bg-danger-50 text-danger-800" : "border-brand-200 bg-brand-50 text-brand-900"}`}>
           <span className="font-bold mr-2">Đáp án:</span>
-          {q.correctAnswerImageUrl ? (
+          {missingAnswer ? (
+            <span className="font-bold">Thiếu đáp án — cần bổ sung trước khi lưu</span>
+          ) : q.correctAnswerImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={q.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-20 max-w-full align-middle" />
           ) : (
