@@ -9,10 +9,6 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   doc,
   getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
   Timestamp,
 } from "firebase/firestore";
 import { formatCountdown } from "@/utils/examTypes";
@@ -205,21 +201,30 @@ export default function ExamDetailPage() {
         setNewEndTime(toDateTimeLocal(examData.endTime));
 
         // 2. Fetch submissions for this exam
-        const subSnap = await getDocs(
-          query(collection(db, "submissions"), where("examId", "==", id))
-        );
-        const subs: Submission[] = subSnap.docs.map((sdoc) => {
-          const s = sdoc.data();
+        const token = await user?.getIdToken();
+        if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
+        const submissionResponse = await fetch(`/api/exams/${encodeURIComponent(id)}/submissions`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const submissionPayload = await submissionResponse.json().catch(() => null) as {
+          submissions?: Array<Record<string, unknown>>;
+          error?: string;
+        } | null;
+        if (!submissionResponse.ok) {
+          throw new Error(submissionPayload?.error ?? "Không thể tải kết quả bài thi.");
+        }
+        const subs: Submission[] = (submissionPayload?.submissions ?? []).map((s) => {
           return {
-            id: sdoc.id,
-            studentName: s.studentName ?? "Học sinh",
-            studentEmail: s.studentEmail ?? "—",
-            studentAvatar: s.studentAvatar ?? "",
-            submittedAt: s.submittedAt ?? null,
-            part1Results: s.part1Results ?? [],
-            part2Results: s.part2Results ?? [],
-            part3Results: s.part3Results ?? [],
-            cheatCount: s.cheatCount ?? 0,
+            id: String(s.id ?? ""),
+            studentName: String(s.studentName ?? "Học sinh"),
+            studentEmail: String(s.studentEmail ?? "—"),
+            studentAvatar: String(s.studentAvatar ?? ""),
+            submittedAt: typeof s.submittedAtMillis === "number" ? Timestamp.fromMillis(s.submittedAtMillis) : null,
+            part1Results: Array.isArray(s.part1Results) ? s.part1Results as boolean[] : [],
+            part2Results: Array.isArray(s.part2Results) ? s.part2Results as number[] : [],
+            part3Results: Array.isArray(s.part3Results) ? s.part3Results as boolean[] : [],
+            cheatCount: Number(s.cheatCount ?? 0),
             totalElapsedSeconds: Number(s.totalElapsedSeconds ?? 0),
             idleBeforeSubmitSeconds: Number(s.idleBeforeSubmitSeconds ?? 0),
           };
@@ -234,7 +239,7 @@ export default function ExamDetailPage() {
     };
 
     fetchData();
-  }, [id, authLoading, isMod, isAdmin, user?.email]);
+  }, [id, authLoading, isMod, isAdmin, user]);
 
   // ── Group by unique student ──────────────────────────────────────────────────
   const studentRows = useMemo(() => {

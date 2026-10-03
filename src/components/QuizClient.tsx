@@ -735,21 +735,43 @@ export default function QuizClient({
           ...(isStudentMode ? { isTeacherPreview: true } : {}),
         };
 
-        if (inProgressDocIdRef.current) {
-          // UPDATE the existing IN_PROGRESS doc → avoids creating a duplicate
-          await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
-          savedSubmissionId = inProgressDocIdRef.current;
-        } else {
-          // Fallback: no IN_PROGRESS doc (Firestore was unavailable at start)
-          const docRef = await addDoc(collection(db, "submissions"), submissionPayload);
-          savedSubmissionId = docRef.id;
+        const token = await user?.getIdToken();
+        if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
+        const response = await fetch("/api/submissions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            examId,
+            submissionId: inProgressDocIdRef.current,
+            studentName: submissionPayload.studentName,
+            studentAvatar: submissionPayload.studentAvatar,
+            answersJson: submissionPayload.answersJson,
+            cheatCount: submissionPayload.cheatCount,
+            activityLog: activitySummary.activityLog,
+            questionTimings: activitySummary.questionTimings,
+            totalElapsedSeconds: activitySummary.totalElapsedSeconds,
+            idleBeforeSubmitSeconds: activitySummary.idleBeforeSubmitSeconds,
+            lastInteractionAtSeconds: activitySummary.lastInteractionAtSeconds,
+            isTeacherPreview: isStudentMode,
+          }),
+        });
+        const saved = await response.json().catch(() => null) as { id?: string; error?: string } | null;
+        if (!response.ok || !saved?.id) {
+          throw new Error(saved?.error ?? "Không thể lưu bài nộp.");
         }
+        savedSubmissionId = saved.id;
 
         // Clear persistence artifacts — draft and sessionStorage backup
         if (user?.uid) clearDraft(examId, user.uid);
         clearSession();
       } catch (err) {
         console.error("Lỗi lưu bài nộp:", err);
+        window.alert("Không thể lưu bài nộp lên máy chủ. Đáp án vẫn được giữ trên thiết bị; vui lòng kiểm tra mạng và bấm Nộp bài lại.");
+        setSubmitting(false);
+        return;
       }
 
       // Send result email — skip for teacher preview mode
@@ -863,16 +885,36 @@ export default function QuizClient({
         exitedEarly: true, // flag: student left before finishing all questions
         ...(isStudentMode ? { isTeacherPreview: true } : {}),
       };
-      if (inProgressDocIdRef.current) {
-        await updateDoc(doc(db, "submissions", inProgressDocIdRef.current), submissionPayload);
-      } else {
-        await addDoc(collection(db, "submissions"), submissionPayload);
-      }
+      const token = await user?.getIdToken();
+      if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
+      const response = await fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          examId,
+          submissionId: inProgressDocIdRef.current,
+          studentName: submissionPayload.studentName,
+          studentAvatar: submissionPayload.studentAvatar,
+          answersJson: submissionPayload.answersJson,
+          cheatCount: submissionPayload.cheatCount,
+          activityLog: activitySummary.activityLog,
+          questionTimings: activitySummary.questionTimings,
+          totalElapsedSeconds: activitySummary.totalElapsedSeconds,
+          idleBeforeSubmitSeconds: activitySummary.idleBeforeSubmitSeconds,
+          lastInteractionAtSeconds: activitySummary.lastInteractionAtSeconds,
+          isTeacherPreview: isStudentMode,
+          exitedEarly: true,
+        }),
+      });
+      if (!response.ok) throw new Error("Không thể lưu bài nộp khi thoát.");
       if (user?.uid) clearDraft(examId, user.uid);
       clearSession();
     } catch (err) {
       console.error("Lỗi lưu bài khi thoát:", err);
-      // Non-fatal: navigate anyway so the student isn't stuck
+      window.alert("Chưa thể lưu bài lên máy chủ. Vui lòng kiểm tra mạng và thử lại trước khi rời trang.");
+      isExitingRef.current = false;
+      setIsSavingExit(false);
+      return;
     }
 
     const href = exitConfirmHref;

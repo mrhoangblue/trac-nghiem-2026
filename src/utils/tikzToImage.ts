@@ -32,6 +32,15 @@ const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
     preamble: "\\usepackage{tkz-tab}",
   },
   {
+    // Các lệnh tkz hình học (không thuộc tkz-tab).
+    pattern: /\\tkz(?!Tab)[A-Za-z]+/,
+    preamble: "\\usepackage{tkz-euclide}",
+  },
+  {
+    pattern: /\\begin\{axis\}|\\addplot\b/,
+    preamble: "\\usepackage{pgfplots}\n\\pgfplotsset{compat=1.18}",
+  },
+  {
     // calc library: coordinate arithmetic like $(A)!0.5!(B)$ or $(A)+(1,0)$
     pattern: /\$\s*\(/,
     preamble: "\\usetikzlibrary{calc}",
@@ -129,7 +138,9 @@ const COLOR_RULES: Array<{ pattern: RegExp; preamble: string }> = [
  * needs to compile the diagram successfully.
  */
 function detectExtraPreamble(tikzCode: string): string {
-  const lines: string[] = [];
+  // Công thức trong node/nhãn TikZ thường dùng dfrac, text, overrightarrow…
+  // Renderer độc lập không bảo đảm nạp AMS như tài liệu gốc của giáo viên.
+  const lines: string[] = ["\\usepackage{amsmath,amssymb}"];
   if (/[^\u0000-\u007f]/.test(tikzCode)) lines.push(VIETNAMESE_PREAMBLE);
   for (const rule of LIBRARY_RULES) {
     if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
@@ -175,6 +186,25 @@ interface TikzRenderResponse {
    *  client will automatically use the correct data URI without further changes. */
   mime_type?: string;
   error?: string;
+  detail?: {
+    message?: string;
+    latex_error?: string;
+  };
+}
+
+function conciseRendererError(payload: TikzRenderResponse, responseText: string): string {
+  const latexError = payload.detail?.latex_error?.trim();
+  if (latexError) {
+    const importantLine = latexError
+      .split("\n")
+      .reverse()
+      .find((line) => line.trim().startsWith("!"));
+    return [payload.detail?.message, importantLine, latexError.slice(-700)]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 1200);
+  }
+  return (payload.error?.trim() || payload.detail?.message?.trim() || responseText.trim()).slice(0, 1200);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -282,8 +312,8 @@ export async function convertTikzToStoredImage(
     }
 
     if (!response.ok) {
-      const detail = payload.error?.trim() || responseText.trim();
-      const conciseDetail = detail ? ` — ${detail.slice(0, 800)}` : "";
+      const detail = conciseRendererError(payload, responseText);
+      const conciseDetail = detail ? ` — ${detail}` : "";
       throw new Error(`TikZ render HTTP ${response.status}: ${response.statusText}${conciseDetail}`);
     }
 
