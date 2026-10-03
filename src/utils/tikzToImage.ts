@@ -27,6 +27,11 @@ const TIKZPICTURE_RE =
  */
 const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
   {
+    // Bảng biến thiên của tkz-tab không thuộc TikZ lõi.
+    pattern: /\\tkzTab(?:Init|Line|Var|Setup)/,
+    preamble: "\\usepackage{tkz-tab}",
+  },
+  {
     // calc library: coordinate arithmetic like $(A)!0.5!(B)$ or $(A)+(1,0)$
     pattern: /\$\s*\(/,
     preamble: "\\usetikzlibrary{calc}",
@@ -54,6 +59,53 @@ const LIBRARY_RULES: Array<{ pattern: RegExp; preamble: string }> = [
   { pattern: /shape\s*=|(?:diamond|trapezium|regular polygon)/, preamble: "\\usetikzlibrary{shapes.geometric}" },
 ];
 
+const ROYAL_GRAPH_MACROS = String.raw`
+\definecolor{RSnavy}{HTML}{00537F}
+\newcommand{\BTDoThi}[8][0.55]{%
+  \begin{tikzpicture}[scale=#1,font=\scriptsize,line join=round,line cap=round,>=stealth]
+    \draw[->] (#2,0)--(#3,0) node[below] {$x$};
+    \draw[->] (0,#4)--(0,#5) node[left] {$y$};
+    \draw[thick,RSnavy,domain=#6,samples=120,smooth] plot (\x,{#7});
+    #8
+  \end{tikzpicture}}
+`;
+
+const ROYAL_BOX_MACROS = String.raw`
+\usetikzlibrary{calc,arrows.meta}
+\newcommand{\BTHopTen}[8]{\def\hO{#1}\def\hX{#2}\def\hXY{#3}\def\hY{#4}%
+  \def\hOt{#5}\def\hXt{#6}\def\hXYt{#7}\def\hYt{#8}}
+\newcommand{\BTHop}[4][1]{%
+  \begin{tikzpicture}[scale=#1,x={(-0.26cm,-0.2cm)},y={(0.55cm,0cm)},z={(0cm,0.75cm)},
+      font=\scriptsize,line join=round,line cap=round,>=stealth]
+    \coordinate(P1)at(0,0,0);\coordinate(P2)at(#2,0,0);
+    \coordinate(P3)at(#2,#3,0);\coordinate(P4)at(0,#3,0);
+    \coordinate(Q1)at(0,0,#4);\coordinate(Q2)at(#2,0,#4);
+    \coordinate(Q3)at(#2,#3,#4);\coordinate(Q4)at(0,#3,#4);
+    \draw[dashed](P1)--(P2)(P1)--(P4)(P1)--(Q1);
+    \draw(P2)--(P3)--(P4)(Q1)--(Q2)--(Q3)--(Q4)--cycle;
+    \draw(P2)--(Q2)(P3)--(Q3)(P4)--(Q4);
+    \draw[->](P2)--($(P2)+(1.2,0,0)$)node[below left]{$x$};
+    \draw[->](P4)--($(P4)+(0,1.1,0)$)node[below]{$y$};
+    \draw[->](Q1)--($(Q1)+(0,0,1)$)node[left]{$z$};
+    \node[above right]at(P1){$\hO\equiv O$};
+    \node[left]at(P2){$\hX$};\node[below]at(P3){$\hXY$};
+    \node[below right]at(P4){$\hY$};\node[left]at(Q1){$\hOt$};
+    \node[left]at(Q2){$\hXt$};\node[right]at(Q3){$\hXYt$};
+    \node[above right]at(Q4){$\hYt$};
+  \end{tikzpicture}}
+`;
+
+const CUSTOM_MACRO_RULES: Array<{ pattern: RegExp; preamble: string }> = [
+  { pattern: /\\BTDoThi\b/, preamble: ROYAL_GRAPH_MACROS },
+  { pattern: /\\BTHop(?:Ten)?\b/, preamble: ROYAL_BOX_MACROS },
+];
+
+const VIETNAMESE_PREAMBLE = [
+  "\\usepackage[utf8]{inputenc}",
+  "\\usepackage[T5]{fontenc}",
+  "\\usepackage[vietnamese]{babel}",
+].join("\n");
+
 /**
  * TikZ blocks are stored independently from the source document preamble.
  * BlueMath/Hoang Blue documents therefore need their semantic palette restored
@@ -64,6 +116,12 @@ const COLOR_RULES: Array<{ pattern: RegExp; preamble: string }> = [
   { pattern: /\bHBson\b/, preamble: "\\definecolor{HBson}{HTML}{B23A26}" },
   { pattern: /\bHBxam\b/, preamble: "\\definecolor{HBxam}{HTML}{5E5348}" },
   { pattern: /\bHBcatDam\b/, preamble: "\\definecolor{HBcatDam}{HTML}{EFDCBB}" },
+  { pattern: /\bRSblue\b/, preamble: "\\definecolor{RSblue}{HTML}{0081C8}" },
+  { pattern: /\bRSnavy\b/, preamble: "\\definecolor{RSnavy}{HTML}{00537F}" },
+  { pattern: /\bRSnavyDark\b/, preamble: "\\definecolor{RSnavyDark}{HTML}{003A59}" },
+  { pattern: /\bRSred\b/, preamble: "\\definecolor{RSred}{HTML}{E31837}" },
+  { pattern: /\bRSgrey\b/, preamble: "\\definecolor{RSgrey}{HTML}{5A5A5A}" },
+  { pattern: /\bRSbgBlue\b/, preamble: "\\definecolor{RSbgBlue}{HTML}{F2F7FF}" },
 ];
 
 /**
@@ -72,12 +130,18 @@ const COLOR_RULES: Array<{ pattern: RegExp; preamble: string }> = [
  */
 function detectExtraPreamble(tikzCode: string): string {
   const lines: string[] = [];
+  if (/[^\u0000-\u007f]/.test(tikzCode)) lines.push(VIETNAMESE_PREAMBLE);
   for (const rule of LIBRARY_RULES) {
     if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
       lines.push(rule.preamble);
     }
   }
   for (const rule of COLOR_RULES) {
+    if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
+      lines.push(rule.preamble);
+    }
+  }
+  for (const rule of CUSTOM_MACRO_RULES) {
     if (rule.pattern.test(tikzCode) && !lines.includes(rule.preamble)) {
       lines.push(rule.preamble);
     }
