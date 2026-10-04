@@ -315,6 +315,15 @@ Nguồn: tác vụ hiện tại `01a0d2a1-def5-70b0-96fa-50f77aacb45a`, yêu c�
 - Thêm công cụ vận hành `scripts/repair-exam-short-answers.mjs`, mặc định chạy dry-run và chỉ ghi dữ liệu khi có `--apply`, để phục hồi đáp án từ nguồn LaTeX mã hóa rồi chấm lại nhất quán.
 - Kiểm tra: ESLint đạt, TypeScript đạt, production build Next.js 16.3.6 bằng Webpack đạt; dry-run sau cập nhật xác nhận điểm lưu và điểm tính lại cùng bằng `8,0`.
 
+### 04/10/2026 — Kiểm tra điểm đề Kết thúc Chương I và ổn định pipeline bài nộp
+
+- Kiểm tra trực tiếp đề `uDJN8qshiqgMeCoIbSAo` (“[TOÁN 12] Bài kiểm tra kết thúc Chương I”): có 3 bài `COMPLETED`, không có đáp án chuẩn bị thiếu và không có điểm sai lệch khi tính lại. Tổng điểm lần lượt là `7,5`, `9,0`, `9,5`.
+- Xác định bảng điểm lớp dùng truy vấn Firestore kết hợp `examId + studentEmail in + status` nhưng `firestore.indexes.json` không có composite index tương ứng; lỗi truy vấn có thể khiến giao diện báo không có kết quả dù submission đã lưu đúng.
+- Chuyển bảng điểm lớp sang API máy chủ đã xác thực, trả kèm điểm và thời gian nộp, lọc theo danh sách thành viên bằng email đã chuẩn hóa và vẫn chọn lần làm có điểm cao nhất.
+- Bổ sung API khởi tạo và đọc trạng thái bài làm của chính học sinh. Tạo phiên, khôi phục bài `IN_PROGRESS` và đếm số lần làm không còn phụ thuộc truy vấn composite hoặc quyền ghi phía trình duyệt; API chỉ trả dữ liệu thuộc email trong token đăng nhập.
+- Thêm công cụ kiểm toán `scripts/audit-submission-pipeline.mjs` để đối chiếu điểm lưu với điểm tính lại và phát hiện thiếu đáp án theo tên đề.
+- Kiểm tra: ESLint đạt; production build Next.js 16.3.6 bằng Webpack đạt, bao gồm bước TypeScript.
+
 ## 3. Tiến trình Git
 
 Chi tiết từng hash/thời gian/thông điệp: [36 commit](history/git-commits.txt). Nội dung dưới đây tóm tắt theo thông điệp commit, không xác nhận lại mọi diff hoặc deployment.

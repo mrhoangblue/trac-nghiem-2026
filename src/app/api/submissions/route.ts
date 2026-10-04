@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 type AnswerMap = Record<string, unknown>;
 
 interface SubmitExamBody {
+  action?: "start" | "submit";
   examId?: string;
   submissionId?: string;
   studentName?: string;
@@ -22,6 +23,10 @@ interface SubmitExamBody {
   lastInteractionAtSeconds?: number;
   isTeacherPreview?: boolean;
   exitedEarly?: boolean;
+}
+
+function timestampMillis(value: unknown): number | null {
+  return (value as { toMillis?: () => number } | null)?.toMillis?.() ?? null;
 }
 
 function asRecord(value: unknown): AnswerMap {
@@ -43,6 +48,57 @@ function safeEvents(value: unknown): unknown[] {
   return Array.isArray(value) ? value.slice(0, 500) : [];
 }
 
+export async function GET(request: NextRequest) {
+  try {
+    const authUser = await verifyAuth(request);
+    if (!authUser?.email) {
+      return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+    }
+    const examId = request.nextUrl.searchParams.get("examId")?.trim();
+    if (!examId) {
+      return NextResponse.json({ error: "EXAM_ID_REQUIRED" }, { status: 400 });
+    }
+
+    // Query only by examId (single-field index), then enforce ownership on the
+    // server. This avoids fragile client-side composite-index queries while
+    // never exposing another student's answers.
+    const snapshot = await adminDb.collection("submissions").where("examId", "==", examId).get();
+    const owned = snapshot.docs
+      .map((document) => ({ id: document.id, data: document.data() }))
+      .filter(({ data }) => String(data.studentEmail ?? "").toLowerCase() === authUser.email.toLowerCase());
+    const completedCount = owned.filter(({ data }) =>
+      data.status === "COMPLETED" && data.isTeacherPreview !== true
+    ).length;
+    const inProgress = owned
+      .filter(({ data }) => data.status === "IN_PROGRESS")
+      .sort((left, right) => (
+        timestampMillis(right.data.lastActivityAt)
+        ?? timestampMillis(right.data.examStartTime)
+        ?? 0
+      ) - (
+        timestampMillis(left.data.lastActivityAt)
+        ?? timestampMillis(left.data.examStartTime)
+        ?? 0
+      ))[0];
+
+    return NextResponse.json({
+      completedCount,
+      inProgress: inProgress ? {
+        id: inProgress.id,
+        answersJson: typeof inProgress.data.answersJson === "string" ? inProgress.data.answersJson : "{}",
+        examStartTimeMillis: timestampMillis(inProgress.data.examStartTime),
+        activityLog: safeEvents(inProgress.data.activityLog),
+        questionTimings: safeEvents(inProgress.data.questionTimings),
+        lastInteractionAtSeconds: clampInteger(inProgress.data.lastInteractionAtSeconds, 0, 7 * 24 * 60 * 60),
+        currentQuestionIndex: clampInteger(inProgress.data.currentQuestionIndex, 0, 299),
+      } : null,
+    }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    console.error("GET /api/submissions failed:", error);
+    return NextResponse.json({ error: "SUBMISSION_STATE_LOAD_FAILED" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authUser = await verifyAuth(request);
@@ -62,6 +118,38 @@ export async function POST(request: NextRequest) {
     }
     const exam = examSnapshot.data() ?? {};
     const questions = Array.isArray(exam.questions) ? exam.questions : [];
+
+    if (body.action === "start") {
+      const isStaff = ["admin", "mod"].includes(authUser.role);
+      const isTeacherPreview = Boolean(body.isTeacherPreview && isStaff);
+      const existingSnapshot = await adminDb.collection("submissions").where("examId", "==", examId).get();
+      const existing = existingSnapshot.docs.find((document) => {
+        const data = document.data();
+        return data.status === "IN_PROGRESS"
+          && String(data.studentEmail ?? "").toLowerCase() === authUser.email.toLowerCase()
+          && Boolean(data.isTeacherPreview) === isTeacherPreview;
+      });
+      if (existing) {
+        return NextResponse.json({ id: existing.id, resumed: true });
+      }
+
+      const sessionRef = adminDb.collection("submissions").doc();
+      await sessionRef.set({
+        examId,
+        examTitle: String(exam.title ?? "Bài thi"),
+        studentName: String(body.studentName ?? "Học sinh").slice(0, 160),
+        studentEmail: authUser.email,
+        studentAvatar: String(body.studentAvatar ?? "").slice(0, 1000),
+        status: "IN_PROGRESS",
+        examStartTime: FieldValue.serverTimestamp(),
+        activityLog: [],
+        questionTimings: [],
+        lastInteractionAtSeconds: 0,
+        currentQuestionIndex: 0,
+        ...(isTeacherPreview ? { isTeacherPreview: true } : {}),
+      });
+      return NextResponse.json({ id: sessionRef.id, resumed: false }, { status: 201 });
+    }
 
     let parsedAnswers: Record<string, AnswerMap> = {};
     try {

@@ -29,13 +29,19 @@ export async function GET(
     const snapshot = await adminDb.collection("submissions").where("examId", "==", examId).get();
     const submissions = snapshot.docs
       .map((document) => ({ id: document.id, ...document.data() } as Record<string, unknown> & { id: string }))
-      .filter((submission) => submission.status !== "IN_PROGRESS" && submission.isTeacherPreview !== true)
+      .filter((submission) => (
+        (submission.status === "COMPLETED" || typeof submission.status !== "string")
+        && submission.isTeacherPreview !== true
+      ))
       .map((submission) => ({
         id: submission.id,
         studentName: submission.studentName ?? "Học sinh",
         studentEmail: submission.studentEmail ?? "—",
         studentAvatar: submission.studentAvatar ?? "",
         submittedAtMillis: (submission.submittedAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null,
+        scores: submission.scores && typeof submission.scores === "object"
+          ? submission.scores
+          : { p1: 0, p2: 0, p3: 0, total: 0 },
         part1Results: Array.isArray(submission.part1Results) ? submission.part1Results : [],
         part2Results: Array.isArray(submission.part2Results) ? submission.part2Results : [],
         part3Results: Array.isArray(submission.part3Results) ? submission.part3Results : [],

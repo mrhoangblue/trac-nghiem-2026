@@ -9,14 +9,9 @@ import TikzRenderer from "@/components/TikzRenderer";
 import ReviewMode from "@/components/ReviewMode";
 import { db } from "@/lib/firebase";
 import {
-  collection,
-  addDoc,
   doc,
   updateDoc,
   serverTimestamp,
-  query,
-  where,
-  getDocs,
 } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { useStudentMode } from "@/lib/StudentModeContext";
@@ -39,6 +34,37 @@ import { useExamSession } from "@/hooks/useExamSession";
 
 interface WakeLockSentinel {
   release(): Promise<void>;
+}
+
+interface StudentSubmissionState {
+  completedCount: number;
+  inProgress: {
+    id: string;
+    answersJson: string;
+    examStartTimeMillis: number | null;
+    activityLog: ExamActivityEvent[];
+    questionTimings: QuestionTimingStat[];
+    lastInteractionAtSeconds: number;
+    currentQuestionIndex: number;
+  } | null;
+}
+
+async function fetchStudentSubmissionState(
+  user: { getIdToken: (forceRefresh?: boolean) => Promise<string> },
+  examId: string,
+): Promise<StudentSubmissionState> {
+  const send = async (forceRefresh: boolean) => fetch(
+    `/api/submissions?examId=${encodeURIComponent(examId)}`,
+    {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${await user.getIdToken(forceRefresh)}` },
+    },
+  );
+  let response = await send(false);
+  if (response.status === 401) response = await send(true);
+  const payload = await response.json().catch(() => null) as (StudentSubmissionState & { error?: string }) | null;
+  if (!response.ok || !payload) throw new Error(payload?.error ?? "SUBMISSION_STATE_LOAD_FAILED");
+  return payload;
 }
 type WakeLockNav = Navigator & {
   wakeLock?: { request(type: "screen"): Promise<WakeLockSentinel> };
@@ -195,6 +221,7 @@ export default function QuizClient({
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [submissionCount, setSubmissionCount] = useState<number | null>(null);
   const activityLogRef = useRef<ExamActivityEvent[]>([]);
   const questionTimingsRef = useRef<Map<number, QuestionTimingStat>>(new Map());
   const attemptStartedAtRef = useRef<number | null>(null);
@@ -222,17 +249,12 @@ export default function QuizClient({
 
     const checkAndRestoreSession = async () => {
       try {
-        const sessionQuery = query(
-          collection(db, "submissions"),
-          where("examId", "==", examId),
-          where("studentEmail", "==", user.email),
-          where("status", "==", "IN_PROGRESS")
-        );
-        const snap = await getDocs(sessionQuery);
+        const state = await fetchStudentSubmissionState(user, examId);
+        setSubmissionCount(state.completedCount);
+        const session = state.inProgress;
 
-        if (!snap.empty) {
-          const sessionDoc = snap.docs[0];
-          inProgressDocIdRef.current = sessionDoc.id;
+        if (session) {
+          inProgressDocIdRef.current = session.id;
 
           // Hydrate saved answers from localStorage draft
           const draft = loadDraft(examId, user.uid);
@@ -240,9 +262,9 @@ export default function QuizClient({
             if (Object.keys(draft.p1Ans).length) setP1Ans(draft.p1Ans);
             if (Object.keys(draft.p2Ans).length) setP2Ans(draft.p2Ans);
             if (Object.keys(draft.p3Ans).length) setP3Ans(draft.p3Ans);
-          } else if (typeof sessionDoc.data().answersJson === "string") {
+          } else if (typeof session.answersJson === "string") {
             try {
-              const stored = JSON.parse(sessionDoc.data().answersJson);
+              const stored = JSON.parse(session.answersJson);
               setP1Ans(stored.p1Ans ?? {});
               setP2Ans(stored.p2Ans ?? {});
               setP3Ans(stored.p3Ans ?? {});
@@ -252,9 +274,9 @@ export default function QuizClient({
           }
 
           // Calculate remaining seconds from the authoritative server timestamp
-          const data = sessionDoc.data();
-          const startTs = data.examStartTime as { toDate?: () => Date } | null;
-          const startDate = startTs?.toDate?.();
+          const startDate = session.examStartTimeMillis
+            ? new Date(session.examStartTimeMillis)
+            : null;
           if (startDate) {
             attemptStartedAtRef.current = startDate.getTime();
             const elapsed = (Date.now() - startDate.getTime()) / 1000;
@@ -266,14 +288,12 @@ export default function QuizClient({
             setRemainingSecondsOverride(remaining);
           }
 
-          activityLogRef.current = Array.isArray(data.activityLog) ? data.activityLog : [];
-          const storedTimings = Array.isArray(data.questionTimings)
-            ? (data.questionTimings as QuestionTimingStat[])
-            : [];
+          activityLogRef.current = Array.isArray(session.activityLog) ? session.activityLog : [];
+          const storedTimings = Array.isArray(session.questionTimings) ? session.questionTimings : [];
           questionTimingsRef.current = new Map(storedTimings.map((item) => [item.questionId, item]));
-          lastInteractionAtSecondsRef.current = Number(data.lastInteractionAtSeconds ?? 0);
+          lastInteractionAtSecondsRef.current = Number(session.lastInteractionAtSeconds ?? 0);
           const restoredIndex = Math.min(
-            Math.max(0, Number(data.currentQuestionIndex ?? 0)),
+            Math.max(0, Number(session.currentQuestionIndex ?? 0)),
             Math.max(0, questions.length - 1)
           );
           currentIdxRef.current = restoredIndex;
@@ -285,6 +305,7 @@ export default function QuizClient({
         }
       } catch (err) {
         console.error("Session restore failed:", err);
+        setSubmissionCount(0);
         // Non-fatal: fall through to reveal the Start screen
       } finally {
         setIsCheckingSession(false);
@@ -454,31 +475,34 @@ export default function QuizClient({
       ? Math.floor((new Date(timing.endTime).getTime() - now) / 1000)
       : Number.POSITIVE_INFINITY;
     setRemainingSecondsOverride(Math.max(0, Math.min(timing.duration * 60, closeRemaining)));
-    // Always create an IN_PROGRESS record in Firestore.
-    // If the teacher is in student-preview mode, tag the doc with isTeacherPreview: true
-    // so it can be identified and filtered out of real statistics later.
+    // Create the IN_PROGRESS record through the authenticated server API so
+    // session tracking does not depend on client Firestore indexes or rules.
     try {
-      const docRef = await addDoc(collection(db, "submissions"), {
-        examId,
-        examTitle: title,
-        studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
-        studentEmail: user.email,
-        studentAvatar: user.photoURL ?? "",
-        status: "IN_PROGRESS",
-        examStartTime: serverTimestamp(),
-        activityLog: activityLogRef.current,
-        questionTimings: Array.from(questionTimingsRef.current.values()),
-        lastInteractionAtSeconds: 0,
-        ...(isStudentMode ? { isTeacherPreview: true } : {}),
+      const response = await fetch("/api/submissions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({
+          action: "start",
+          examId,
+          studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
+          studentAvatar: user.photoURL ?? "",
+          isTeacherPreview: isStudentMode,
+        }),
       });
-      inProgressDocIdRef.current = docRef.id;
+      const payload = await response.json().catch(() => null) as { id?: string; error?: string } | null;
+      if (!response.ok || !payload?.id) throw new Error(payload?.error ?? "SESSION_START_FAILED");
+      inProgressDocIdRef.current = payload.id;
     } catch (err) {
       console.error("Failed to write IN_PROGRESS record:", err);
-      // Non-fatal — exam still runs; reload won't restore (Firestore unavailable)
+      window.alert("Chưa thể tạo phiên làm bài trên máy chủ. Vui lòng kiểm tra mạng và thử lại.");
+      return;
     }
     startSession(); // sessionStorage fallback for timer reference
     setManuallyStarted(true);
-  }, [isStudentMode, examId, title, user, userProfile, startSession, enterQuestion, timing]);
+  }, [isStudentMode, examId, user, userProfile, startSession, enterQuestion, timing]);
 
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
 
@@ -517,30 +541,6 @@ export default function QuizClient({
   // ── Retry limit ───────────────────────────────────────────────────────────
   // In student-preview mode the teacher is not a real student — bypass the
   // retry limit entirely so the toggle never blocks the teacher from previewing.
-  const [submissionCount, setSubmissionCount] = useState<number | null>(null);
-  const userEmail = user?.email ?? null; // stable string dep (not object ref)
-
-  useEffect(() => {
-    if (!userEmail || isStudentMode) return; // skip when previewing
-    let cancelled = false;
-    const countPrev = async () => {
-      try {
-        const q = query(
-          collection(db, "submissions"),
-          where("examId", "==", examId),
-          where("studentEmail", "==", userEmail),
-          where("status", "==", "COMPLETED")
-        );
-        const snap = await getDocs(q);
-        if (!cancelled) setSubmissionCount(snap.size);
-      } catch {
-        if (!cancelled) setSubmissionCount(0);
-      }
-    };
-    countPrev();
-    return () => { cancelled = true; };
-  }, [userEmail, examId, isStudentMode]);
-
   // ── Anti-cheat + Wake Lock re-acquire (merged visibility handler) ─────────
   // Anti-cheat is disabled in student-preview mode — the teacher is deliberately
   // navigating away to test the experience and should not be penalised.

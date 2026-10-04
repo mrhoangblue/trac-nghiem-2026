@@ -90,6 +90,21 @@ interface SubmissionData {
   submittedAt: Date;
 }
 
+interface ExamSubmissionResponse {
+  submissions?: Array<{
+    id: string;
+    studentEmail: string;
+    submittedAtMillis: number | null;
+    scores?: {
+      p1?: number;
+      p2?: number;
+      p3?: number;
+      total?: number;
+    };
+  }>;
+  error?: string;
+}
+
 interface AddStudentForm {
   email: string;
   fullName: string;
@@ -592,44 +607,43 @@ export default function TeacherClassDetailPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleLoadScores = async () => {
-    if (!selectedExamId || !classData) return;
+    if (!selectedExamId || !classData || !user) return;
     setLoadingScores(true);
     setScoreRows(null);
     try {
-      const studentEmails = students.map((s) => s.email).filter(Boolean);
+      const studentEmails = new Set(students.map((student) => student.email.trim().toLowerCase()).filter(Boolean));
       const allSubmissions: Record<string, SubmissionData> = {};
 
-      for (const batch of chunkIds(studentEmails, FIRESTORE_IN_LIMIT)) {
-        const snap = await getDocs(
-          query(
-            collection(db, "submissions"),
-            where("examId", "==", selectedExamId),
-            where("studentEmail", "in", batch),
-            where("status", "==", "COMPLETED"),
-          )
-        );
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          // Skip teacher-preview submissions — they should not appear in class gradebook
-          if (data.isTeacherPreview === true) return;
-          const email = String(data.studentEmail);
-          const scores = data.scores ?? {};
-          const existing = allSubmissions[email];
-          const submittedAt = data.submittedAt?.toDate?.() ?? new Date(0);
-          if (!existing || (scores.total ?? 0) > (existing.total ?? 0)) {
-            allSubmissions[email] = {
-              p1: scores.p1 ?? 0,
-              p2: scores.p2 ?? 0,
-              p3: scores.p3 ?? 0,
-              total: scores.total ?? 0,
-              submittedAt,
-            };
-          }
-        });
+      const response = await fetchWithAuth(
+        user,
+        `/api/exams/${encodeURIComponent(selectedExamId)}/submissions`,
+        { cache: "no-store" },
+      );
+      const payload = await response.json().catch(() => null) as ExamSubmissionResponse | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "SUBMISSIONS_LOAD_FAILED");
+      }
+      for (const submission of payload?.submissions ?? []) {
+        const email = String(submission.studentEmail ?? "").trim().toLowerCase();
+        if (!studentEmails.has(email)) continue;
+        const scores = submission.scores ?? {};
+        const existing = allSubmissions[email];
+        const submittedAt = submission.submittedAtMillis
+          ? new Date(submission.submittedAtMillis)
+          : new Date(0);
+        if (!existing || (scores.total ?? 0) > existing.total) {
+          allSubmissions[email] = {
+            p1: scores.p1 ?? 0,
+            p2: scores.p2 ?? 0,
+            p3: scores.p3 ?? 0,
+            total: scores.total ?? 0,
+            submittedAt,
+          };
+        }
       }
 
       const rows: ScoreRow[] = students.map((s, idx) => {
-        const sub = allSubmissions[s.email];
+        const sub = allSubmissions[s.email.trim().toLowerCase()];
         return {
           stt: idx + 1,
           fullName: s.fullName,
