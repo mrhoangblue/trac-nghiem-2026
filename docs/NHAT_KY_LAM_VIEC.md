@@ -2,6 +2,13 @@
 
 Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
 
+### 04/10/2026 — Sửa upload file bài tập lên R2
+
+- Xác minh bằng preflight thật: bucket R2 trả `204` cho `http://localhost:3000` nhưng trả `403` cho domain production, Vercel, `127.0.0.1` và `0.0.0.0`; đây là nguyên nhân trình duyệt báo `Failed to fetch`.
+- Bổ sung upload dự phòng qua API cùng domain cho file tối đa 4 MB trên Vercel và tối đa 25 MB khi chạy local; quyền giáo viên/học sinh, loại file, hạn nộp và kích thước vẫn được kiểm tra ở máy chủ.
+- Đổi thông báo lỗi file lớn thành hướng dẫn CORS cụ thể thay vì hiển thị lỗi mạng chung.
+- Cập nhật mẫu CORS R2 với đầy đủ domain đang sử dụng. Khóa S3 hiện tại chỉ có quyền đọc/ghi object và không thể tự sửa cấu hình CORS bucket.
+
 ### 29/09/2026 — Mở rộng vùng học liệu và hỏi đáp theo bài đang xem
 
 - Mở rộng trang chi tiết khóa học lên 1700px và thu cột chương trình từ 22rem xuống 18,5rem để PDF, Word, ảnh và slide có thêm không gian.

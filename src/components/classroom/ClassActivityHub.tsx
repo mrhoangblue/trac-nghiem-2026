@@ -81,7 +81,7 @@ export default function ClassActivityHub({ classId, teacherMode = false }: Props
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ purpose, assignmentId, fileName: file.name, size: file.size }),
     });
-    const payload = await response.json() as { key?: string; uploadUrl?: string; contentType?: string; error?: string };
+    const payload = await response.json() as { key?: string; uploadUrl?: string; contentType?: string; serverFallbackMaxBytes?: number; error?: string };
     if (!response.ok || !payload.key || !payload.uploadUrl || !payload.contentType) {
       const messages: Record<string, string> = {
         PDF_REQUIRED: "Đề bài giáo viên giao phải là file PDF.",
@@ -91,9 +91,37 @@ export default function ClassActivityHub({ classId, teacherMode = false }: Props
       };
       throw new Error(messages[payload.error ?? ""] ?? "Không thể chuẩn bị vùng upload R2.");
     }
-    const uploadResponse = await fetch(payload.uploadUrl, { method: "PUT", headers: { "Content-Type": payload.contentType }, body: file });
-    if (!uploadResponse.ok) throw new Error("Không thể upload file lên R2.");
-    return { key: payload.key, name: file.name, contentType: payload.contentType, size: file.size };
+    try {
+      const uploadResponse = await fetch(payload.uploadUrl, { method: "PUT", headers: { "Content-Type": payload.contentType }, body: file });
+      if (!uploadResponse.ok) throw new Error(`R2_UPLOAD_${uploadResponse.status}`);
+      return { key: payload.key, name: file.name, contentType: payload.contentType, size: file.size };
+    } catch (directUploadError) {
+      const fallbackLimit = payload.serverFallbackMaxBytes ?? 0;
+      if (file.size > fallbackLimit) {
+        console.error("Direct assignment upload failed:", directUploadError);
+        throw new Error("R2 đang chặn upload trực tiếp từ tên miền này. File lớn hơn 4 MB cần thêm tên miền website vào CORS của bucket R2.");
+      }
+
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("purpose", purpose);
+      if (assignmentId) formData.set("assignmentId", assignmentId);
+      const fallbackResponse = await fetch(`/api/classes/${encodeURIComponent(classId)}/activity/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const fallback = await fallbackResponse.json().catch(() => null) as { key?: string; contentType?: string; error?: string } | null;
+      if (!fallbackResponse.ok || !fallback?.key || !fallback.contentType) {
+        const fallbackMessages: Record<string, string> = {
+          DIRECT_UPLOAD_REQUIRED: "File lớn hơn 4 MB cần upload trực tiếp; hãy thêm tên miền website vào CORS của bucket R2.",
+          R2_NOT_READY: "R2 chưa được cấu hình đầy đủ trên máy chủ.",
+          UPLOAD_PREPARE_FAILED: "Máy chủ chưa thể upload file lên R2.",
+        };
+        throw new Error(fallbackMessages[fallback?.error ?? ""] ?? "Không thể upload file bài tập lên R2.");
+      }
+      return { key: fallback.key, name: file.name, contentType: fallback.contentType, size: file.size };
+    }
   };
 
   const mutate = async (method: "POST" | "PATCH", body: Record<string, unknown>) => {

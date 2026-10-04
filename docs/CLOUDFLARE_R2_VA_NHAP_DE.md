@@ -82,7 +82,10 @@ Khi có domain chính thức, thêm domain vào `AllowedOrigins` và giữ local
   {
     "AllowedOrigins": [
       "http://localhost:3000",
-      "https://ten-mien-chinh-thuc.vn"
+      "http://127.0.0.1:3000",
+      "http://0.0.0.0:3000",
+      "https://toanthayhoang.bluemath.app",
+      "https://hoangblue-tn-2026.vercel.app"
     ],
     "AllowedMethods": ["GET", "PUT", "HEAD"],
     "AllowedHeaders": ["Content-Type"],
@@ -92,7 +95,7 @@ Khi có domain chính thức, thêm domain vào `AllowedOrigins` và giữ local
 ]
 ```
 
-Origin không có dấu `/` ở cuối. `Content-Type` gửi từ trình duyệt phải trùng với `Content-Type` dùng khi ký URL.
+Origin không có dấu `/` ở cuối. `Content-Type` gửi từ trình duyệt phải trùng với `Content-Type` dùng khi ký URL. Kiểm tra thực tế ngày 04/10/2026 cho thấy bucket mới chỉ chấp nhận `http://localhost:3000`; các origin production và localhost khác trả `403`. Khóa S3 Object Read & Write không có quyền sửa CORS, nên cần cập nhật chính sách này trong Cloudflare Dashboard.
 
 ### 3.3 API token
 
