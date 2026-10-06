@@ -367,11 +367,11 @@ function ExamListContent() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
                         <Link
-                          href={`/quiz/${exam.id}`}
+                          href={`/admin/exam/${exam.id}/review`}
                           target="_blank"
-                          className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-800 font-semibold border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-all text-xs"
+                          className="inline-flex items-center gap-1 text-gray-600 hover:text-brand-800 font-semibold border border-gray-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
-                          👁 Xem
+                          👁 Xem đề
                         </Link>
                         <Link
                           href={`/admin/exam/${exam.id}`}

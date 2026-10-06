@@ -37,6 +37,67 @@ interface UpdateExamBody {
   password?: unknown;
 }
 
+function serializeDate(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const toDate = (value as { toDate?: unknown }).toDate;
+    if (typeof toDate === "function") {
+      return (toDate as () => Date)().toISOString();
+    }
+  }
+  return null;
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> },
+) {
+  try {
+    const authUser = await verifyAuth(request);
+    if (!authUser || !["admin", "mod"].includes(authUser.role)) {
+      return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+    }
+
+    const { examId } = await params;
+    const snapshot = await adminDb.collection("exams").doc(examId).get();
+    if (!snapshot.exists) {
+      return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    }
+
+    const exam = snapshot.data() ?? {};
+    const authorEmail = String(exam.authorEmail ?? "").trim().toLowerCase();
+    const canReview =
+      authUser.role === "admin" ||
+      authorEmail === authUser.email.toLowerCase() ||
+      exam.isShared === true;
+    if (!canReview) {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      id: snapshot.id,
+      title: String(exam.title ?? "Đề thi chưa đặt tên"),
+      description: String(exam.description ?? ""),
+      authorEmail: String(exam.authorEmail ?? ""),
+      gradeLevel: String(exam.gradeLevel ?? ""),
+      examType: String(exam.examType ?? ""),
+      duration: Number(exam.duration ?? 0),
+      createdAt: serializeDate(exam.createdAt),
+      updatedAt: serializeDate(exam.updatedAt),
+      tikzProcessed: exam.tikzProcessed === true,
+      tikzImageCount: Number(exam.tikzImageCount ?? 0),
+      tikzFailedCount: Number(exam.tikzFailedCount ?? 0),
+      questions: Array.isArray(exam.questions) ? exam.questions : [],
+    }, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  } catch (error) {
+    console.error("GET /api/exams/[examId] failed:", error);
+    return NextResponse.json({ error: "LOAD_FAILED" }, { status: 500 });
+  }
+}
+
 function optionalDate(value: unknown): string | null | undefined {
   if (value === null || value === "") return null;
   if (typeof value !== "string") return undefined;

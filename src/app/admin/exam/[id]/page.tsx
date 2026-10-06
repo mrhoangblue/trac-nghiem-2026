@@ -411,9 +411,17 @@ export default function ExamDetailPage() {
         </Link>
 
         {/* Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-gray-900">{exam.title}</h1>
-          <p className="text-gray-500 mt-1">Chi tiết kết quả làm bài của học sinh.</p>
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold text-gray-900">{exam.title}</h1>
+            <p className="text-gray-500 mt-1">Chi tiết kết quả làm bài của học sinh.</p>
+          </div>
+          <Link
+            href={`/admin/exam/${id}/review`}
+            className="inline-flex w-fit items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:border-brand-400 hover:bg-brand-50"
+          >
+            Xem toàn bộ đề →
+          </Link>
         </div>
 
         <div className="mb-8 rounded-3xl border border-brand-100 bg-brand-50 p-5">
