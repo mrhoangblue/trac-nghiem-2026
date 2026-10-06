@@ -43,7 +43,9 @@ function serializeDate(value: unknown): string | null {
   if (typeof value === "object" && value !== null && "toDate" in value) {
     const toDate = (value as { toDate?: unknown }).toDate;
     if (typeof toDate === "function") {
-      return (toDate as () => Date)().toISOString();
+      // Firestore Timestamp#toDate reads the internal `_seconds` field from
+      // `this`, so the method must stay bound to its original object.
+      return (toDate as (this: object) => Date).call(value).toISOString();
     }
   }
   return null;
