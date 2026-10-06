@@ -375,7 +375,8 @@ export default function CreateExamPage() {
       setImportWarnings([]); setImportSummary(null); setImportSourceObject(null);
     } catch (err) {
       console.error(err);
-      alert("❌ Lỗi khi lưu bài thi. Vui lòng thử lại.");
+      const message = err instanceof Error ? err.message : "Lỗi khi lưu bài thi. Vui lòng thử lại.";
+      alert(`❌ ${message.slice(0, 2200)}`);
     } finally {
       setSaving(false);
     }

@@ -2,6 +2,13 @@
 
 Ngày tổng hợp: 24/09/2026; cập nhật gần nhất: 28/09/2026. Mốc khảo sát ban đầu: HEAD `b343840`.
 
+### 06/10/2026 — Sửa lưu đề on-tap-5 và chẩn đoán TikZ
+
+- Log production xác nhận đề không lưu vì hình TikZ ở câu trả lời ngắn về chiếc đèn dùng `RSgold` và `RSgoldDeep`, nhưng renderer độc lập chưa nhận được định nghĩa hai màu từ bộ nhận diện Royal School.
+- Bổ sung đầy đủ bảng màu Royal School vào cơ chế tự nhận diện preamble TikZ để các hình tách từ file con vẫn biên dịch được.
+- Tự thử lại một lần khi dịch vụ render trả `429` hoặc `5xx`; lỗi LaTeX xác định (`4xx`) không bị thử lặp vô ích.
+- Giao diện tạo đề nay hiển thị thông báo thật từ API, gồm số câu và trường TikZ lỗi, thay vì luôn che bằng thông báo chung.
+
 ### 04/10/2026 — Sửa upload file bài tập lên R2
 
 - Xác minh bằng preflight thật: bucket R2 trả `204` cho `http://localhost:3000` nhưng trả `403` cho domain production, Vercel, `127.0.0.1` và `0.0.0.0`; đây là nguyên nhân trình duyệt báo `Failed to fetch`.

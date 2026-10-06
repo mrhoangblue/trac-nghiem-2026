@@ -5,6 +5,7 @@ const TIKZ_RENDER_ENDPOINT =
   process.env.TIKZ_RENDER_ENDPOINT ?? "https://frankii1990-tikz-render.hf.space/render";
 
 const DEFAULT_TIMEOUT_MS = 90_000;
+const MAX_RENDER_ATTEMPTS = 2;
 
 // ── Regexes ───────────────────────────────────────────────────────────────────
 
@@ -129,8 +130,14 @@ const COLOR_RULES: Array<{ pattern: RegExp; preamble: string }> = [
   { pattern: /\bRSnavy\b/, preamble: "\\definecolor{RSnavy}{HTML}{00537F}" },
   { pattern: /\bRSnavyDark\b/, preamble: "\\definecolor{RSnavyDark}{HTML}{003A59}" },
   { pattern: /\bRSred\b/, preamble: "\\definecolor{RSred}{HTML}{E31837}" },
+  { pattern: /\bRSredDark\b/, preamble: "\\definecolor{RSredDark}{HTML}{B01029}" },
+  { pattern: /\bRSgold\b/, preamble: "\\definecolor{RSgold}{HTML}{FDB913}" },
+  { pattern: /\bRSgoldDeep\b/, preamble: "\\definecolor{RSgoldDeep}{HTML}{D99B0F}" },
   { pattern: /\bRSgrey\b/, preamble: "\\definecolor{RSgrey}{HTML}{5A5A5A}" },
+  { pattern: /\bRSink\b/, preamble: "\\definecolor{RSink}{HTML}{1F2430}" },
   { pattern: /\bRSbgBlue\b/, preamble: "\\definecolor{RSbgBlue}{HTML}{F2F7FF}" },
+  { pattern: /\bRSbgRed\b/, preamble: "\\definecolor{RSbgRed}{HTML}{FFF2F4}" },
+  { pattern: /\bRSbgGold\b/, preamble: "\\definecolor{RSbgGold}{HTML}{FFFBF0}" },
 ];
 
 /**
@@ -195,10 +202,11 @@ interface TikzRenderResponse {
 function conciseRendererError(payload: TikzRenderResponse, responseText: string): string {
   const latexError = payload.detail?.latex_error?.trim();
   if (latexError) {
-    const importantLine = latexError
+    const errorLines = latexError
       .split("\n")
-      .reverse()
-      .find((line) => line.trim().startsWith("!"));
+      .filter((line) => line.trim().startsWith("!"));
+    const importantLine = errorLines.find((line) => !/fatal error/i.test(line))
+      ?? errorLines.at(-1);
     return [payload.detail?.message, importantLine, latexError.slice(-700)]
       .filter(Boolean)
       .join(" — ")
@@ -295,34 +303,42 @@ export async function convertTikzToStoredImage(
     const body: Record<string, string> = { tikz_code: tikzCode };
     if (extraPreamble) body.extra_preamble = extraPreamble;
 
-    const response = await fetch(TIKZ_RENDER_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal,
-      cache: "no-store",
-    });
+    for (let attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt += 1) {
+      const response = await fetch(TIKZ_RENDER_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal,
+        cache: "no-store",
+      });
 
-    const responseText = await response.text();
-    let payload: TikzRenderResponse = {};
-    try {
-      payload = JSON.parse(responseText) as TikzRenderResponse;
-    } catch {
-      // The renderer can return a plain-text LaTeX error for failed builds.
+      const responseText = await response.text();
+      let payload: TikzRenderResponse = {};
+      try {
+        payload = JSON.parse(responseText) as TikzRenderResponse;
+      } catch {
+        // The renderer can return a plain-text or HTML error for failed builds.
+      }
+
+      if (!response.ok) {
+        const retryable = response.status === 429 || response.status >= 500;
+        if (retryable && attempt < MAX_RENDER_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          continue;
+        }
+        const detail = conciseRendererError(payload, responseText);
+        const conciseDetail = detail ? ` — ${detail}` : "";
+        throw new Error(`TikZ render HTTP ${response.status}: ${response.statusText}${conciseDetail}`);
+      }
+
+      if (payload.status !== "success" || !payload.image_base64) {
+        throw new Error(payload.error ?? "TikZ render API returned an invalid response.");
+      }
+
+      const dataUri = toImageDataUri(payload.image_base64, payload.mime_type);
+      return storeTikzDataUri(dataUri);
     }
-
-    if (!response.ok) {
-      const detail = conciseRendererError(payload, responseText);
-      const conciseDetail = detail ? ` — ${detail}` : "";
-      throw new Error(`TikZ render HTTP ${response.status}: ${response.statusText}${conciseDetail}`);
-    }
-
-    if (payload.status !== "success" || !payload.image_base64) {
-      throw new Error(payload.error ?? "TikZ render API returned an invalid response.");
-    }
-
-    const dataUri = toImageDataUri(payload.image_base64, payload.mime_type);
-    return storeTikzDataUri(dataUri);
+    throw new Error("TikZ renderer did not return a result.");
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`TikZ render timeout after ${timeoutMs}ms`);
