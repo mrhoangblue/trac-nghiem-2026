@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
+import ExamShareDialog from "@/components/ExamShareDialog";
 import { useAuth } from "@/lib/AuthContext";
 import {
   collection,
@@ -70,6 +71,7 @@ function ExamListContent() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sharingExam, setSharingExam] = useState<ExamRow | null>(null);
 
   const userEmail = user?.email ?? "";
 
@@ -379,6 +381,13 @@ function ExamListContent() {
                         >
                           📊 KQ
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => setSharingExam(exam)}
+                          className="inline-flex items-center gap-1 text-success-700 hover:text-success-900 font-semibold border border-success-200 hover:border-success-400 bg-success-50/50 px-3 py-1.5 rounded-lg transition-all text-xs"
+                        >
+                          ↗ Chia sẻ
+                        </button>
                         {canEdit(exam) ? (
                           <Link
                             href={`/admin/edit-exam/${exam.id}`}
@@ -413,6 +422,13 @@ function ExamListContent() {
           </div>
         )}
       </div>
+      {sharingExam && (
+        <ExamShareDialog
+          examId={sharingExam.id}
+          examTitle={sharingExam.title}
+          onClose={() => setSharingExam(null)}
+        />
+      )}
     </div>
   );
 }
