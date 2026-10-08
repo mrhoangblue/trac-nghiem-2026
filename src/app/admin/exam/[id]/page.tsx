@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { formatCountdown } from "@/utils/examTypes";
 import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
+import { AlertTriangle, RotateCcw, X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ScoringConfig {
@@ -155,6 +156,102 @@ function Spinner() {
   );
 }
 
+function ResetSubmissionDialog({
+  student,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  student: StudentRow;
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#21120c]/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reset-submission-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onCancel();
+      }}
+    >
+      <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-danger-200 bg-[#fffdf8] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-danger-100 bg-danger-50/70 px-6 py-5">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-danger-100 text-danger-700">
+              <AlertTriangle size={24} />
+            </span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-danger-700">Hành động cần xác nhận</p>
+              <h2 id="reset-submission-title" className="mt-1 text-xl font-black text-[#2d1910]">
+                Reset bài làm của {student.studentName}?
+              </h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-danger-200 bg-white text-gray-500 hover:text-danger-700 disabled:opacity-50"
+            aria-label="Đóng hộp xác nhận"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="px-6 py-6">
+          <div className="rounded-2xl border border-[#eadfce] bg-white px-5 py-4">
+            <p className="font-bold text-gray-900">{student.studentEmail}</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Đang có <strong className="text-danger-700">{student.attempts} lượt đã nộp</strong> trong đề này.
+            </p>
+          </div>
+          <ul className="mt-5 space-y-2 text-sm leading-6 text-gray-600">
+            <li>• Toàn bộ điểm, đáp án và nhật ký làm bài của học sinh trong đề này sẽ bị xóa.</li>
+            <li>• Phiên đang làm dở của học sinh, nếu có, cũng sẽ được reset.</li>
+            <li>• Học sinh có thể bắt đầu lại từ đầu, miễn là đề vẫn đang mở.</li>
+          </ul>
+          <p className="mt-4 text-sm font-bold text-danger-700">Không thể khôi phục bài làm sau khi xác nhận.</p>
+
+          {error && (
+            <p className="mt-4 rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-700" role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:border-gray-400 disabled:opacity-50"
+            >
+              Giữ nguyên bài làm
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-danger-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-danger-900/10 hover:bg-danger-800 disabled:cursor-wait disabled:opacity-60"
+            >
+              {busy ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              ) : (
+                <RotateCcw size={17} />
+              )}
+              {busy ? "Đang reset…" : "Xác nhận reset"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ExamDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -167,6 +264,10 @@ export default function ExamDetailPage() {
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [newEndTime, setNewEndTime] = useState("");
   const [extending, setExtending] = useState(false);
+  const [studentToReset, setStudentToReset] = useState<StudentRow | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
 
   useEffect(() => {
     if (!id || authLoading) return;
@@ -370,6 +471,44 @@ export default function ExamDetailPage() {
       alert("❌ Không thể gia hạn đề thi. Vui lòng thử lại.");
     } finally {
       setExtending(false);
+    }
+  };
+
+  const handleResetSubmissions = async () => {
+    if (!studentToReset || !user) return;
+    setResetting(true);
+    setResetError("");
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/exams/${encodeURIComponent(id)}/submissions`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ studentEmail: studentToReset.studentEmail }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        deletedCount?: number;
+        error?: string;
+      } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Không thể reset bài làm.");
+      }
+
+      const normalizedEmail = studentToReset.studentEmail.trim().toLowerCase();
+      setSubmissions((current) => current.filter(
+        (submission) => submission.studentEmail.trim().toLowerCase() !== normalizedEmail,
+      ));
+      setResetNotice(
+        `Đã reset ${payload?.deletedCount ?? studentToReset.attempts} lượt làm bài của ${studentToReset.studentName}.`,
+      );
+      setStudentToReset(null);
+    } catch (resetFailure) {
+      console.error(resetFailure);
+      setResetError("Không thể reset bài làm. Vui lòng tải lại trang và thử lại.");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -584,6 +723,14 @@ export default function ExamDetailPage() {
         </div>
 
         {/* ── Results table — one row per unique student ─────────────────────── */}
+        {resetNotice && (
+          <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-success-200 bg-success-50 px-5 py-4 text-sm font-bold text-success-800" role="status">
+            <span>{resetNotice}</span>
+            <button type="button" onClick={() => setResetNotice("")} className="shrink-0 text-success-700 hover:text-success-950" aria-label="Đóng thông báo">
+              <X size={17} />
+            </button>
+          </div>
+        )}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-bold text-gray-800">Danh sách học sinh đã nộp bài</h2>
@@ -615,7 +762,7 @@ export default function ExamDetailPage() {
                     <th className="text-center px-3 py-3 font-semibold">Thời gian làm</th>
                     <th className="text-center px-3 py-3 font-semibold">Gian lận</th>
                     <th className="text-center px-3 py-3 font-semibold">Chi tiết</th>
-                    <th className="text-center px-4 py-3 font-semibold">Email</th>
+                    <th className="text-center px-4 py-3 font-semibold">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -720,21 +867,32 @@ export default function ExamDetailPage() {
                         </Link>
                       </td>
 
-                      {/* Resend email for best submission */}
                       <td className="px-4 py-4 text-center">
-                        <button
-                          onClick={() => handleResendEmail(row.bestSub)}
-                          disabled={sendingEmail === row.bestSub.id}
-                          title={`Gửi email kết quả đến ${row.studentEmail}`}
-                          className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-semibold border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {sendingEmail === row.bestSub.id ? (
-                            <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            "📧"
-                          )}
-                          {sendingEmail === row.bestSub.id ? "Đang gửi…" : "Gửi lại"}
-                        </button>
+                        <div className="flex min-w-28 flex-col items-stretch gap-2">
+                          <button
+                            onClick={() => handleResendEmail(row.bestSub)}
+                            disabled={sendingEmail === row.bestSub.id}
+                            title={`Gửi email kết quả đến ${row.studentEmail}`}
+                            className="inline-flex items-center justify-center gap-1 text-brand-600 hover:text-brand-800 font-semibold border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {sendingEmail === row.bestSub.id ? (
+                              <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              "📧"
+                            )}
+                            {sendingEmail === row.bestSub.id ? "Đang gửi…" : "Gửi lại"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetError("");
+                              setStudentToReset(row);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-danger-200 bg-danger-50/60 px-3 py-1.5 text-xs font-bold text-danger-700 transition hover:border-danger-400 hover:bg-danger-50"
+                          >
+                            <RotateCcw size={13} /> Reset bài
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -743,6 +901,19 @@ export default function ExamDetailPage() {
             </div>
           )}
         </div>
+        {studentToReset && (
+          <ResetSubmissionDialog
+            student={studentToReset}
+            busy={resetting}
+            error={resetError}
+            onCancel={() => {
+              if (resetting) return;
+              setStudentToReset(null);
+              setResetError("");
+            }}
+            onConfirm={handleResetSubmissions}
+          />
+        )}
       </div>
     </AdminGuard>
   );
