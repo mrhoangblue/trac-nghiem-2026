@@ -74,7 +74,7 @@ function RankingRow({
         : "bg-gray-100 text-gray-500";
 
   return (
-    <li className={`flex items-center gap-3 rounded-2xl px-3 py-3 transition ${current ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-gray-50"}`}>
+    <li className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${current ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-gray-50"}`}>
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-sm ${medalClasses}`} aria-label={`Hạng ${rank}`}>
         {rank}
       </span>
@@ -84,14 +84,14 @@ function RankingRow({
           <img src={student.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
         ) : initials(student.fullName)}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-extrabold text-gray-900">{student.fullName}</span>
+      <span className="min-w-0 flex-1 pt-0.5">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="break-words text-sm font-extrabold leading-5 text-gray-900">{student.fullName}</span>
           {current && <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Bạn</span>}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-gray-500">{meta.detail(student)}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-gray-500">{meta.detail(student)}</span>
       </span>
-      <strong className="shrink-0 text-right text-sm font-black text-gray-900">{meta.value(student)}</strong>
+      <strong className="shrink-0 pt-1 text-right text-sm font-black text-gray-900">{meta.value(student)}</strong>
     </li>
   );
 }
@@ -101,11 +101,11 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
   const meta = BOARD_META[board];
   const Icon = meta.icon;
   const rows = data[board];
-  const visible = expanded ? rows : rows.slice(0, 5);
+  const visible = expanded ? rows : rows.slice(0, 10);
   const currentIndex = data.viewerStudentId
     ? rows.findIndex((student) => student.studentId === data.viewerStudentId)
     : -1;
-  const currentOutsideTop = !expanded && currentIndex >= 5 ? rows[currentIndex] : null;
+  const currentOutsideTop = !expanded && currentIndex >= 10 ? rows[currentIndex] : null;
 
   return (
     <article className="overflow-hidden rounded-[1.75rem] border border-gray-200 bg-white shadow-[0_16px_45px_-30px_rgba(74,39,19,0.45)]">
@@ -130,9 +130,9 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
               <RankingRow student={currentOutsideTop} rank={currentIndex + 1} board={board} current />
             </div>
           )}
-          {rows.length > 5 && (
+          {rows.length > 10 && (
             <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-2 w-full rounded-xl py-2 text-xs font-bold text-brand-700 hover:bg-brand-50">
-              {expanded ? "Thu gọn" : `Xem toàn bộ ${rows.length} học sinh`}
+              {expanded ? "Thu gọn còn 10 học sinh" : `Xem thêm ${rows.length - 10} học sinh`}
             </button>
           )}
         </div>
@@ -180,7 +180,7 @@ export default function ClassLeaderboard({ classId }: { classId: string }) {
 
   const participation = useMemo(() => {
     if (!data?.studentCount) return 0;
-    return Math.round((data.completion.length / data.studentCount) * 100);
+    return Math.round((data.participatingStudentCount / data.studentCount) * 100);
   }, [data]);
 
   return (
@@ -203,7 +203,7 @@ export default function ClassLeaderboard({ classId }: { classId: string }) {
         {data && (
           <div className="relative mt-5 grid gap-2 sm:grid-cols-3">
             <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{data.assignedExamCount}</strong><span className="text-xs text-gray-500">bài thi được giao</span></div>
-            <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{data.completion.length}/{data.studentCount}</strong><span className="text-xs text-gray-500">học sinh đã làm bài</span></div>
+            <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{data.participatingStudentCount}/{data.studentCount}</strong><span className="text-xs text-gray-500">học sinh đã làm bài</span></div>
             <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{participation}%</strong><span className="text-xs text-gray-500">tỷ lệ tham gia</span></div>
           </div>
         )}

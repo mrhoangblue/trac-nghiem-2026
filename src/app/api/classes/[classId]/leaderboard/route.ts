@@ -170,19 +170,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     const students = [...aggregateById.values()].map(studentView);
-    const activeStudents = students.filter((student) => student.completedExamCount > 0);
-    const completion = [...activeStudents].sort((left, right) => (
+    const participatingStudentCount = students.filter((student) => student.completedExamCount > 0).length;
+    const completion = [...students].sort((left, right) => (
       right.completedExamCount - left.completedExamCount
       || right.bestScoreAverage - left.bestScoreAverage
       || right.totalExamSeconds - left.totalExamSeconds
       || byName(left, right)
     ));
-    const score = [...activeStudents].sort((left, right) => (
+    const score = [...students].sort((left, right) => (
       right.bestScoreAverage - left.bestScoreAverage
       || right.completedExamCount - left.completedExamCount
       || byName(left, right)
     ));
-    const studyTime = [...activeStudents].sort((left, right) => (
+    const studyTime = [...students].sort((left, right) => (
       right.totalExamSeconds - left.totalExamSeconds
       || right.completedExamCount - left.completedExamCount
       || byName(left, right)
@@ -191,6 +191,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const response: ClassLeaderboardView = {
       assignedExamCount: examIds.length,
       studentCount: studentIds.length,
+      participatingStudentCount,
       viewerStudentId: isStudent ? authUser.uid : null,
       completion,
       score,

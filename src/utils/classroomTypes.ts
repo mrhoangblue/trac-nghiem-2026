@@ -118,6 +118,7 @@ export interface ClassLeaderboardStudent {
 export interface ClassLeaderboardView {
   assignedExamCount: number;
   studentCount: number;
+  participatingStudentCount: number;
   viewerStudentId: string | null;
   completion: ClassLeaderboardStudent[];
   score: ClassLeaderboardStudent[];
