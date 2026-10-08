@@ -105,6 +105,25 @@ export interface ClassExamSummary {
   totalScore?: number;
 }
 
+export interface ClassLeaderboardStudent {
+  studentId: string;
+  fullName: string;
+  avatarUrl: string;
+  completedExamCount: number;
+  bestScoreAverage: number;
+  totalExamSeconds: number;
+  attemptCount: number;
+}
+
+export interface ClassLeaderboardView {
+  assignedExamCount: number;
+  studentCount: number;
+  viewerStudentId: string | null;
+  completion: ClassLeaderboardStudent[];
+  score: ClassLeaderboardStudent[];
+  studyTime: ClassLeaderboardStudent[];
+}
+
 export interface ClassAnnouncementView {
   id: string;
   title: string;
