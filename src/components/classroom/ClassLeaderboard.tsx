@@ -74,24 +74,24 @@ function RankingRow({
         : "bg-gray-100 text-gray-500";
 
   return (
-    <li className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${current ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-gray-50"}`}>
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-sm ${medalClasses}`} aria-label={`Hạng ${rank}`}>
+    <li className={`grid grid-cols-[1.75rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-2.5 py-2.5 transition ${current ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-gray-50"}`}>
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-black shadow-sm ${medalClasses}`} aria-label={`Hạng ${rank}`}>
         {rank}
       </span>
-      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-xs font-black text-brand-800 ring-2 ring-white">
+      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-[10px] font-black text-brand-800 ring-2 ring-white">
         {student.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={student.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
         ) : initials(student.fullName)}
       </span>
-      <span className="min-w-0 flex-1 pt-0.5">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="break-words text-sm font-extrabold leading-5 text-gray-900">{student.fullName}</span>
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-extrabold leading-5 text-gray-900" title={student.fullName}>{student.fullName}</span>
           {current && <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Bạn</span>}
         </span>
-        <span className="mt-0.5 block text-xs leading-5 text-gray-500">{meta.detail(student)}</span>
+        <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-4 text-gray-500">{meta.detail(student)}</span>
       </span>
-      <strong className="shrink-0 pt-1 text-right text-sm font-black text-gray-900">{meta.value(student)}</strong>
+      <strong className="shrink-0 whitespace-nowrap text-right text-xs font-black text-gray-900">{meta.value(student)}</strong>
     </li>
   );
 }
@@ -108,18 +108,18 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
   const currentOutsideTop = !expanded && currentIndex >= 10 ? rows[currentIndex] : null;
 
   return (
-    <article className="overflow-hidden rounded-[1.75rem] border border-gray-200 bg-white shadow-[0_16px_45px_-30px_rgba(74,39,19,0.45)]">
-      <header className={`bg-gradient-to-br ${meta.accent} p-5 text-white`}>
+    <article className="overflow-hidden rounded-[1.5rem] border border-gray-200 bg-white shadow-[0_16px_45px_-30px_rgba(74,39,19,0.45)]">
+      <header className={`min-h-28 bg-gradient-to-br ${meta.accent} p-4 text-white`}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-lg font-extrabold">{meta.title}</h3>
-            <p className="mt-1 text-xs font-medium text-white/80">{meta.description}</p>
+            <h3 className="text-base font-extrabold leading-6">{meta.title}</h3>
+            <p className="mt-1 text-[11px] font-medium leading-4 text-white/80">{meta.description}</p>
           </div>
-          <span className="rounded-2xl bg-white/15 p-2.5 ring-1 ring-white/25"><Icon className="h-5 w-5" /></span>
+          <span className="rounded-xl bg-white/15 p-2 ring-1 ring-white/25"><Icon className="h-4 w-4" /></span>
         </div>
       </header>
       {rows.length ? (
-        <div className="p-2.5">
+        <div className="p-2">
           <ol className="space-y-1">
             {visible.map((student, index) => (
               <RankingRow key={student.studentId} student={student} rank={index + 1} board={board} current={student.studentId === data.viewerStudentId} />
