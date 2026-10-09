@@ -137,7 +137,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         dueAt: dueAt?.toISOString() ?? null,
         acceptingSubmissions: data.acceptingSubmissions !== false,
         status: open ? "open" : "closed",
-        ...(attachment && { attachment: { ...attachment, downloadUrl: await createR2DownloadUrl(attachment.key) } }),
+        ...(attachment && { attachment: { ...attachment, downloadUrl: await createR2DownloadUrl(attachment.key, 60 * 60, true) } }),
         createdAt: iso(data.createdAt),
         ...(access.isTeacher ? {
           submittedCount: submittedIds.size,

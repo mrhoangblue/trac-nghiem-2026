@@ -178,7 +178,7 @@ export async function downloadFromR2(key: string): Promise<Uint8Array> {
   return response.Body.transformToByteArray();
 }
 
-export async function createR2DownloadUrl(key: string, expiresIn = 10 * 60): Promise<string> {
+export async function createR2DownloadUrl(key: string, expiresIn = 10 * 60, inlinePdf = false): Promise<string> {
   const config = getConfig();
   if (!config) throw new Error("R2_NOT_CONFIGURED");
   const normalizedKey = key.trim().replace(/^\/+/, "");
@@ -189,7 +189,7 @@ export async function createR2DownloadUrl(key: string, expiresIn = 10 * 60): Pro
   }
   return getSignedUrl(
     getClient(config),
-    new GetObjectCommand({ Bucket: config.bucket, Key: normalizedKey }),
+    new GetObjectCommand({ Bucket: config.bucket, Key: normalizedKey, ...(inlinePdf ? { ResponseContentType: "application/pdf", ResponseContentDisposition: "inline" } : {}) }),
     { expiresIn: Math.max(60, Math.min(expiresIn, 60 * 60)) },
   );
 }

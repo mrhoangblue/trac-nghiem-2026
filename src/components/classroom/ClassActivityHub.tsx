@@ -36,6 +36,7 @@ function localDateTime(value: string | null): string {
 
 export default function ClassActivityHub({ classId, teacherMode = false, section }: Props) {
   const { user } = useAuth();
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [data, setData] = useState<ActivityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,9 +63,11 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
       const payload = await response.json() as ActivityResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Không thể tải hoạt động lớp học.");
       setData(payload);
-      setDeadlineDrafts(Object.fromEntries(payload.assignments.map((item) => [item.id, localDateTime(item.dueAt)])));
+      setDeadlineDrafts((current) => Object.fromEntries(payload.assignments.map((item) => [item.id, current[item.id] ?? localDateTime(item.dueAt)])));
+      return true;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Không thể tải hoạt động lớp học.");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -184,8 +187,8 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
 
       {section !== "announcements" && <section id="class-assignments" aria-labelledby="assignment-heading" className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-brand-700">Giao và nhận bài</p><h2 id="assignment-heading" className="mt-1 text-2xl font-extrabold text-gray-950">Bài tập</h2><p className="mt-1 text-sm text-gray-500">Đề bài lưu trên R2; bài nộp chỉ giáo viên và chính học sinh nhìn thấy.</p></div>
-          {isTeacher && <button onClick={() => setAssignmentOpen((value) => !value)} className="rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-800">+ Giao bài tập</button>}
+          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-brand-700">Giao và nhận bài</p><h2 id="assignment-heading" className="mt-1 text-2xl font-extrabold text-gray-950">Bài tập rèn luyện</h2><p className="mt-1 text-sm text-gray-500">Xem đề ngay tại đây và nộp PDF hoặc ảnh bài làm cho giáo viên.</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={loading} onClick={() => void load()} className="min-h-11 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 disabled:opacity-50">{loading ? "Đang tải…" : "Cập nhật danh sách"}</button>{isTeacher && <button onClick={() => setAssignmentOpen((value) => !value)} className="rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-800">+ Giao bài tập</button>}</div>
         </div>
         {error && <p role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-700">{error}</p>}
         {assignmentOpen && isTeacher && (
@@ -205,7 +208,23 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
               <article key={item.id} className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
                 <div className="p-5 sm:p-7">
                   <div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${item.status === "open" ? "bg-success-100 text-success-700" : "bg-gray-100 text-gray-600"}`}>{item.status === "open" ? "Đang nhận bài" : "Đã khóa"}</span>{item.mySubmission && <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">✓ Đã nộp</span>}</div><h3 className="mt-3 text-xl font-extrabold text-gray-950">{item.title}</h3>{item.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{item.description}</p>}</div><div className="rounded-2xl bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800"><CalendarClock className="mr-2 inline h-4 w-4" />{formatDate(item.dueAt)}</div></div>
-                  {item.attachment && <a href={item.attachment.downloadUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-50"><FileDown size={17} />Mở đề bài PDF</a>}
+                  {item.attachment && <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" disabled={loading} aria-expanded={previewId === item.id} aria-controls={`assignment-preview-${item.id}`} onClick={async () => {
+                        if (previewId === item.id) { setPreviewId(null); return; }
+                        if (await load()) setPreviewId(item.id);
+                      }} className="min-h-11 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{previewId === item.id ? "Thu gọn đề bài" : loading ? "Đang tải…" : "Xem đề bài tại đây"}</button>
+                      <a href={item.attachment.downloadUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 px-4 py-2.5 text-sm font-bold text-brand-700"><FileDown size={17} />Mở tab riêng</a>
+                    </div>
+                    {previewId === item.id && <div id={`assignment-preview-${item.id}`} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2">
+                        <p className="min-w-0 break-words text-xs text-gray-600">{item.attachment.name}</p>
+                        <button type="button" disabled={loading} onClick={() => void load()} className="min-h-11 px-2 text-xs font-bold text-brand-700">Tải lại PDF</button>
+                      </div>
+                      <iframe key={item.attachment.downloadUrl} src={`${item.attachment.downloadUrl}#toolbar=1&navpanes=0&view=FitH`} title={`Đề bài: ${item.title}`} className="h-[75dvh] min-h-[480px] w-full bg-white sm:min-h-[640px]" allowFullScreen referrerPolicy="no-referrer" />
+                      <p className="bg-white px-3 py-2 text-xs leading-5 text-gray-500">Cuộn bên trong khung để đọc. Nếu trình duyệt không hiển thị PDF, chọn “Mở tab riêng”. Liên kết xem có hiệu lực 1 giờ; chọn “Tải lại PDF” khi cần.</p>
+                    </div>}
+                  </div>}
 
                   {isTeacher ? (
                     <div className="mt-5 grid gap-4 border-t border-gray-100 pt-5 lg:grid-cols-[1fr_auto]">
@@ -224,7 +243,7 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
               </article>
             );
           })}
-          {data.assignments.length === 0 && <div className="rounded-3xl border border-dashed border-gray-300 bg-white py-12 text-center text-sm text-gray-400"><ClipboardList className="mx-auto mb-3 h-8 w-8" />Chưa có bài tập nào.</div>}
+          {data.assignments.length === 0 && <div className="rounded-3xl border border-dashed border-gray-300 bg-white py-12 text-center text-sm text-gray-400"><ClipboardList className="mx-auto mb-3 h-8 w-8" />Chưa có bài tập được giao cho lớp này.</div>}
         </div>
       </section>}
     </div>
