@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import LessonDiscussion from "@/components/classroom/LessonDiscussion";
 import ClassActivityHub from "@/components/classroom/ClassActivityHub";
+import ClassTabs from "@/components/classroom/ClassTabs";
 import ClassLeaderboard from "@/components/classroom/ClassLeaderboard";
 import { flattenCourseResources } from "@/utils/courseProgress";
 import type {
@@ -76,6 +77,7 @@ interface Props {
   teacherMode?: boolean;
   showClassHeader?: boolean;
   courseId?: string;
+  management?: ReactNode;
 }
 
 interface StoredUpload {
@@ -231,6 +233,7 @@ export default function ClassLearningContent({
   teacherMode = false,
   showClassHeader = false,
   courseId,
+  management,
 }: Props) {
   const { user } = useAuth();
   const router = useRouter();
@@ -667,26 +670,8 @@ export default function ClassLearningContent({
   const canEdit = teacherMode && data.viewerRole === "teacher";
   const isStudentViewer = data.viewerRole === "student";
 
-  return (
-    <div className="space-y-8">
-      {showClassHeader && (
-        <header className="rounded-3xl bg-gradient-to-r from-brand-700 to-brand-600 p-7 text-white shadow-lg sm:p-9">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-100">Không gian lớp học</p>
-          <h1 className="mt-2 text-3xl font-extrabold">{data.class.name}</h1>
-          <p className="mt-2 text-sm text-brand-100">Giáo viên: {data.class.teacherName || "—"}</p>
-          {data.class.description && <p className="mt-4 max-w-2xl text-sm leading-7 text-white/85">{data.class.description}</p>}
-        </header>
-      )}
-
-      {error && (
-        <div className="rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</div>
-      )}
-
-      {!courseId && <ClassActivityHub classId={classId} teacherMode={teacherMode} />}
-
-      {!courseId && <ClassLeaderboard classId={classId} />}
-
-      <section className="space-y-4" aria-labelledby="course-section-title">
+  const coursePanel = (
+<section className="space-y-4" aria-labelledby="course-section-title">
         {!courseId && <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-700">Tài liệu học tập</p>
@@ -1092,8 +1077,9 @@ export default function ClassLearningContent({
           </div>
         )}
       </section>
-
-      {!courseId && <section className="space-y-4 border-t border-gray-200 pt-8" aria-labelledby="exam-section-title">
+  );
+  const examPanel = (
+<section className="space-y-4" aria-labelledby="exam-section-title">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-700">Được giao cho lớp</p>
@@ -1155,7 +1141,33 @@ export default function ClassLearningContent({
             })}
           </div>
         )}
-      </section>}
+      </section>
+  );
+
+  return (
+    <div className="space-y-8">
+      {showClassHeader && (
+        <header className="rounded-3xl bg-gradient-to-r from-brand-700 to-brand-600 p-5 text-white sm:p-7">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-100">Không gian lớp học</p>
+          <h1 className="mt-2 text-3xl font-extrabold">{data.class.name}</h1>
+          <p className="mt-2 text-sm text-brand-100">Giáo viên: {data.class.teacherName || "—"}</p>
+          {data.class.description && <p className="mt-4 max-w-2xl text-sm leading-7 text-white/85">{data.class.description}</p>}
+        </header>
+      )}
+
+      {error && (
+        <div className="rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</div>
+      )}
+
+      {courseId ? coursePanel : <ClassTabs label="Nội dung lớp học" tabs={[
+        { id: "announcements", label: "Thông báo", content: <ClassActivityHub classId={classId} teacherMode={teacherMode} section="announcements" /> },
+        { id: "assignments", label: "Bài tập", content: <ClassActivityHub classId={classId} teacherMode={teacherMode} section="assignments" /> },
+        { id: "courses", label: "Khóa học", content: coursePanel },
+        { id: "exams", label: "Bài thi", content: examPanel },
+        { id: "rankings", label: "Xếp hạng", content: <ClassLeaderboard classId={classId} /> },
+        ...(management ? [{ id: "management", label: "Quản lý", content: management }] : []),
+      ]} />}
+
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Award, CheckCircle2, Clock3, RefreshCw, Sparkles, Trophy } from "lucide-react";
+import { Award, CheckCircle2, Clock3, RefreshCw, Trophy } from "lucide-react";
+import ClassTabs from "@/components/classroom/ClassTabs";
 import { useAuth } from "@/lib/AuthContext";
 import type { ClassLeaderboardStudent, ClassLeaderboardView } from "@/utils/classroomTypes";
 
@@ -74,11 +75,11 @@ function RankingRow({
         : "bg-gray-100 text-gray-500";
 
   return (
-    <li className={`grid grid-cols-[1.75rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-2.5 py-2.5 transition ${current ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-gray-50"}`}>
+    <li className={`grid grid-cols-[1.5rem_1.75rem_minmax(0,1fr)] sm:grid-cols-[1.75rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-2.5 py-2.5 transition ${current ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-gray-50"}`}>
       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-black shadow-sm ${medalClasses}`} aria-label={`Hạng ${rank}`}>
         {rank}
       </span>
-      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-[10px] font-black text-brand-800 ring-2 ring-white">
+      <span className="relative flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-[10px] font-black text-brand-800 ring-2 ring-white">
         {student.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={student.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
@@ -86,12 +87,12 @@ function RankingRow({
       </span>
       <span className="min-w-0">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-extrabold leading-5 text-gray-900" title={student.fullName}>{student.fullName}</span>
+          <span className="min-w-0 overflow-x-auto whitespace-nowrap text-[13px] sm:text-sm font-extrabold leading-5 text-gray-900" title={student.fullName}>{student.fullName}</span>
           {current && <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Bạn</span>}
         </span>
         <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-4 text-gray-500">{meta.detail(student)}</span>
       </span>
-      <strong className="shrink-0 whitespace-nowrap text-right text-xs font-black text-gray-900">{meta.value(student)}</strong>
+      <strong className="col-start-3 whitespace-nowrap text-left text-sm font-black sm:col-auto sm:text-right text-gray-900">{meta.value(student)}</strong>
     </li>
   );
 }
@@ -108,14 +109,14 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
   const currentOutsideTop = !expanded && currentIndex >= 10 ? rows[currentIndex] : null;
 
   return (
-    <article className="overflow-hidden rounded-[1.5rem] border border-gray-200 bg-white shadow-[0_16px_45px_-30px_rgba(74,39,19,0.45)]">
-      <header className={`min-h-28 bg-gradient-to-br ${meta.accent} p-4 text-white`}>
+    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <header className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-gray-900">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-base font-extrabold leading-6">{meta.title}</h3>
-            <p className="mt-1 text-[11px] font-medium leading-4 text-white/80">{meta.description}</p>
+            <p className="mt-1 text-[11px] font-medium leading-4 text-gray-500">{meta.description}</p>
           </div>
-          <span className="rounded-xl bg-white/15 p-2 ring-1 ring-white/25"><Icon className="h-4 w-4" /></span>
+          <span className="rounded-xl bg-white p-2 text-brand-700"><Icon className="h-4 w-4" /></span>
         </div>
       </header>
       {rows.length ? (
@@ -126,12 +127,12 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
             ))}
           </ol>
           {currentOutsideTop && (
-            <div className="mt-2 border-t border-dashed border-gray-200 pt-2">
+            <ol start={currentIndex + 1} className="mt-2 border-t border-dashed border-gray-200 pt-2">
               <RankingRow student={currentOutsideTop} rank={currentIndex + 1} board={board} current />
-            </div>
+            </ol>
           )}
           {rows.length > 10 && (
-            <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-2 w-full rounded-xl py-2 text-xs font-bold text-brand-700 hover:bg-brand-50">
+            <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-2 min-h-11 w-full rounded-xl py-2 text-sm font-bold text-brand-700 hover:bg-brand-50">
               {expanded ? "Thu gọn còn 10 học sinh" : `Xem thêm ${rows.length - 10} học sinh`}
             </button>
           )}
@@ -139,7 +140,7 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
       ) : (
         <div className="px-5 py-9 text-center">
           <p className="text-sm font-bold text-gray-600">Chưa có dữ liệu xếp hạng</p>
-          <p className="mt-1 text-xs leading-5 text-gray-400">Bảng sẽ cập nhật sau khi học sinh nộp bài đầu tiên.</p>
+          <p className="mt-1 text-xs leading-5 text-gray-400">Học sinh sẽ xuất hiện sau khi được duyệt vào lớp.</p>
         </div>
       )}
     </article>
@@ -184,45 +185,28 @@ export default function ClassLeaderboard({ classId }: { classId: string }) {
   }, [data]);
 
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-brand-200 bg-[linear-gradient(145deg,#fffdf8_0%,#fff8e7_52%,#fff_100%)] shadow-[0_24px_70px_-45px_rgba(95,48,17,0.55)]" aria-labelledby="class-leaderboard-title">
-      <div className="relative border-b border-brand-100 px-5 py-6 sm:px-7">
-        <div className="pointer-events-none absolute -right-12 -top-20 h-48 w-48 rounded-full bg-brand-200/30 blur-2xl" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="rounded-2xl bg-brand-700 p-3 text-white shadow-lg shadow-brand-200"><Trophy className="h-6 w-6" /></span>
-            <div>
-              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.18em] text-brand-700"><Sparkles className="h-3.5 w-3.5" /> Thành tích lớp học</p>
-              <h2 id="class-leaderboard-title" className="mt-1 text-2xl font-black text-gray-950">Bảng xếp hạng học sinh</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">Ghi nhận mức độ hoàn thành, kết quả tốt nhất và thời gian học tập từ các bài thi được giao cho lớp.</p>
-            </div>
-          </div>
-          <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-3.5 py-2 text-xs font-bold text-brand-800 shadow-sm hover:bg-brand-50 disabled:opacity-50">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Cập nhật
-          </button>
+    <section className="min-w-0 space-y-5" aria-labelledby="class-leaderboard-title">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="class-leaderboard-title" className="flex items-center gap-2 text-xl font-extrabold text-gray-900"><Trophy className="h-5 w-5 text-brand-700" /> Xếp hạng lớp</h2>
+          <p className="mt-2 text-sm leading-6 text-gray-500">Mỗi nỗ lực đều được ghi nhận. Chọn tiêu chí để xem thành tích của lớp.</p>
         </div>
-        {data && (
-          <div className="relative mt-5 grid gap-2 sm:grid-cols-3">
-            <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{data.assignedExamCount}</strong><span className="text-xs text-gray-500">bài thi được giao</span></div>
-            <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{data.participatingStudentCount}/{data.studentCount}</strong><span className="text-xs text-gray-500">học sinh đã làm bài</span></div>
-            <div className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-brand-100"><strong className="block text-xl text-gray-950">{participation}%</strong><span className="text-xs text-gray-500">tỷ lệ tham gia</span></div>
-          </div>
-        )}
+        <button type="button" onClick={() => void load()} disabled={loading} aria-label="Cập nhật bảng xếp hạng" className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-brand-800 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /><span className="hidden sm:inline">Cập nhật</span>
+        </button>
       </div>
-
-      <div className="p-4 sm:p-6">
-        {loading && !data ? (
-          <div className="flex items-center justify-center gap-3 py-16 text-sm font-semibold text-gray-500"><span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-200 border-t-brand-700" />Đang tổng hợp thành tích…</div>
-        ) : error ? (
-          <div className="rounded-2xl border border-danger-200 bg-danger-50 p-5 text-center text-sm font-semibold text-danger-700">{error}</div>
-        ) : data ? (
-          <div className="grid gap-4 xl:grid-cols-3">
-            <RankingBoard board="completion" data={data} />
-            <RankingBoard board="score" data={data} />
-            <RankingBoard board="studyTime" data={data} />
-          </div>
-        ) : null}
-        <p className="mt-4 text-center text-[11px] leading-5 text-gray-400">Mỗi đề chỉ tính một lần vào số bài hoàn thành. Điểm dùng kết quả cao nhất của từng đề; thời gian chỉ cộng các lượt đã nộp hợp lệ.</p>
-      </div>
+      {data && <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm leading-6 text-brand-900"><strong>{data.participatingStudentCount}/{data.studentCount}</strong> học sinh đã làm bài · {data.assignedExamCount} đề được giao · {participation}% tham gia</p>}
+      {loading && !data ? <p role="status" className="py-12 text-center text-sm text-gray-500">Đang tổng hợp thành tích…</p>
+        : error ? <p role="alert" className="rounded-xl bg-danger-50 p-4 text-sm text-danger-700">{error}</p>
+        : data ? <ClassTabs label="Tiêu chí xếp hạng" tabs={[
+          { id: "completion", label: "Hoàn thành", content: <RankingBoard board="completion" data={data} /> },
+          { id: "score", label: "Điểm cao", content: <RankingBoard board="score" data={data} /> },
+          { id: "time", label: "Thời gian", content: <RankingBoard board="studyTime" data={data} /> },
+        ]} /> : null}
+      <details className="text-xs leading-6 text-gray-500">
+        <summary className="min-h-11 cursor-pointer py-2 font-semibold text-gray-700">Cách tính xếp hạng</summary>
+        <p>Mỗi đề chỉ tính một lần vào số bài hoàn thành. Điểm là trung bình kết quả cao nhất của từng đề. Thời gian cộng các lượt đã nộp, có thể bao gồm thời gian không tương tác. Chỉ tính bài thi được giao cho lớp.</p>
+      </details>
     </section>
   );
 }

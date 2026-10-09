@@ -8,6 +8,7 @@ import type { AssignmentFileView, ClassAnnouncementView, ClassAssignmentView } f
 interface Props {
   classId: string;
   teacherMode?: boolean;
+  section?: "announcements" | "assignments";
 }
 
 interface ActivityResponse {
@@ -33,7 +34,7 @@ function localDateTime(value: string | null): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-export default function ClassActivityHub({ classId, teacherMode = false }: Props) {
+export default function ClassActivityHub({ classId, teacherMode = false, section }: Props) {
   const { user } = useAuth();
   const [data, setData] = useState<ActivityResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,7 +156,7 @@ export default function ClassActivityHub({ classId, teacherMode = false }: Props
 
   return (
     <div className="space-y-8">
-      <section id="class-announcements" aria-labelledby="announcement-heading" className="overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
+      {section !== "assignments" && <section id="class-announcements" aria-labelledby="announcement-heading" className="overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-orange-50/70 to-white px-5 py-5 sm:px-7">
           <div className="flex items-center gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-500 text-white shadow-sm"><Bell size={21} /></span>
@@ -179,9 +180,9 @@ export default function ClassActivityHub({ classId, teacherMode = false }: Props
           ))}
           {data.announcements.length === 0 && <p className="px-7 py-8 text-center text-sm text-gray-400">Chưa có thông báo nào.</p>}
         </div>
-      </section>
+      </section>}
 
-      <section id="class-assignments" aria-labelledby="assignment-heading" className="space-y-4">
+      {section !== "announcements" && <section id="class-assignments" aria-labelledby="assignment-heading" className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-xs font-bold uppercase tracking-[.18em] text-brand-700">Giao và nhận bài</p><h2 id="assignment-heading" className="mt-1 text-2xl font-extrabold text-gray-950">Bài tập</h2><p className="mt-1 text-sm text-gray-500">Đề bài lưu trên R2; bài nộp chỉ giáo viên và chính học sinh nhìn thấy.</p></div>
           {isTeacher && <button onClick={() => setAssignmentOpen((value) => !value)} className="rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-800">+ Giao bài tập</button>}
@@ -225,7 +226,7 @@ export default function ClassActivityHub({ classId, teacherMode = false }: Props
           })}
           {data.assignments.length === 0 && <div className="rounded-3xl border border-dashed border-gray-300 bg-white py-12 text-center text-sm text-gray-400"><ClipboardList className="mx-auto mb-3 h-8 w-8" />Chưa có bài tập nào.</div>}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

@@ -792,7 +792,7 @@ export default function TeacherClassDetailPage() {
         ) : classData ? (
           <>
             {/* ── Class header ──────────────────────────────────────────── */}
-            <header className="mb-8 rounded-3xl bg-gradient-to-r from-brand-600 to-brand-700 text-white p-8 shadow-lg">
+            <header className="mb-8 rounded-3xl bg-gradient-to-r from-brand-600 to-brand-700 text-white p-5 sm:p-7">
               <p className="text-brand-200 text-xs font-bold uppercase tracking-widest mb-1">Lớp học</p>
               <h1 className="text-3xl font-extrabold">{classData.name}</h1>
               <div className="mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-3">
@@ -825,10 +825,7 @@ export default function TeacherClassDetailPage() {
               </div>
             </header>
 
-            <div className="mb-8 rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
-              <ClassLearningContent classId={classId} teacherMode />
-            </div>
-
+            <ClassLearningContent classId={classId} teacherMode management={<>
             {pendingStudents.length > 0 && (
               <section className="mb-8 overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
                 <div className="border-b border-amber-100 bg-amber-50/70 px-6 py-4">
@@ -1075,6 +1072,7 @@ export default function TeacherClassDetailPage() {
                 </div>
               )}
             </div>
+            </>} />
           </>
         ) : null}
       </div>
