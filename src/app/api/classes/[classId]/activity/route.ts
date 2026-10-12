@@ -70,10 +70,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { classId } = await params;
     const access = await accessFor(request, classId);
     if (access instanceof NextResponse) return access;
+    const section = request.nextUrl.searchParams.get("section");
+    const announcementsOnly = section === "announcements";
+    const assignmentsOnly = section === "assignments";
     const [announcementSnapshot, assignmentSnapshot, submissionSnapshot] = await Promise.all([
-      adminDb.collection("class_announcements").where("classId", "==", classId).get(),
-      adminDb.collection("class_assignments").where("classId", "==", classId).get(),
-      adminDb.collection("class_assignment_submissions").where("classId", "==", classId).get(),
+      assignmentsOnly ? Promise.resolve({ docs: [] }) : adminDb.collection("class_announcements").where("classId", "==", classId).get(),
+      announcementsOnly ? Promise.resolve({ docs: [] }) : adminDb.collection("class_assignments").where("classId", "==", classId).get(),
+      announcementsOnly ? Promise.resolve({ docs: [] }) : adminDb.collection("class_assignment_submissions").where("classId", "==", classId).get(),
     ]);
 
     const announcements = announcementSnapshot.docs.map((document) => {
@@ -89,7 +92,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }).sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
     const activeStudentIds = Array.isArray(access.classData.studentIds) ? access.classData.studentIds as string[] : [];
-    const userSnapshots = access.isTeacher && activeStudentIds.length
+    const userSnapshots = !announcementsOnly && access.isTeacher && activeStudentIds.length
       ? await adminDb.getAll(...activeStudentIds.map((id) => adminDb.collection("users").doc(id)))
       : [];
     const students = userSnapshots.map((snapshot) => ({

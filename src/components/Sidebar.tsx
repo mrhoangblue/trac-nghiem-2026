@@ -1,5 +1,7 @@
 "use client";
 
+import { gradeHref } from "@/lib/seo";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -129,7 +131,7 @@ export default function Sidebar() {
             <SectionLabel collapsed={collapsed}>Ôn luyện theo khối</SectionLabel>
             {GRADE_LEVELS.map((grade) => {
               if (grade === "Thi Thử TN THPT") {
-                return <SideLink collapsed={collapsed} key={grade} href={`/?grade=${encodeURIComponent(grade)}`} icon={Target}>{grade}</SideLink>;
+                return <SideLink collapsed={collapsed} key={grade} href={gradeHref(grade)} icon={Target}>{grade}</SideLink>;
               }
               const expanded = expandedGrade === grade;
               return (
@@ -141,8 +143,8 @@ export default function Sidebar() {
                   </button>
                   {expanded && !collapsed && (
                     <div className="ml-7 mt-1 space-y-0.5 border-l border-[#e9ddd2] pl-3">
-                      <Link href={`/?grade=${encodeURIComponent(grade)}`} className="block rounded-lg px-3 py-2 text-xs font-bold text-brand-700 hover:bg-brand-50">Tất cả đề</Link>
-                      {EXAM_TYPES.map((type) => <Link key={type} href={`/?grade=${encodeURIComponent(grade)}&type=${encodeURIComponent(type)}`} className="block rounded-lg px-3 py-2 text-xs leading-4 text-gray-500 hover:bg-brand-50 hover:text-brand-700">{type}</Link>)}
+                      <Link href={gradeHref(grade)} className="block rounded-lg px-3 py-2 text-xs font-bold text-brand-700 hover:bg-brand-50">Tất cả đề</Link>
+                      {EXAM_TYPES.map((type) => <Link key={type} href={`${gradeHref(grade)}?type=${encodeURIComponent(type)}`} className="block rounded-lg px-3 py-2 text-xs leading-4 text-gray-500 hover:bg-brand-50 hover:text-brand-700">{type}</Link>)}
                     </div>
                   )}
                 </div>

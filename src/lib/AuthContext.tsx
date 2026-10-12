@@ -211,7 +211,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isMod = userProfile?.role === "mod" || userProfile?.role === "admin";
 
   // Show loading screen while Firebase auth resolves
-  if (loading) return <LoadingScreen />;
+  const publicPage = pathname === "/" || pathname.startsWith("/de-thi/");
+  if (loading && !publicPage) return <LoadingScreen />;
 
   return (
     <AuthContext.Provider

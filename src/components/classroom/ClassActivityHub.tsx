@@ -56,7 +56,7 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
     setError("");
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/activity`, {
+      const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/activity${section ? `?section=${section}` : ""}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -71,7 +71,7 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
     } finally {
       setLoading(false);
     }
-  }, [classId, user]);
+  }, [classId, user, section]);
 
   useEffect(() => {
     queueMicrotask(() => void load());

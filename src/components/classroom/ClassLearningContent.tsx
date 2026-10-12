@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
-import LessonDiscussion from "@/components/classroom/LessonDiscussion";
-import ClassActivityHub from "@/components/classroom/ClassActivityHub";
+const LessonDiscussion = dynamic(() => import("@/components/classroom/LessonDiscussion"), { loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang tải nội dung…</p> });
+const ClassActivityHub = dynamic(() => import("@/components/classroom/ClassActivityHub"), { loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang tải nội dung…</p> });
 import ClassTabs from "@/components/classroom/ClassTabs";
-import ClassLeaderboard from "@/components/classroom/ClassLeaderboard";
+const ClassLeaderboard = dynamic(() => import("@/components/classroom/ClassLeaderboard"), { loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang tải nội dung…</p> });
 import { flattenCourseResources } from "@/utils/courseProgress";
 import type {
   ClassCourseLesson,

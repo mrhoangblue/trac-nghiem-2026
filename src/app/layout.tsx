@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/lib/seo";
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Geist_Mono, STIX_Two_Text } from "next/font/google";
 import Script from "next/script";
@@ -31,8 +32,10 @@ const stixTwoText = STIX_Two_Text({
 });
 
 export const metadata: Metadata = {
-  title: "Hệ thống Ôn tập Toán",
-  description: "Website trắc nghiệm toán dành cho học sinh",
+  metadataBase: new URL(SITE_URL),
+  title: { default: "Học Toán THPT cùng Thầy Hoàng Blue", template: "%s | Thầy Hoàng Blue" },
+  description: "Học Toán lớp 10, 11, 12 cùng Thầy Hoàng Blue. Luyện đề, học theo lớp, xem lời giải và theo dõi tiến bộ để chuẩn bị cho kỳ thi tốt nghiệp THPT.",
+  openGraph: { siteName: "Toán Thầy Hoàng Blue", locale: "vi_VN", type: "website", title: "Học Toán THPT cùng Thầy Hoàng Blue", description: "Luyện đề, học theo lớp và theo dõi tiến bộ môn Toán THPT." },
 };
 
 export default function RootLayout({
