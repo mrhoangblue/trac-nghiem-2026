@@ -1109,7 +1109,7 @@ export default function ClassLearningContent({
               const status = STATUS_META[exam.status];
               const studentCanStart = exam.status === "open";
               const href = canEdit
-                ? `/admin/exam/${exam.id}`
+                ? `/admin/exam/${exam.id}?classId=${encodeURIComponent(classId)}`
                 : exam.submitted && exam.submissionId
                   ? `/student/review/${exam.submissionId}`
                   : `/quiz/${exam.id}`;

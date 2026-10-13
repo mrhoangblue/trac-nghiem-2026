@@ -275,7 +275,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         .get();
       submissionSnapshot.docs.forEach((document) => {
         const data = document.data();
-        if (data.status !== "COMPLETED" || typeof data.examId !== "string") return;
+        if (data.status !== "COMPLETED" || typeof data.examId !== "string" || data.isTeacherPreview === true) return;
+        if (data.classId && data.classId !== classId) return;
         const submittedAt = data.submittedAt instanceof Timestamp ? data.submittedAt.toMillis() : 0;
         const previous = submissions.get(data.examId);
         if (!previous || submittedAt >= previous.submittedAt) {

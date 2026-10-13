@@ -27,12 +27,44 @@ export async function GET(
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
 
+    const classId = request.nextUrl.searchParams.get("classId")?.trim();
+    let classStudentEmails: Set<string> | null = null;
+    let classStudentIds: Set<string> | null = null;
+    if (classId) {
+      const classSnapshot = await adminDb.collection("classes").doc(classId).get();
+      if (!classSnapshot.exists) return NextResponse.json({ error: "CLASS_NOT_FOUND" }, { status: 404 });
+      const classData = classSnapshot.data() ?? {};
+      if (authUser.role !== "admin" && classData.teacherId !== authUser.uid) {
+        return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      }
+      const assignedClassIds = [...(Array.isArray(exam.targetClassIds) ? exam.targetClassIds : []), ...(Array.isArray(exam.classIds) ? exam.classIds : [])];
+      if (!assignedClassIds.includes(classId)) {
+        return NextResponse.json({ error: "EXAM_NOT_ASSIGNED_TO_CLASS" }, { status: 403 });
+      }
+      const studentIds: string[] = Array.isArray(classData.studentIds)
+        ? classData.studentIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        : [];
+      classStudentIds = new Set(studentIds);
+      const [profiles, members] = await Promise.all([
+        studentIds.length ? adminDb.getAll(...studentIds.map((id) => adminDb.collection("users").doc(id))) : Promise.resolve([]),
+        adminDb.collection("class_members").where("classId", "==", classId).get(),
+      ]);
+      const membershipEmails = new Map(members.docs.map((member) => [member.data().studentId, member.data().studentEmail]));
+      classStudentEmails = new Set(profiles.map((profile) => String(profile.data()?.email ?? membershipEmails.get(profile.id) ?? "").trim().toLowerCase()).filter(Boolean));
+    }
+
     const snapshot = await adminDb.collection("submissions").where("examId", "==", examId).get();
     const submissions = snapshot.docs
       .map((document) => ({ id: document.id, ...document.data() } as Record<string, unknown> & { id: string }))
       .filter((submission) => (
         (submission.status === "COMPLETED" || typeof submission.status !== "string")
         && submission.isTeacherPreview !== true
+        && (!classId || (
+          (!submission.classId || submission.classId === classId)
+          && (typeof submission.studentId === "string" && submission.studentId
+            ? classStudentIds!.has(submission.studentId)
+            : classStudentEmails!.has(String(submission.studentEmail ?? "").trim().toLowerCase()))
+        ))
       ))
       .map((submission) => ({
         id: submission.id,

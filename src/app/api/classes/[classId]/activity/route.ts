@@ -104,7 +104,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const submissionsByAssignment = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
     submissionSnapshot.docs.forEach((document) => {
       const assignmentId = String(document.data().assignmentId ?? "");
-      if (!assignmentId) return;
+      if (!assignmentId || !activeStudentIds.includes(String(document.data().studentId ?? ""))) return;
       submissionsByAssignment.set(assignmentId, [...(submissionsByAssignment.get(assignmentId) ?? []), document]);
     });
 

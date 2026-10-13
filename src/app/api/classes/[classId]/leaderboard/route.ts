@@ -154,7 +154,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const submission = document.data();
       if (submission.status !== "COMPLETED" || submission.isTeacherPreview === true) return;
       const examId = typeof submission.examId === "string" ? submission.examId : "";
-      const student = aggregateByEmail.get(normalizedEmail(submission.studentEmail));
+      if (submission.classId && submission.classId !== classId) return;
+      const student = typeof submission.studentId === "string" && submission.studentId
+        ? aggregateById.get(submission.studentId)
+        : aggregateByEmail.get(normalizedEmail(submission.studentEmail));
       if (!examId || !student) return;
 
       student.completedExamIds.add(examId);

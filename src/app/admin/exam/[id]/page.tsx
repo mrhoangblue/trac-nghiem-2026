@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
@@ -255,6 +255,7 @@ function ResetSubmissionDialog({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ExamDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const classId = useSearchParams().get("classId")?.trim() ?? "";
   const { user, isMod, isAdmin, loading: authLoading } = useAuth();
 
   const [exam, setExam] = useState<ExamData | null>(null);
@@ -272,7 +273,11 @@ export default function ExamDetailPage() {
   useEffect(() => {
     if (!id || authLoading) return;
 
+    let cancelled = false;
     const fetchData = async () => {
+      setLoading(true);
+      setSubmissions([]);
+      setError(null);
       try {
         // 1. Fetch exam metadata
         const examDoc = await getDoc(doc(db, "exams", id));
@@ -304,7 +309,7 @@ export default function ExamDetailPage() {
         // 2. Fetch submissions for this exam
         const token = await user?.getIdToken();
         if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
-        const submissionResponse = await fetch(`/api/exams/${encodeURIComponent(id)}/submissions`, {
+        const submissionResponse = await fetch(`/api/exams/${encodeURIComponent(id)}/submissions${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         });
@@ -315,6 +320,7 @@ export default function ExamDetailPage() {
         if (!submissionResponse.ok) {
           throw new Error(submissionPayload?.error ?? "Không thể tải kết quả bài thi.");
         }
+        if (cancelled) return;
         const subs: Submission[] = (submissionPayload?.submissions ?? []).map((s) => {
           return {
             id: String(s.id ?? ""),
@@ -333,14 +339,15 @@ export default function ExamDetailPage() {
         setSubmissions(subs);
       } catch (err) {
         console.error(err);
-        setError("Lỗi khi tải dữ liệu. Vui lòng thử lại.");
+        if (!cancelled) setError("Lỗi khi tải dữ liệu. Vui lòng thử lại.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
-  }, [id, authLoading, isMod, isAdmin, user]);
+    return () => { cancelled = true; };
+  }, [id, classId, authLoading, isMod, isAdmin, user]);
 
   // ── Group by unique student ──────────────────────────────────────────────────
   const studentRows = useMemo(() => {
@@ -480,7 +487,7 @@ export default function ExamDetailPage() {
     setResetError("");
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`/api/exams/${encodeURIComponent(id)}/submissions`, {
+      const response = await fetch(`/api/exams/${encodeURIComponent(id)}/submissions${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
