@@ -23,6 +23,9 @@ import {
   type QuestionTimingStat,
 } from "@/utils/examTypes";
 import ReviewMode from "@/components/ReviewMode";
+import StateIcon from "@/components/StateIcon";
+import { orderQuestionsByPart } from "@/utils/examStructure";
+import { AlertTriangle, PenTool } from "lucide-react";
 
 interface StoredAnswers {
   p1Ans: Record<string, number>;
@@ -101,6 +104,7 @@ function recalcScore(
     p1: finalP1,
     p2: finalP2,
     p3: finalP3,
+    p4: storedScore?.p4 ?? null,
     total: storedScore?.total ?? r(finalP1 + finalP2 + finalP3),
     part1: storedScore?.part1 ?? { correct: p1Correct, total: p1Qs.length, score: finalP1 },
     part2: storedScore?.part2 ?? { details: p2Details, totalScore: finalP2 },
@@ -137,6 +141,7 @@ export default function TeacherSubmissionReviewPage() {
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [activitySummary, setActivitySummary] = useState<ExamActivitySummary | null>(null);
+  const [essayGrade, setEssayGrade] = useState<{ examId: string; status: "pending" | "graded" } | null>(null);
 
   const backHref =
     returnToRaw &&
@@ -182,12 +187,13 @@ export default function TeacherSubmissionReviewPage() {
         if (exam.tikzProcessed && Array.isArray(exam.questions)) {
           qs = exam.questions as ParsedQuestion[];
         } else if (exam.rawLatex) {
-          const { part1 = "", part2 = "", part3 = "" } = exam.rawLatex;
-          qs = [
+          const { part1 = "", part2 = "", part3 = "", part4 = "" } = exam.rawLatex;
+          qs = orderQuestionsByPart([
             ...parseLatexExam(part1),
             ...parseLatexExam(part2),
             ...parseLatexExam(part3),
-          ].map((q, idx) => ({ ...q, id: idx + 1 }));
+            ...parseLatexExam(part4),
+          ]);
         } else {
           qs = (exam.questions ?? []) as ParsedQuestion[];
         }
@@ -200,6 +206,9 @@ export default function TeacherSubmissionReviewPage() {
 
         const score = recalcScore(qs, a1, a2, a3, sub.scores);
         setScoreResult(score);
+        if (sub.gradingStatus === "pending" || sub.gradingStatus === "graded") {
+          setEssayGrade({ examId: String(sub.examId), status: sub.gradingStatus });
+        }
         if (Array.isArray(sub.activityLog) || Array.isArray(sub.questionTimings)) {
           setActivitySummary({
             activityLog: (sub.activityLog ?? []) as ExamActivityEvent[],
@@ -231,7 +240,7 @@ export default function TeacherSubmissionReviewPage() {
         <Spinner />
       ) : error ? (
         <div className="max-w-lg mx-auto px-4 py-20 text-center">
-          <div className="text-5xl mb-4">⚠️</div>
+          <StateIcon icon="alert" tone="danger" className="mb-4" />
           <p className="text-danger-500 font-semibold text-lg mb-6">{error}</p>
           <Link
             href={backHref}
@@ -252,11 +261,11 @@ export default function TeacherSubmissionReviewPage() {
           </div>
 
           <div className="max-w-3xl mx-auto px-4 pt-6">
-            <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-card">
+            <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-[var(--shadow-soft)]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Nhật ký thời gian</p>
-                  <h2 className="mt-1 text-xl font-extrabold text-earth-900">Tiến trình làm bài theo từng câu</h2>
+                  <h2 className="mt-1 text-xl font-extrabold font-display text-gray-900">Tiến trình làm bài theo từng câu</h2>
                 </div>
                 {!activitySummary && (
                   <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
@@ -292,7 +301,7 @@ export default function TeacherSubmissionReviewPage() {
 
                   {activitySummary.idleBeforeSubmitSeconds >= 300 && (
                     <p className="mt-4 rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-800">
-                      ⚠️ Học sinh không có tương tác trong ít nhất 5 phút trước khi bài được nộp. Đây là tín hiệu để giáo viên xem xét cùng các dữ liệu khác.
+                      <AlertTriangle size={14} className="mr-1 inline align-[-2px]" aria-hidden="true" />Học sinh không có tương tác trong ít nhất 5 phút trước khi bài được nộp. Đây là tín hiệu để giáo viên xem xét cùng các dữ liệu khác.
                     </p>
                   )}
 
@@ -350,6 +359,16 @@ export default function TeacherSubmissionReviewPage() {
               )}
             </section>
           </div>
+
+          {essayGrade && (
+            <div className="workspace-page mx-auto mt-6 max-w-4xl px-4">
+              <Link href={`/admin/grade/${essayGrade.examId}?s=${submissionId}`} className="flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800 transition hover:border-violet-300">
+                <PenTool size={18} aria-hidden="true" />
+                {essayGrade.status === "pending" ? "Phần tự luận chưa chấm · Mở màn hình chấm" : "Xem hoặc sửa bài chấm tự luận"}
+                <span className="ml-auto" aria-hidden="true">→</span>
+              </Link>
+            </div>
+          )}
 
           <ReviewMode
             title={examTitle}

@@ -1,6 +1,6 @@
 import { SITE_URL } from "@/lib/seo";
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro, Geist_Mono, STIX_Two_Text } from "next/font/google";
+import { Be_Vietnam_Pro, Plus_Jakarta_Sans, Geist_Mono, STIX_Two_Text } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import "katex/dist/katex.min.css";
@@ -16,6 +16,13 @@ const beVietnam = Be_Vietnam_Pro({
   variable: "--font-be-vietnam",
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin", "vietnamese"],
+  weight: ["600", "700", "800"],
   display: "swap",
 });
 
@@ -47,7 +54,7 @@ export default function RootLayout({
     <html
       lang="vi"
       data-scroll-behavior="smooth"
-      className={`${beVietnam.variable} ${geistMono.variable} ${stixTwoText.variable} h-full antialiased`}
+      className={`${beVietnam.variable} ${jakarta.variable} ${geistMono.variable} ${stixTwoText.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <a href="#main-content" className="skip-link">Đến nội dung chính</a>

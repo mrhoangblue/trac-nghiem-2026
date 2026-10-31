@@ -179,11 +179,12 @@ export interface ModUserExtension {
 
 export type ReviewPolicy = "immediate" | "after_end" | "never";
 
-export type ExamTargetType = "all" | "classes";
+export type { ExamTargetType } from "@/utils/examAudience";
+import type { ExamTargetType } from "@/utils/examAudience";
 
 export interface ExamDocExtension {
   classIds: string[];
-  /** "all" = mọi học sinh; "classes" = chỉ HS thuộc targetClassIds */
+  /** Xem examAudience.ts: "all" | "classes" | "both" */
   targetType: ExamTargetType;
   targetClassIds: string[];
   isShuffleQuestions: boolean;

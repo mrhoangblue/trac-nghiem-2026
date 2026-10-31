@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import AdminGuard from "@/components/AdminGuard";
-import { ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, X } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -17,6 +17,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { generateSearchKeywords } from "@/utils/searchKeywords";
+import StateIcon from "@/components/StateIcon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ export default function AdminUsersPage() {
     if (rows.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-          <span className="text-4xl">📭</span>
+          <StateIcon icon="inbox" />
           <p className="text-sm">Không có dữ liệu.</p>
         </div>
       );
@@ -276,7 +277,7 @@ export default function AdminUsersPage() {
                         {actionId === u.uid ? (
                           <span className="w-3 h-3 border-2 border-success-400 border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          "✓ Phê duyệt"
+                          <><Check size={13} aria-hidden="true" />Phê duyệt</>
                         )}
                       </button>
                       <button
@@ -284,7 +285,7 @@ export default function AdminUsersPage() {
                         disabled={actionId === u.uid}
                         className="inline-flex items-center gap-1 text-danger-500 hover:text-danger-700 font-semibold border border-danger-200 hover:border-danger-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-40"
                       >
-                        ❌ Từ chối
+                        <X size={13} aria-hidden="true" /> Từ chối
                       </button>
                     </div>
                   </td>
@@ -412,7 +413,7 @@ export default function AdminUsersPage() {
                 <>
                   {pendingTeachers.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-                      <span className="text-4xl">🎉</span>
+                      <StateIcon icon="inbox" tone="muted" size="sm" />
                       <p className="text-sm">Không có giáo viên nào đang chờ duyệt.</p>
                     </div>
                   ) : (
@@ -429,7 +430,7 @@ export default function AdminUsersPage() {
         {/* Student limit warning */}
         {activeTab === "students" && students.length >= STUDENT_LIMIT * 0.9 && (
           <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center gap-3">
-            <span className="text-amber-500 text-xl">⚠️</span>
+            <AlertTriangle size={20} className="shrink-0 text-amber-500" aria-hidden="true" />
             <p className="text-sm text-amber-800 font-medium">
               Đã đạt {Math.round((students.length / STUDENT_LIMIT) * 100)}% giới hạn học sinh ({students.length}/{STUDENT_LIMIT}).
             </p>

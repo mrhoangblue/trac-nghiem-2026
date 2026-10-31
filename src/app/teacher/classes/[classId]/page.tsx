@@ -18,6 +18,7 @@ import {
 import type { ClassDoc } from "@/utils/classroomTypes";
 import ClassLearningContent from "@/components/classroom/ClassLearningContent";
 import * as XLSX from "xlsx";
+import { AlertTriangle, BarChart3, Check } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -95,6 +96,7 @@ interface ExamSubmissionResponse {
     id: string;
     studentEmail: string;
     submittedAtMillis: number | null;
+    gradingStatus?: "pending" | "graded" | null;
     scores?: {
       p1?: number;
       p2?: number;
@@ -289,7 +291,7 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
           {/* Error banner */}
           {error && (
             <div className="flex items-start gap-2.5 bg-danger-50 border border-danger-200 text-danger-700 text-sm px-4 py-3 rounded-xl">
-              <span className="mt-0.5 shrink-0">⚠️</span>
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
@@ -309,7 +311,7 @@ function AddStudentModal({ classId, existingUids, onAdd, onClose }: AddStudentMo
               disabled={loading || !form.email.trim()}
               className="flex-1 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2"
             >
-              {loading ? <><BtnSpinner /> Đang thêm…</> : "✓ Thêm học sinh"}
+              {loading ? <><BtnSpinner /> Đang thêm…</> : <><Check size={13} aria-hidden="true" />Thêm học sinh</>}
             </button>
           </div>
         </form>
@@ -625,7 +627,7 @@ export default function TeacherClassDetailPage() {
       }
       for (const submission of payload?.submissions ?? []) {
         const email = String(submission.studentEmail ?? "").trim().toLowerCase();
-        if (!studentEmails.has(email)) continue;
+        if (!studentEmails.has(email) || submission.gradingStatus === "pending") continue;
         const scores = submission.scores ?? {};
         const existing = allSubmissions[email];
         const submittedAt = submission.submittedAtMillis
@@ -792,10 +794,13 @@ export default function TeacherClassDetailPage() {
         ) : classData ? (
           <>
             {/* ── Class header ──────────────────────────────────────────── */}
-            <header className="mb-8 rounded-3xl bg-gradient-to-r from-brand-600 to-brand-700 text-white p-5 sm:p-7">
-              <p className="text-brand-200 text-xs font-bold uppercase tracking-widest mb-1">Lớp học</p>
-              <h1 className="text-3xl font-extrabold">{classData.name}</h1>
-              <div className="mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-3">
+            <header className="relative mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-6 text-white shadow-[var(--shadow-lift)] sm:p-8">
+              <div aria-hidden="true" className="edu-dots absolute inset-0 opacity-50 mix-blend-overlay" />
+              <div aria-hidden="true" className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
+              <span aria-hidden="true" className="edu-float-slow absolute bottom-2 right-8 font-display text-8xl font-extrabold text-white/10">∑</span>
+              <p className="relative mb-1 text-xs font-semibold uppercase tracking-widest text-indigo-100">Lớp học</p>
+              <h1 className="relative font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{classData.name}</h1>
+              <div className="relative mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-3">
                 <span className="text-sm text-brand-100 font-medium">
                   Mã lớp:{" "}
                   <strong className="text-white tracking-[0.35em] text-lg font-black font-mono">
@@ -843,7 +848,7 @@ export default function TeacherClassDetailPage() {
                       <div className="flex gap-2">
                         <button disabled={reviewingStudentId !== null} onClick={() => reviewJoinRequest(student, "reject")} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition hover:border-danger-200 hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50">Từ chối</button>
                         <button disabled={reviewingStudentId !== null} onClick={() => reviewJoinRequest(student, "approve")} className="rounded-xl bg-success-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-success-700 disabled:opacity-50">
-                          {reviewingStudentId === student.studentId ? "Đang duyệt…" : "✓ Duyệt vào lớp"}
+                          {reviewingStudentId === student.studentId ? "Đang duyệt…" : <><Check size={13} aria-hidden="true" />Duyệt vào lớp</>}
                         </button>
                       </div>
                     </div>
@@ -959,7 +964,7 @@ export default function TeacherClassDetailPage() {
                 className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xl">📊</span>
+                  <BarChart3 size={20} className="text-brand-600" aria-hidden="true" />
                   <div className="text-left">
                     <h2 className="font-extrabold text-gray-900">Xuất bảng điểm</h2>
                     <p className="text-gray-500 text-sm">CSV, XLSX hoặc in PDF</p>

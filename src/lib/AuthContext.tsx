@@ -23,6 +23,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter, usePathname } from "next/navigation";
+import { EXAM_FONT_SCALE, resolveUserSettings, type UserSettings } from "@/utils/userSettings";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,11 @@ export interface UserProfile {
   phoneNumber?: string;
   searchKeywords?: string[];
   class?: string;
+  /** Ảnh tự tải lên ở trang Tài khoản; nếu trống dùng ảnh Google. */
+  avatarUrl?: string;
+  avatarKey?: string;
+  /** Xem resolveUserSettings() để đọc kèm giá trị mặc định. */
+  settings?: Partial<UserSettings>;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -165,6 +171,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return unsub;
   }, [fetchProfile]);
+
+  // Cỡ chữ đề theo cài đặt tài khoản (.exam-reading nhân với --exam-scale).
+  const examFontScale = resolveUserSettings(userProfile?.settings).examFontScale;
+  useEffect(() => {
+    document.documentElement.style.setProperty("--exam-scale", String(EXAM_FONT_SCALE[examFontScale]));
+  }, [examFontScale]);
 
   // ── Route guard: profile incomplete → force /onboarding ───────────────────
   useEffect(() => {

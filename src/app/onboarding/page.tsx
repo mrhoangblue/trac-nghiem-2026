@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
+import { GraduationCap, School } from "lucide-react";
 
 type Tab = "student" | "teacher";
 
@@ -113,7 +114,7 @@ export default function OnboardingPage() {
                     : "text-gray-500 hover:text-gray-800"
                 }`}
               >
-                {t === "student" ? "🎓 Học sinh" : "📚 Giáo viên"}
+                <span className="inline-flex items-center justify-center gap-2">{t === "student" ? <GraduationCap size={16} aria-hidden="true" /> : <School size={16} aria-hidden="true" />}{t === "student" ? "Học sinh" : "Giáo viên"}</span>
               </button>
             ))}
           </div>

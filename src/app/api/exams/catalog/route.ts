@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAuth } from "@/lib/verifyAuth";
+import { isClassOnly } from "@/utils/examAudience";
 
 // List cards never need question text, answer keys, LaTeX or R2 source files.
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyAuth(request);
     if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-    const isTeacher = user.role === "admin" || user.role === "mod";
-    const [snapshot, classes] = await Promise.all([
-      adminDb.collection("exams").select("title", "description", "questionCount", "gradeLevel", "examType", "coverImageUrl", "duration", "requiresPassword", "targetType", "targetClassIds").get(),
-      isTeacher ? Promise.resolve(null) : adminDb.collection("classes").where("studentIds", "array-contains", user.uid).select().get(),
-    ]);
-    const classIds = new Set(classes?.docs.map((item) => item.id) ?? []);
+    const snapshot = await adminDb.collection("exams").select("title", "description", "questionCount", "gradeLevel", "examType", "coverImageUrl", "duration", "requiresPassword", "targetType", "targetClassIds").get();
+    // The public catalog only lists public exams. Class-only exams are reached
+    // from the class page, for students and teachers alike.
     const visible = snapshot.docs.filter((item) => {
       const data = item.data();
-      const targets = Array.isArray(data.targetClassIds) ? data.targetClassIds : [];
-      return isTeacher || data.targetType !== "classes" || targets.length === 0 || targets.some((id: string) => classIds.has(id));
+      return !isClassOnly(data.targetType, data.targetClassIds);
     });
     const exams = await Promise.all(visible.map(async (item) => {
       const data = item.data();

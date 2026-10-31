@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { getClassById, joinClassById } from "@/lib/classroomService";
 import type { ClassDoc } from "@/utils/classroomTypes";
+import StateIcon from "@/components/StateIcon";
+import { Check, XCircle } from "lucide-react";
 
 function Spinner() {
   return (
@@ -77,7 +79,7 @@ export default function JoinClassByLinkPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 max-w-sm w-full text-center">
-          <div className="text-5xl mb-4">🔐</div>
+          <StateIcon icon="lock" className="mb-4" />
           <h1 className="text-xl font-extrabold text-gray-900 mb-2">Cần đăng nhập</h1>
           <p className="text-gray-500 text-sm mb-6">Bạn cần đăng nhập để tham gia lớp học.</p>
           <Link
@@ -95,7 +97,7 @@ export default function JoinClassByLinkPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 max-w-sm w-full text-center">
-          <div className="text-5xl mb-4">😕</div>
+          <StateIcon icon="school" tone="muted" className="mb-4" />
           <h1 className="text-xl font-extrabold text-gray-900 mb-2">Không tìm thấy lớp học</h1>
           <p className="text-gray-500 text-sm mb-6">
             Lớp học này không tồn tại hoặc đã đóng. Liên hệ giáo viên để được hỗ trợ.
@@ -112,13 +114,11 @@ export default function JoinClassByLinkPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="workspace-surface bg-white rounded-2xl p-8 max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-brand-100 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4">
-            🏫
-          </div>
+          <StateIcon icon="school" className="mb-4" />
           <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-1">
             Lớp học của {classData?.teacherName}
           </p>
@@ -130,7 +130,7 @@ export default function JoinClassByLinkPage() {
 
         {result?.success ? (
           <div className="flex flex-col items-center gap-4 py-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-success-100 text-2xl text-success-700">✓</div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-lg shadow-emerald-500/30"><Check size={28} aria-hidden="true" /></div>
             <p className="text-success-700 font-bold text-center">{result.message}</p>
             <p className="text-gray-400 text-sm">Đang chuyển hướng…</p>
           </div>
@@ -143,7 +143,7 @@ export default function JoinClassByLinkPage() {
               <button
                 onClick={handleJoin}
                 disabled={joining}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="edu-btn mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {joining && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
                 {joining ? "Đang gửi…" : "Gửi yêu cầu tham gia"}
@@ -152,7 +152,7 @@ export default function JoinClassByLinkPage() {
 
             {result && !result.success && (
               <div className="mt-6 flex items-start gap-3 p-4 rounded-xl text-sm font-medium border bg-danger-50 border-danger-200 text-danger-700">
-                <span className="text-base shrink-0">❌</span>
+                <XCircle size={18} className="shrink-0" aria-hidden="true" />
                 <span>{result.message}</span>
               </div>
             )}

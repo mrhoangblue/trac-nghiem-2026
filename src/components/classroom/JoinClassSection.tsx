@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { User } from "firebase/auth";
 import { joinClass } from "@/lib/classroomService";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 // Only valid class code characters (no O/I/0/1)
 const VALID_CLASS_CODE_RE = /[^A-Z2-9]/g;
@@ -128,7 +129,7 @@ export default function JoinClassSection({ user, onRequested }: Props) {
               : "bg-danger-50 border-danger-200 text-danger-700"
           }`}
         >
-          <span className="text-base shrink-0">{result.success ? "✓" : "❌"}</span>
+          {result.success ? <CheckCircle2 size={18} className="shrink-0" aria-hidden="true" /> : <XCircle size={18} className="shrink-0" aria-hidden="true" />}
           <span>{result.message}</span>
         </div>
       )}

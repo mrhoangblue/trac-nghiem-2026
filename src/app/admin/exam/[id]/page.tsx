@@ -13,7 +13,8 @@ import {
 } from "firebase/firestore";
 import { formatCountdown } from "@/utils/examTypes";
 import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
-import { AlertTriangle, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Crosshair, PenTool, RotateCcw, X } from "lucide-react";
+import StateIcon from "@/components/StateIcon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ScoringConfig {
@@ -30,6 +31,8 @@ interface ExamData {
   authorEmail: string;
   startTime: string | null;
   endTime: string | null;
+  /** Đề 4 phần có tự luận. */
+  hasEssay: boolean;
 }
 
 interface Submission {
@@ -44,6 +47,9 @@ interface Submission {
   cheatCount?: number;
   totalElapsedSeconds?: number;
   idleBeforeSubmitSeconds?: number;
+  /** Điểm Phần IV đã chấm; null khi chưa chấm hoặc đề không có tự luận. */
+  p4: number | null;
+  gradingStatus: "pending" | "graded" | null;
 }
 
 interface ScoreBreakdown {
@@ -98,7 +104,8 @@ function calcScores(sub: Submission, config: ScoringConfig): ScoreBreakdown {
   const p1 = calcP1(sub.part1Results ?? [], config.part1TotalScore);
   const p2 = calcP2(sub.part2Results ?? []);
   const p3 = calcP3(sub.part3Results ?? [], config.part3TotalScore);
-  return { p1, p2, p3, total: Math.round((p1 + p2 + p3) * 100) / 100 };
+  const p4 = sub.gradingStatus === "graded" ? sub.p4 ?? 0 : 0;
+  return { p1, p2, p3, total: Math.round((p1 + p2 + p3 + p4) * 100) / 100 };
 }
 
 // ── Group submissions by unique student ───────────────────────────────────────
@@ -171,7 +178,7 @@ function ResetSubmissionDialog({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#21120c]/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0F2E]/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reset-submission-title"
@@ -179,7 +186,7 @@ function ResetSubmissionDialog({
         if (event.target === event.currentTarget && !busy) onCancel();
       }}
     >
-      <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-danger-200 bg-[#fffdf8] shadow-2xl">
+      <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-danger-200 bg-[#FFFFFF] shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-danger-100 bg-danger-50/70 px-6 py-5">
           <div className="flex items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-danger-100 text-danger-700">
@@ -187,7 +194,7 @@ function ResetSubmissionDialog({
             </span>
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-danger-700">Hành động cần xác nhận</p>
-              <h2 id="reset-submission-title" className="mt-1 text-xl font-black text-[#2d1910]">
+              <h2 id="reset-submission-title" className="mt-1 text-xl font-black text-[#101828]">
                 Reset bài làm của {student.studentName}?
               </h2>
             </div>
@@ -204,7 +211,7 @@ function ResetSubmissionDialog({
         </div>
 
         <div className="px-6 py-6">
-          <div className="rounded-2xl border border-[#eadfce] bg-white px-5 py-4">
+          <div className="rounded-2xl border border-[#EAECF0] bg-white px-5 py-4">
             <p className="font-bold text-gray-900">{student.studentEmail}</p>
             <p className="mt-1 text-sm text-gray-500">
               Đang có <strong className="text-danger-700">{student.attempts} lượt đã nộp</strong> trong đề này.
@@ -295,6 +302,7 @@ export default function ExamDetailPage() {
           authorEmail: d.authorEmail ?? "",
           startTime: d.startTime ?? null,
           endTime: d.endTime ?? null,
+          hasEssay: d.structure === "p1234",
         };
 
         // Privacy check: mods can only view results for their own exams
@@ -334,6 +342,8 @@ export default function ExamDetailPage() {
             cheatCount: Number(s.cheatCount ?? 0),
             totalElapsedSeconds: Number(s.totalElapsedSeconds ?? 0),
             idleBeforeSubmitSeconds: Number(s.idleBeforeSubmitSeconds ?? 0),
+            p4: typeof (s.scores as { p4?: unknown } | undefined)?.p4 === "number" ? (s.scores as { p4: number }).p4 : null,
+            gradingStatus: s.gradingStatus === "pending" || s.gradingStatus === "graded" ? s.gradingStatus : null,
           };
         });
         setSubmissions(subs);
@@ -354,6 +364,7 @@ export default function ExamDetailPage() {
     if (!exam || submissions.length === 0) return [];
     return groupSubmissionsByStudent(submissions, exam.scoringConfig);
   }, [exam, submissions]);
+  const pendingEssays = submissions.filter((submission) => submission.gradingStatus === "pending").length;
 
   // ── Analytics — per unique student (best attempt) ────────────────────────────
   const analytics = useMemo(() => {
@@ -562,6 +573,15 @@ export default function ExamDetailPage() {
             <h1 className="text-3xl font-extrabold text-gray-900">{exam.title}</h1>
             <p className="text-gray-500 mt-1">Chi tiết kết quả làm bài của học sinh.</p>
           </div>
+          {exam.hasEssay && (
+            <Link
+              href={`/admin/grade/${id}`}
+              className="edu-btn inline-flex w-fit items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white"
+            >
+              <PenTool size={16} aria-hidden="true" />Chấm tự luận
+              {pendingEssays > 0 && <span className="rounded-full bg-white/25 px-2 py-0.5 text-xs">{pendingEssays} chờ chấm</span>}
+            </Link>
+          )}
           <Link
             href={`/admin/exam/${id}/review`}
             className="inline-flex w-fit items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:border-brand-400 hover:bg-brand-50"
@@ -621,7 +641,7 @@ export default function ExamDetailPage() {
             {/* Score overview */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
               <h2 className="font-extrabold text-gray-800 mb-4 flex items-center gap-2">
-                <span className="text-brand-500">📊</span> Phổ điểm
+                <BarChart3 size={18} className="text-brand-500" aria-hidden="true" /> Phổ điểm
               </h2>
               <div className="flex items-center gap-4 mb-5">
                 <div className="text-center">
@@ -670,7 +690,7 @@ export default function ExamDetailPage() {
             {/* Killer questions */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
               <h2 className="font-extrabold text-gray-800 mb-4 flex items-center gap-2">
-                <span className="text-danger-500">🎯</span> Top 3 câu hỏi sát thủ
+                <Crosshair size={18} className="text-danger-500" aria-hidden="true" /> Top 3 câu hỏi sát thủ
               </h2>
               {analytics.top3.length === 0 ? (
                 <p className="text-sm text-gray-400">Chưa đủ dữ liệu.</p>
@@ -750,7 +770,7 @@ export default function ExamDetailPage() {
 
           {studentRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center text-gray-400">
-              <span className="text-5xl">📭</span>
+              <StateIcon icon="inbox" />
               <p>Chưa có học sinh nào nộp bài cho bài thi này.</p>
             </div>
           ) : (
@@ -834,6 +854,9 @@ export default function ExamDetailPage() {
                         >
                           {row.bestScore.total}
                         </span>
+                        {row.bestSub.gradingStatus === "pending" && (
+                          <span className="mt-1 block text-[10px] font-bold text-violet-700">Tự luận chờ chấm</span>
+                        )}
                       </td>
 
                       {/* Latest submission time */}
@@ -858,7 +881,7 @@ export default function ExamDetailPage() {
                       <td className="px-3 py-4 text-center">
                         {row.totalCheatCount > 0 ? (
                           <span className="font-bold text-danger-600 bg-danger-50 px-2 py-0.5 rounded-full text-xs">
-                            {row.totalCheatCount}x ⚠️
+                            {row.totalCheatCount}x <AlertTriangle size={12} className="inline align-[-1px]" aria-hidden="true" />
                           </span>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>

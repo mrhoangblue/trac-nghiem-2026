@@ -5,6 +5,8 @@ export interface ExamRawLatex {
   part1: string;
   part2: string;
   part3: string;
+  /** Phần IV tự luận, chỉ có ở đề 4 phần. */
+  part4?: string;
 }
 
 export interface ExamSourceReference {
@@ -49,8 +51,9 @@ export function normalizeRawLatex(value: unknown): ExamRawLatex | null {
     part1: typeof source.part1 === "string" ? source.part1 : "",
     part2: typeof source.part2 === "string" ? source.part2 : "",
     part3: typeof source.part3 === "string" ? source.part3 : "",
+    ...(typeof source.part4 === "string" && source.part4 ? { part4: source.part4 } : {}),
   };
-  return normalized.part1 || normalized.part2 || normalized.part3 ? normalized : null;
+  return normalized.part1 || normalized.part2 || normalized.part3 || normalized.part4 ? normalized : null;
 }
 
 function encryptSource(source: ExamRawLatex): { bytes: Uint8Array; size: number; sha256: string } {

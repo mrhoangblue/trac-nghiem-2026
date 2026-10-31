@@ -10,6 +10,7 @@ interface StudentAggregate {
   studentId: string;
   fullName: string;
   avatarUrl: string;
+  hidden: boolean;
   completedExamIds: Set<string>;
   bestScoreByExam: Map<string, number>;
   totalExamSeconds: number;
@@ -69,8 +70,8 @@ function studentView(student: StudentAggregate): ClassLeaderboardStudent {
     : 0;
   return {
     studentId: student.studentId,
-    fullName: student.fullName,
-    avatarUrl: student.avatarUrl,
+    fullName: student.hidden ? "Bạn học ẩn danh" : student.fullName,
+    avatarUrl: student.hidden ? "" : student.avatarUrl,
     completedExamCount: student.completedExamIds.size,
     bestScoreAverage: Math.round(average * 100) / 100,
     totalExamSeconds: student.totalExamSeconds,
@@ -139,7 +140,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const aggregate: StudentAggregate = {
         studentId: snapshot.id,
         fullName: String(profile.fullName ?? membership.studentName ?? "Học sinh"),
-        avatarUrl: String(profile.photoURL ?? profile.avatarUrl ?? ""),
+        avatarUrl: String(profile.avatarUrl ?? profile.photoURL ?? ""),
+        // Học sinh chọn ẩn tên: bạn cùng lớp chỉ thấy "Bạn học ẩn danh".
+        hidden: !isTeacher && snapshot.id !== authUser.uid && profile.settings?.hideOnLeaderboard === true,
         completedExamIds: new Set(),
         bestScoreByExam: new Map(),
         totalExamSeconds: 0,
@@ -152,7 +155,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const submissions = examIds.length ? await loadExamSubmissions(examIds) : [];
     submissions.forEach((document) => {
       const submission = document.data();
-      if (submission.status !== "COMPLETED" || submission.isTeacherPreview === true) return;
+      // Bài tự luận chưa chấm không tính điểm cho tới khi giáo viên chấm xong.
+      if (submission.status !== "COMPLETED" || submission.isTeacherPreview === true || submission.gradingStatus === "pending") return;
       const examId = typeof submission.examId === "string" ? submission.examId : "";
       if (submission.classId && submission.classId !== classId) return;
       const student = typeof submission.studentId === "string" && submission.studentId
@@ -163,7 +167,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       student.completedExamIds.add(examId);
       student.attemptCount += 1;
       student.totalExamSeconds += attemptSeconds(submission);
-      if (!student.avatarUrl && typeof submission.studentAvatar === "string") {
+      if (!student.avatarUrl && !student.hidden && typeof submission.studentAvatar === "string") {
         student.avatarUrl = submission.studentAvatar;
       }
       const score = submissionScore(submission);

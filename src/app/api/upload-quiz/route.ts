@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeTargetType, sanitizeTargetClassIds, type ExamTargetType } from "@/utils/examAudience";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -14,6 +15,7 @@ import {
   processTikzToImagesWithStats,
   storeTikzDataUri,
 } from "@/utils/tikzToImage";
+import { countQuestionsByPart, normalizeStructure, sanitizeScoringConfig, structureProblems } from "@/utils/examStructure";
 import { mapWithConcurrency } from "@/utils/asyncPool";
 
 export const runtime = "nodejs";
@@ -27,7 +29,9 @@ interface UploadQuizRequest {
   scoringConfig?: {
     part1TotalScore: number;
     part3TotalScore: number;
+    part4TotalScore?: number;
   };
+  structure?: string;
   duration?: number;
   startTime?: string | null;
   endTime?: string | null;
@@ -35,6 +39,7 @@ interface UploadQuizRequest {
     part1?: string;
     part2?: string;
     part3?: string;
+    part4?: string;
   };
   authorEmail?: string;
   maxRetries?: number;
@@ -42,7 +47,7 @@ interface UploadQuizRequest {
   gradeLevel?: string;
   examType?: string | null;
   timeoutMs?: number;
-  targetType?: "all" | "classes";
+  targetType?: ExamTargetType;
   targetClassIds?: string[];
   password?: string;
   importSourceObject?: {
@@ -221,6 +226,11 @@ export async function POST(request: NextRequest) {
     const p1Questions = questionsToSave.filter((q) => q.type === "multiple_choice");
     const p2Questions = questionsToSave.filter((q) => q.type === "true_false");
     const p3Questions = questionsToSave.filter((q) => q.type === "short_answer");
+    const structure = normalizeStructure(body.structure);
+    const problems = structureProblems(structure, countQuestionsByPart(questionsToSave));
+    if (problems.length > 0) {
+      return NextResponse.json({ error: "STRUCTURE_MISMATCH", message: problems.join(" ") }, { status: 422 });
+    }
     const missingShortAnswers = getMissingShortAnswerQuestionNumbers(questionsToSave);
     if (missingShortAnswers.length > 0) {
       return NextResponse.json({
@@ -272,10 +282,9 @@ export async function POST(request: NextRequest) {
       part1Count: p1Questions.length,
       part2Count: p2Questions.length,
       part3Count: p3Questions.length,
-      scoringConfig: {
-        part1TotalScore: Number(body.scoringConfig?.part1TotalScore ?? 3),
-        part3TotalScore: Number(body.scoringConfig?.part3TotalScore ?? 3),
-      },
+      part4Count: questionsToSave.filter((q) => q.type === "essay").length,
+      structure,
+      scoringConfig: sanitizeScoringConfig(body.scoringConfig, structure),
       duration: Number(body.duration ?? 90),
       startTime: body.startTime || null,
       endTime: body.endTime || null,
@@ -288,8 +297,8 @@ export async function POST(request: NextRequest) {
       isShared: Boolean(body.isShared),
       gradeLevel: body.gradeLevel ?? "",
       examType: body.examType ?? null,
-      targetType: body.targetType ?? "all",
-      targetClassIds: body.targetClassIds ?? [],
+      targetType: normalizeTargetType(body.targetType),
+      targetClassIds: sanitizeTargetClassIds(body.targetType, body.targetClassIds),
       requiresPassword: Boolean(password),
       importSourceObject,
       coverImageUrl,

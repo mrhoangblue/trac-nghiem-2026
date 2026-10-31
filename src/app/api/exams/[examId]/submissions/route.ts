@@ -28,6 +28,8 @@ export async function GET(
     }
 
     const classId = request.nextUrl.searchParams.get("classId")?.trim();
+    // Màn hình chấm tự luận hiện cả bài thử của giáo viên (Chế độ học sinh) để kiểm tra luồng chấm.
+    const includePreview = request.nextUrl.searchParams.get("includePreview") === "1";
     let classStudentEmails: Set<string> | null = null;
     let classStudentIds: Set<string> | null = null;
     if (classId) {
@@ -58,7 +60,7 @@ export async function GET(
       .map((document) => ({ id: document.id, ...document.data() } as Record<string, unknown> & { id: string }))
       .filter((submission) => (
         (submission.status === "COMPLETED" || typeof submission.status !== "string")
-        && submission.isTeacherPreview !== true
+        && (includePreview || submission.isTeacherPreview !== true)
         && (!classId || (
           (!submission.classId || submission.classId === classId)
           && (typeof submission.studentId === "string" && submission.studentId
@@ -81,6 +83,11 @@ export async function GET(
         cheatCount: Number(submission.cheatCount ?? 0),
         totalElapsedSeconds: Number(submission.totalElapsedSeconds ?? 0),
         idleBeforeSubmitSeconds: Number(submission.idleBeforeSubmitSeconds ?? 0),
+        gradingStatus: submission.gradingStatus === "pending" || submission.gradingStatus === "graded" ? submission.gradingStatus : null,
+        essayFileCount: Array.isArray((submission.essay as { files?: unknown[] } | undefined)?.files)
+          ? (submission.essay as { files: unknown[] }).files.length
+          : 0,
+        isTeacherPreview: submission.isTeacherPreview === true,
       }));
     return NextResponse.json({ submissions }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

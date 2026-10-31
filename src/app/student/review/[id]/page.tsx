@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { ScoreResult, P2_TABLE, normalizeAnswer } from "@/utils/examTypes";
-import ReviewMode from "@/components/ReviewMode";
+import ReviewMode, { type EssayReview } from "@/components/ReviewMode";
+import EssayGradedWork, { useEssayResult } from "@/components/essay/EssayGradedWork";
+import { useAuth } from "@/lib/AuthContext";
+import { essayQuestionPoints, hasEssayPart, orderQuestionsByPart } from "@/utils/examStructure";
+import StateIcon from "@/components/StateIcon";
 
 interface StoredAnswers {
   p1Ans: Record<string, number>;        // qId (string from JSON) → optionIndex
@@ -86,6 +90,7 @@ function recalcScore(
     p1: finalP1,
     p2: finalP2,
     p3: finalP3,
+    p4: storedScore?.p4 ?? null,
     total: storedScore?.total ?? r(finalP1 + finalP2 + finalP3),
     part1: storedScore?.part1 ?? { correct: p1Correct, total: p1Qs.length, score: finalP1 },
     part2: storedScore?.part2 ?? { details: p2Details, totalScore: finalP2 },
@@ -117,6 +122,21 @@ export default function ReviewPage() {
   const [p2Ans, setP2Ans] = useState<Record<number, (boolean | null)[]>>({});
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [gradingStatus, setGradingStatus] = useState<"pending" | "graded" | null>(null);
+  const [part4TotalScore, setPart4TotalScore] = useState<number | null>(null);
+  const { user } = useAuth();
+  const getToken = useCallback(() => user!.getIdToken(), [user]);
+  const essayResult = useEssayResult(gradingStatus === "graded" ? id : null, user ? getToken : null);
+  const essayReview = useMemo<EssayReview | undefined>(() => {
+    if (part4TotalScore === null || !essayResult.data?.grading) return undefined;
+    return {
+      scores: essayResult.data.grading.essayScores,
+      comments: essayResult.data.grading.essayComments,
+      maxPoints: essayQuestionPoints(questions, part4TotalScore),
+      total: part4TotalScore,
+      slot: <EssayGradedWork data={essayResult.data} />,
+    };
+  }, [essayResult.data, part4TotalScore, questions]);
 
   useEffect(() => {
     if (!id) return;
@@ -140,18 +160,28 @@ export default function ReviewPage() {
         const exam = examSnap.data();
 
         setExamTitle(sub.examTitle ?? exam.title ?? "Bài thi");
+        if (sub.gradingStatus === "pending") {
+          // Đề tự luận chưa chấm: chưa công bố điểm và đáp án.
+          setGradingStatus("pending");
+          return;
+        }
+        if (sub.gradingStatus === "graded" && hasEssayPart(exam.structure)) {
+          setGradingStatus("graded");
+          setPart4TotalScore(Number(exam.scoringConfig?.part4TotalScore ?? 0));
+        }
 
         // 3. Lấy câu hỏi. Đề đã xử lý TikZ phải dùng questions đã lưu ảnh.
         let qs: ParsedQuestion[];
         if (exam.tikzProcessed && Array.isArray(exam.questions)) {
           qs = exam.questions as ParsedQuestion[];
         } else if (exam.rawLatex) {
-          const { part1 = "", part2 = "", part3 = "" } = exam.rawLatex;
-          qs = [
+          const { part1 = "", part2 = "", part3 = "", part4 = "" } = exam.rawLatex;
+          qs = orderQuestionsByPart([
             ...parseLatexExam(part1),
             ...parseLatexExam(part2),
             ...parseLatexExam(part3),
-          ].map((q, idx) => ({ ...q, id: idx + 1 }));
+            ...parseLatexExam(part4),
+          ]);
         } else {
           qs = (exam.questions ?? []) as ParsedQuestion[];
         }
@@ -182,7 +212,7 @@ export default function ReviewPage() {
   if (error) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
-        <div className="text-5xl mb-4">⚠️</div>
+        <StateIcon icon="alert" tone="danger" className="mb-4" />
         <p className="text-danger-500 font-semibold text-lg mb-6">{error}</p>
         <Link
           href="/student/history"
@@ -194,7 +224,17 @@ export default function ReviewPage() {
     );
   }
 
-  if (!scoreResult) return null;
+  if (gradingStatus === "pending") {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+        <StateIcon icon="lock" tone="brand" className="mx-auto mb-4" />
+        <h1 className="font-display text-xl font-extrabold text-gray-900">{examTitle}</h1>
+        <p className="mt-2 text-sm leading-6 text-gray-500">Bài có phần tự luận đang chờ giáo viên chấm. Điểm, đáp án và bài chữa sẽ hiện ở đây khi chấm xong.</p>
+        <Link href="/student/history" className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-gray-100 px-5 text-sm font-bold text-gray-800 hover:bg-gray-200">← Quay lại lịch sử</Link>
+      </div>
+    );
+  }
+  if (!scoreResult || (gradingStatus === "graded" && essayResult.loading)) return scoreResult ? <Spinner /> : null;
 
   return (
     <div>
@@ -216,6 +256,7 @@ export default function ReviewPage() {
         p3Ans={p3Ans}
         scoreResult={scoreResult}
         standalone
+        essay={essayReview}
       />
 
       {/* Footer */}

@@ -1,6 +1,8 @@
 export interface ScoringConfig {
   part1TotalScore: number;
   part3TotalScore: number;
+  /** Tổng điểm Phần IV tự luận, chỉ đề 4 phần. */
+  part4TotalScore?: number;
 }
 
 export interface TimingConfig {
@@ -41,6 +43,8 @@ export interface ScoreResult {
   p1: number;
   p2: number;
   p3: number;
+  /** Phần IV tự luận do giáo viên chấm; null khi chưa chấm. */
+  p4?: number | null;
   total: number;
   part1: { correct: number; total: number; score: number };
   part2: { details: Array<{ match: number; maxMatch: number; score: number }>; totalScore: number };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { Check, Copy, Download, Link2, QrCode, Share2, X } from "lucide-react";
 
@@ -31,7 +32,7 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
       width: 560,
       margin: 3,
       errorCorrectionLevel: "H",
-      color: { dark: "#32190f", light: "#fffdf8" },
+      color: { dark: "#1E1B4B", light: "#ffffff" },
     })
       .then((dataUrl) => {
         if (!cancelled) setQrDataUrl(dataUrl);
@@ -114,9 +115,11 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
     }
   };
 
-  return (
+  // Portal to <body>: page wrappers create their own stacking context, which
+  // would leave the sticky header above this overlay.
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1f120c]/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0F2E]/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="exam-share-title"
@@ -124,18 +127,18 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-3xl overflow-hidden rounded-[30px] border border-[#ead8bd] bg-[#fffdf8] shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-[#eadfce] px-6 py-5 sm:px-8">
+      <div className="w-full max-w-3xl overflow-hidden rounded-[30px] border border-[#EAECF0] bg-[#FFFFFF] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-[#EAECF0] px-6 py-5 sm:px-8">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Mời học sinh làm bài</p>
-            <h2 id="exam-share-title" className="mt-1 text-xl font-black leading-snug text-[#28180f] sm:text-2xl">
+            <h2 id="exam-share-title" className="mt-1 text-xl font-black leading-snug text-[#101828] sm:text-2xl">
               {examTitle}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e5d7c5] bg-white text-gray-500 transition hover:border-brand-300 hover:text-brand-800"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#EAECF0] bg-white text-gray-500 transition hover:border-brand-300 hover:text-brand-800"
             aria-label="Đóng cửa sổ chia sẻ"
           >
             <X size={19} />
@@ -147,7 +150,7 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
             <div className="flex items-center gap-2 text-sm font-black text-gray-800">
               <Link2 size={17} className="text-brand-700" /> Link làm bài
             </div>
-            <div className="mt-3 flex items-stretch gap-2 rounded-2xl border border-[#e5d8c6] bg-white p-2">
+            <div className="mt-3 flex items-stretch gap-2 rounded-2xl border border-[#EAECF0] bg-white p-2">
               <input
                 value={shareUrl}
                 readOnly
@@ -158,7 +161,7 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
               <button
                 type="button"
                 onClick={copyLink}
-                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#f4ede3] px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-[#eadcc9]"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#EEF2FF] px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-[#E0E7FF]"
               >
                 {copied ? <Check size={17} /> : <Copy size={17} />}
                 {copied ? "Đã chép" : "Sao chép"}
@@ -194,8 +197,8 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
             )}
           </div>
 
-          <div className="flex flex-col items-center rounded-[24px] border border-[#e4d4be] bg-white p-4">
-            <div className="flex min-h-[218px] w-full items-center justify-center overflow-hidden rounded-2xl bg-[#fffdf8]">
+          <div className="flex flex-col items-center rounded-[24px] border border-[#EAECF0] bg-white p-4">
+            <div className="flex min-h-[218px] w-full items-center justify-center overflow-hidden rounded-2xl bg-[#FFFFFF]">
               {qrDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={qrDataUrl} alt={`Mã QR của đề ${examTitle}`} className="h-auto w-full max-w-[220px]" />
@@ -214,6 +217,7 @@ export default function ExamShareDialog({ examId, examTitle, onClose }: ExamShar
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

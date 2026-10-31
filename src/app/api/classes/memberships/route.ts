@@ -7,6 +7,27 @@ export async function GET(request: NextRequest) {
     const authUser = await verifyAuth(request);
     if (!authUser) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
 
+    // Chế độ học sinh của giáo viên: hiện các lớp mình dạy như thể đã tham gia.
+    const isTeacher = authUser.role === "admin" || authUser.role === "mod";
+    if (isTeacher && request.nextUrl.searchParams.get("preview") === "student") {
+      const taught = await adminDb.collection("classes").where("teacherId", "==", authUser.uid).get();
+      return NextResponse.json({
+        memberships: taught.docs.map((classDoc) => {
+          const cls = classDoc.data();
+          return {
+            id: classDoc.id,
+            name: cls.name ?? "Lớp học",
+            description: cls.description ?? "",
+            teacherName: cls.teacherName ?? "Giáo viên",
+            studentCount: Array.isArray(cls.studentIds) ? cls.studentIds.length : 0,
+            isActive: cls.isActive === true,
+            status: "active",
+            requestedAt: null,
+          };
+        }),
+      });
+    }
+
     const [membershipSnapshot, legacyClassSnapshot] = await Promise.all([
       adminDb.collection("class_members").where("studentId", "==", authUser.uid).get(),
       adminDb.collection("classes").where("studentIds", "array-contains", authUser.uid).get(),

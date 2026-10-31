@@ -163,15 +163,32 @@ function wrapBareArrays(text: string): string {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Drop print-only layout commands (spacing, font size, \centering, length
+ * tweaks) that have no meaning on the web and would otherwise leak as raw text.
+ */
+function stripLayoutCommands(text: string): string {
+  return text
+    .replace(/\\(?:setlength|addtolength)\s*\{\\[a-zA-Z]+\}\s*\{[^{}]*\}/g, '')
+    .replace(/\\renewcommand\s*\{?\\arraystretch\}?\s*\{[^{}]*\}/g, '')
+    .replace(/\\[vh]space\*?\s*\{[^{}]*\}/g, '')
+    .replace(/\\(?:par|centering|raggedright|raggedleft|noindent|indent|smallskip|medskip|bigskip|newline|tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)(?![a-zA-Z])\s*/g, (match) => (match.startsWith('\\par') || match.startsWith('\\newline') ? '\n' : ''));
+}
+
 export function processLatexText(text: string): React.ReactNode {
   if (!text) return null;
+  text = stripLayoutCommands(text);
 
   // Step 0 — split out \begin{tabular}...\end{tabular} blocks.
   // Optionally consume a surrounding \begin{center}...\end{center} wrapper so
   // those tags don't leak into the text segments as raw LaTeX.
   // Column spec uses (?:[^{}]|\{[^{}]*\})* to handle 1-level nested braces
   // such as {|p{3cm}|c|r|}. Matches the same pattern as tikzToImage.ts.
-  const TABULAR_RE = /(?:\\begin\{center\}\s*)?\\begin\{tabular\}\{(?:[^{}]|\{[^{}]*\})*\}[\s\S]*?\\end\{tabular\}(?:\s*\\end\{center\})?/g;
+  // A tabular may also sit inside a plain {...} group, e.g. {\centering\small
+  // \begin{tabular}...\end{tabular}\par} — the layout commands are stripped
+  // above, so consume the leftover braces together with the table.
+  const TABULAR_CORE = String.raw`\\begin\{tabular\}\{(?:[^{}]|\{[^{}]*\})*\}[\s\S]*?\\end\{tabular\}`;
+  const TABULAR_RE = new RegExp(String.raw`\{\s*${TABULAR_CORE}\s*\}|(?:\\begin\{center\}\s*)?${TABULAR_CORE}(?:\s*\\end\{center\})?`, 'g');
   type TopSeg = { kind: 'text' | 'tabular'; content: string };
   const topSegs: TopSeg[] = [];
   let lastPos = 0;
@@ -190,6 +207,12 @@ export function processLatexText(text: string): React.ReactNode {
   }
 
   if (topSegs.some(s => s.kind === 'tabular')) {
+    // The table already has its own margin; drop line breaks hugging it.
+    topSegs.forEach((seg, i) => {
+      if (seg.kind !== 'text') return;
+      if (topSegs[i + 1]?.kind === 'tabular') seg.content = seg.content.replace(/(?:\s|\\\\)+$/, '');
+      if (topSegs[i - 1]?.kind === 'tabular') seg.content = seg.content.replace(/^(?:\s|\\\\)+/, '');
+    });
     return (
       <>
         {topSegs.map((seg, i) =>
@@ -263,6 +286,24 @@ function processTextOnly(text: string): React.ReactNode {
 
 function renderMathAndText(text: string): React.ReactNode {
   if (!text.trim()) return null;
+
+  // \textbf{...$x$...}: split before the math pass, otherwise the formula cuts
+  // the command in half and its braces show up as raw text.
+  const styled = text.split(/(\\(?:textbf|textit|emph)\{[^{}]*\$[^{}]*\})/);
+  if (styled.length > 1) {
+    return (
+      <>
+        {styled.map((piece, idx) => {
+          const m = /^\\(textbf|textit|emph)\{([\s\S]*)\}$/.exec(piece);
+          if (m) {
+            const inner = renderMathAndText(m[2]);
+            return m[1] === 'textbf' ? <strong key={idx}>{inner}</strong> : <em key={idx}>{inner}</em>;
+          }
+          return piece ? <React.Fragment key={idx}>{renderMathAndText(piece)}</React.Fragment> : null;
+        })}
+      </>
+    );
+  }
 
   const parts = text.split(MATH_BLOCK_REGEX);
 

@@ -14,6 +14,8 @@ export interface ParsedQuestion {
   explanationTikzImageUrl?: string;
   explanationTikzImageKey?: string;
   imageUrls?: string[];
+  /** Điểm tối đa của câu tự luận, ghi trong đề bằng \diem{1,5}. */
+  points?: number;
 }
 
 export function getMissingShortAnswerQuestionNumbers(questions: ParsedQuestion[]): number[] {
@@ -301,6 +303,14 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
       }
     }
 
+    // ── 3b. \diem{1,5}: điểm riêng của câu (dùng cho câu tự luận) ────────────
+    let points: number | undefined;
+    raw = raw.replace(/\\diem\s*\{\s*([0-9]+(?:[.,][0-9]+)?)\s*\}/, (_match, value: string) => {
+      const parsed = Number.parseFloat(value.replace(",", "."));
+      if (Number.isFinite(parsed) && parsed > 0) points = parsed;
+      return "";
+    }).trim();
+
     // ── 4. Detect question type and extract options ──────────────────────────
     let type = 'essay';
     let options: string[] = [];
@@ -343,6 +353,7 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
       ...(tikzCode ? { tikzCode } : {}),
       ...(explanationTikzCode ? { explanationTikzCode } : {}),
       ...(imageUrls.length > 0 ? { imageUrls } : {}),
+      ...(points !== undefined ? { points } : {}),
     });
   }
 

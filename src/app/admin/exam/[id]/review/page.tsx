@@ -158,13 +158,13 @@ function QuestionCard({
   return (
     <article
       id={`question-${index + 1}`}
-      className={`scroll-mt-28 overflow-hidden rounded-[28px] border bg-[#fffefa] shadow-[0_14px_45px_rgba(69,43,27,0.07)] ${
-        issues.length ? "border-danger-200" : "border-[#e9dfd1]"
+      className={`scroll-mt-28 overflow-hidden rounded-[28px] border bg-[#FFFFFF] shadow-[0_14px_45px_rgba(16,24,40,0.06)] ${
+        issues.length ? "border-danger-200" : "border-[#EAECF0]"
       }`}
     >
-      <div className="flex flex-col gap-3 border-b border-[#eee5d8] bg-white/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+      <div className="flex flex-col gap-3 border-b border-[#EAECF0] bg-white/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#32190f] text-sm font-black text-white">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1E1B4B] text-sm font-black text-white">
             {index + 1}
           </span>
           <div>
@@ -187,7 +187,7 @@ function QuestionCard({
       </div>
 
       <div className="exam-reading px-5 py-6 sm:px-8 sm:py-8">
-        <div className="text-[1.03rem] font-medium leading-8 text-[#251c17]">
+        <div className="text-[1.03rem] font-medium leading-8 text-[#101828]">
           {processLatexText(question.questionText)}
         </div>
 
@@ -235,7 +235,7 @@ function QuestionCard({
         {question.type === "true_false" && (
           <div className="mt-5 overflow-x-auto rounded-2xl border border-gray-200 bg-white">
             <table className="w-full min-w-[580px] border-collapse text-sm">
-              <thead className="bg-[#f7f2e9] text-left text-xs uppercase tracking-wider text-gray-500">
+              <thead className="bg-[#F9FAFB] text-left text-xs uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="w-14 px-4 py-3 text-center">Ý</th>
                   <th className="px-4 py-3">Mệnh đề</th>
@@ -288,11 +288,11 @@ function QuestionCard({
         )}
 
         {(question.explanation || question.explanationTikzImageUrl || question.explanationTikzCode) && (
-          <section className="mt-6 rounded-2xl border border-[#ead7bf] bg-[#fff9ef] p-5 sm:p-6">
+          <section className="mt-6 rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-5 sm:p-6">
             <div className="mb-3 flex items-center gap-3">
-              <span className="h-px flex-1 bg-[#ead7bf]" />
+              <span className="h-px flex-1 bg-[#C7D2FE]" />
               <h3 className="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Lời giải chi tiết</h3>
-              <span className="h-px flex-1 bg-[#ead7bf]" />
+              <span className="h-px flex-1 bg-[#C7D2FE]" />
             </div>
             <QuestionFigure
               url={question.explanationTikzImageUrl}
@@ -405,8 +405,8 @@ export default function TeacherExamReviewPage() {
           </div>
         </div>
       ) : (
-        <div className="min-h-screen bg-[#f6f1e8] pb-20 print:bg-white">
-          <header className="border-b border-[#e5d9c9] bg-[#fffdf8] print:border-0">
+        <div className="min-h-screen bg-[#F7F8FC] pb-20 print:bg-white">
+          <header className="border-b border-[#EAECF0] bg-[#FFFFFF] print:border-0">
             <div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-6 lg:px-8">
               <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
                 <div className="max-w-4xl">
@@ -414,7 +414,7 @@ export default function TeacherExamReviewPage() {
                     ← Danh sách đề thi
                   </Link>
                   <p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-brand-700">Bản kiểm duyệt dành cho giáo viên</p>
-                  <h1 className="mt-2 text-3xl font-black leading-tight text-[#25170f] sm:text-4xl">{exam.title}</h1>
+                  <h1 className="mt-2 text-3xl font-black leading-tight text-[#101828] sm:text-4xl">{exam.title}</h1>
                   {exam.description && <p className="mt-3 max-w-3xl text-base leading-7 text-gray-600">{exam.description}</p>}
                   <p className="mt-3 text-xs text-gray-500">
                     {exam.gradeLevel || "Chưa phân loại"} · {exam.examType || "Chưa chọn loại đề"} · {exam.duration ? `${exam.duration} phút` : "Không giới hạn thời gian"} · Cập nhật {formatDate(exam.updatedAt ?? exam.createdAt)}
@@ -444,8 +444,8 @@ export default function TeacherExamReviewPage() {
                 { label: "Phần III", value: stats.shortAnswer, hint: "Trả lời ngắn" },
                 { label: "Cần kiểm tra", value: stats.issues + brokenImages.size, hint: `${stats.tikzImages} ảnh TikZ trên R2`, alert: stats.issues + brokenImages.size > 0 },
               ].map((item) => (
-                <div key={item.label} className={`rounded-2xl border bg-white px-5 py-4 ${item.alert ? "border-danger-200" : "border-[#e5d9c9]"}`}>
-                  <p className={`text-3xl font-black ${item.alert ? "text-danger-700" : "text-[#2f1a10]"}`}>{item.value}</p>
+                <div key={item.label} className={`rounded-2xl border bg-white px-5 py-4 ${item.alert ? "border-danger-200" : "border-[#EAECF0]"}`}>
+                  <p className={`text-3xl font-black ${item.alert ? "text-danger-700" : "text-[#101828]"}`}>{item.value}</p>
                   <p className="mt-1 text-sm font-black text-gray-800">{item.label}</p>
                   <p className="mt-0.5 text-xs text-gray-500">{item.hint}</p>
                 </div>
@@ -466,8 +466,8 @@ export default function TeacherExamReviewPage() {
                   onClick={() => setFilter(value as Filter)}
                   className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition ${
                     filter === value
-                      ? "border-[#32190f] bg-[#32190f] text-white"
-                      : "border-[#dfd1bf] bg-white text-gray-600 hover:border-brand-400"
+                      ? "border-[#1E1B4B] bg-[#1E1B4B] text-white"
+                      : "border-[#D0D5DD] bg-white text-gray-600 hover:border-brand-400"
                   }`}
                 >
                   {label}
@@ -482,7 +482,7 @@ export default function TeacherExamReviewPage() {
               </div>
             ) : (
               <div className="mt-7 grid items-start gap-7 xl:grid-cols-[220px_minmax(0,1fr)]">
-                <aside className="sticky top-24 hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-[24px] border border-[#e2d6c5] bg-[#fffdf8] p-4 xl:block print:hidden">
+                <aside className="sticky top-24 hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-[24px] border border-[#EAECF0] bg-[#FFFFFF] p-4 xl:block print:hidden">
                   <p className="px-2 text-xs font-black uppercase tracking-[0.18em] text-brand-700">Mục lục câu hỏi</p>
                   <div className="mt-4 grid grid-cols-5 gap-2">
                     {exam.questions.map((question, index) => {
@@ -495,7 +495,7 @@ export default function TeacherExamReviewPage() {
                           className={`flex aspect-square items-center justify-center rounded-lg border text-xs font-black ${
                             hasIssue
                               ? "border-danger-300 bg-danger-50 text-danger-700"
-                              : "border-[#e5d9c9] bg-white text-gray-700 hover:border-brand-400 hover:text-brand-700"
+                              : "border-[#EAECF0] bg-white text-gray-700 hover:border-brand-400 hover:text-brand-700"
                           }`}
                         >
                           {index + 1}
@@ -503,7 +503,7 @@ export default function TeacherExamReviewPage() {
                       );
                     })}
                   </div>
-                  <div className="mt-5 space-y-2 border-t border-[#e9dfd1] pt-4 text-xs text-gray-500">
+                  <div className="mt-5 space-y-2 border-t border-[#EAECF0] pt-4 text-xs text-gray-500">
                     <p><strong className="text-gray-700">{stats.tikzImages}</strong> ảnh TikZ đã lưu trên R2</p>
                     <p><strong className="text-gray-700">{exam.tikzFailedCount}</strong> lỗi TikZ lúc lưu gần nhất</p>
                     <p className={exam.tikzProcessed ? "text-success-700" : "font-bold text-danger-700"}>

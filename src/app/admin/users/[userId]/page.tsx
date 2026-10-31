@@ -112,7 +112,7 @@ export default function AdminUserTeachingSpacePage() {
           </div>
         ) : (
           <>
-            <section className="relative mt-6 overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#34241c] via-[#633c27] to-[#a15b2d] p-7 text-white shadow-xl shadow-brand-900/10">
+            <section className="relative mt-6 overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-7 text-white shadow-xl shadow-brand-900/10">
               <div className="absolute -right-12 -top-16 h-52 w-52 rounded-full border-[32px] border-white/10" />
               <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
                 <div>
@@ -146,8 +146,8 @@ export default function AdminUserTeachingSpacePage() {
             ) : (
               <div className="mt-5 space-y-5">
                 {data.classes.map((classroom) => (
-                  <article key={classroom.id} className="overflow-hidden rounded-[1.75rem] border border-[#eadfd5] bg-white shadow-sm">
-                    <div className="flex flex-col justify-between gap-4 border-b border-[#f0e8e0] bg-[#fffaf5] p-6 sm:flex-row sm:items-center">
+                  <article key={classroom.id} className="overflow-hidden rounded-[1.75rem] border border-[#EAECF0] bg-white shadow-sm">
+                    <div className="flex flex-col justify-between gap-4 border-b border-[#EAECF0] bg-[#F9FAFB] p-6 sm:flex-row sm:items-center">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-xl font-black text-gray-950">{classroom.name}</h3>

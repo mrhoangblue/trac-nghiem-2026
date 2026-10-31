@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClass } from "@/lib/classroomService";
 import { useAuth } from "@/lib/AuthContext";
+import { AlertTriangle, Check, Copy } from "lucide-react";
 
 interface Props {
   onClose: () => void;
@@ -118,7 +119,7 @@ export default function CreateClassModal({ onClose, onCreated }: Props) {
                     : "bg-brand-600 hover:bg-brand-700 text-white"
                 }`}
               >
-                {copied ? "✓ Đã sao chép!" : "📋 Sao chép mã"}
+                {copied ? <><Check size={13} aria-hidden="true" />Đã sao chép!</> : <><Copy size={13} aria-hidden="true" />Sao chép mã</>}
               </button>
               <button
                 onClick={onClose}
@@ -182,7 +183,7 @@ export default function CreateClassModal({ onClose, onCreated }: Props) {
 
             {error && (
               <div className="flex items-center gap-2 p-3 bg-danger-50 border border-danger-200 rounded-xl text-danger-700 text-sm">
-                <span>⚠️</span> {error}
+                <AlertTriangle size={16} className="shrink-0" aria-hidden="true" /> {error}
               </div>
             )}
 

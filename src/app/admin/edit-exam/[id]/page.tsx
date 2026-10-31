@@ -3,9 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Latex from "react-latex-next";
-import "katex/dist/katex.min.css";
-import { processLatexText } from "@/utils/textProcessor";
 import { db } from "@/lib/firebase";
 import {
   doc,
@@ -17,21 +14,22 @@ import {
 } from "firebase/firestore";
 import AdminGuard from "@/components/AdminGuard";
 import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
-import TikzRenderer from "@/components/TikzRenderer";
-import ExplanationRenderer from "@/components/ExplanationRenderer";
+import { joinLatexParts, smartParseLatex, type SmartParseCounts } from "@/utils/smartParseLatex";
+import { countQuestionsByPart, normalizeStructure, orderQuestionsByPart, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 import type { ClassDoc } from "@/utils/classroomTypes";
 import { toDateTimeLocal, toStoredDateTime, validateTimeRange } from "@/utils/examSchedule";
-
-interface ClassOption { id: string; name: string; }
+import { AlertTriangle, ArrowLeft, Copy, Eye, FileCode2, Loader2, PenLine, RefreshCw, Save, SlidersHorizontal } from "lucide-react";
+import StateIcon from "@/components/StateIcon";
+import { EditorCard, Field, Toggle, inputClass } from "@/components/exam-editor/EditorKit";
+import ExamSourceInput, { type ImportStats } from "@/components/exam-editor/ExamSourceInput";
+import ExamPreview from "@/components/exam-editor/ExamPreview";
+import { importExamFile } from "@/components/exam-editor/importExamFile";
+import { ExamInfoFields, ExamRulesFields, ExamStructurePicker, MOCK_EXAM_GRADE, type ClassOption, type ScoringConfig } from "@/components/exam-editor/ExamSettingsFields";
+import { assignsClasses, normalizeTargetType, type ExamTargetType } from "@/utils/examAudience";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface ScoringConfig {
-  part1TotalScore: number;
-  part3TotalScore: number;
-}
 
 interface PreviewData {
   title: string;
@@ -77,6 +75,13 @@ export default function EditExamPage() {
   const [part1, setPart1] = useState("");
   const [part2, setPart2] = useState("");
   const [part3, setPart3] = useState("");
+  const [part4, setPart4] = useState("");
+  const [structure, setStructure] = useState<ExamStructure>("p123");
+  const [smartInput, setSmartInput] = useState("");
+  const [smartCounts, setSmartCounts] = useState<SmartParseCounts | null>(null);
+  const [importingFile, setImportingFile] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importSummary, setImportSummary] = useState<ImportStats | null>(null);
 
   // Scoring / timing
   const [scoringConfig, setScoringConfig] = useState<ScoringConfig>({
@@ -98,7 +103,7 @@ export default function EditExamPage() {
   const [originalAuthorEmail, setOriginalAuthorEmail] = useState<string>("");
 
   // ── Target audience ─────────────────────────────────────────────────────────
-  const [targetType, setTargetType] = useState<"all" | "classes">("all");
+  const [targetType, setTargetType] = useState<ExamTargetType>("all");
   const [targetClassIds, setTargetClassIds] = useState<string[]>([]);
   const [myClasses, setMyClasses] = useState<ClassOption[]>([]);
   const [classesLoading, setClassesLoading] = useState(false);
@@ -116,7 +121,8 @@ export default function EditExamPage() {
 
         setExamTitle(data.title ?? "");
         setDescription(data.description ?? "");
-        setScoringConfig(data.scoringConfig ?? { part1TotalScore: 3, part3TotalScore: 1 });
+        setScoringConfig({ part1TotalScore: 3, part3TotalScore: 1, part4TotalScore: 3, ...(data.scoringConfig ?? {}) });
+        setStructure(normalizeStructure(data.structure));
         setDuration(data.duration ?? 90);
         setStartTime(toDateTimeLocal(data.startTime));
         setEndTime(toDateTimeLocal(data.endTime));
@@ -126,7 +132,7 @@ export default function EditExamPage() {
         setGradeLevel(data.gradeLevel ?? GRADE_LEVELS[0]);
         setExamType(data.examType ?? EXAM_TYPES[0]);
         setOriginalAuthorEmail(data.authorEmail ?? "");
-        setTargetType(data.targetType ?? "all");
+        setTargetType(normalizeTargetType(data.targetType));
         setTargetClassIds(data.targetClassIds ?? []);
 
         const token = await user.getIdToken();
@@ -135,15 +141,35 @@ export default function EditExamPage() {
           cache: "no-store",
         });
         const sourcePayload = await sourceResponse.json().catch(() => null) as {
-          rawLatex?: { part1?: string; part2?: string; part3?: string };
+          rawLatex?: { part1?: string; part2?: string; part3?: string; part4?: string };
           error?: string;
         } | null;
         if (!sourceResponse.ok || !sourcePayload?.rawLatex) {
           throw new Error(sourcePayload?.error ?? "SOURCE_NOT_FOUND");
         }
-        setPart1(sourcePayload.rawLatex.part1 ?? "");
-        setPart2(sourcePayload.rawLatex.part2 ?? "");
-        setPart3(sourcePayload.rawLatex.part3 ?? "");
+        const source = {
+          part1: sourcePayload.rawLatex.part1 ?? "",
+          part2: sourcePayload.rawLatex.part2 ?? "",
+          part3: sourcePayload.rawLatex.part3 ?? "",
+          part4: sourcePayload.rawLatex.part4 ?? "",
+        };
+        setPart1(source.part1);
+        setPart2(source.part2);
+        setPart3(source.part3);
+        setPart4(source.part4);
+        // Ghép các phần đã lưu vào Smart Input và dựng sẵn bản xem trước của đề hiện tại.
+        const joined = joinLatexParts(source);
+        setSmartInput(joined);
+        setSmartCounts(smartParseLatex(joined, { essay: true }).counts);
+        setPreviewData({
+          title: data.title ?? "",
+          questions: orderQuestionsByPart([
+            ...parseLatexExam(source.part1),
+            ...parseLatexExam(source.part2),
+            ...parseLatexExam(source.part3),
+            ...parseLatexExam(source.part4),
+          ]),
+        });
       } catch (err) {
         console.error(err);
         setLoadError("Không thể tải nguồn LaTeX của bài thi. Vui lòng thử lại.");
@@ -156,7 +182,7 @@ export default function EditExamPage() {
 
   // Load teacher's classes when switching to "classes" mode
   useEffect(() => {
-    if (targetType !== "classes" || !user?.uid || myClasses.length > 0) return;
+    if (!assignsClasses(targetType) || !user?.uid || myClasses.length > 0) return;
     const teacherId = user.uid;
     async function loadClasses() {
       setClassesLoading(true);
@@ -175,12 +201,21 @@ export default function EditExamPage() {
   // ── Compile preview ───────────────────────────────────────────────────────
   const handlePreview = () => {
     if (!examTitle.trim()) { alert("Vui lòng nhập tên bài thi!"); return; }
+    if (!smartInput.trim()) { alert("Vui lòng nhập nội dung LaTeX của đề."); return; }
     try {
-      const all = [
-        ...parseLatexExam(part1),
-        ...parseLatexExam(part2),
-        ...parseLatexExam(part3),
-      ].map((q, idx) => ({ ...q, id: idx + 1 }));
+      const classified = smartParseLatex(smartInput, { essay: true });
+      setPart1(classified.part1);
+      setPart2(classified.part2);
+      setPart3(classified.part3);
+      setPart4(classified.part4);
+      setSmartCounts(classified.counts);
+      if (classified.counts.p4 > 0) setStructure("p1234");
+      const all = orderQuestionsByPart([
+        ...parseLatexExam(classified.part1),
+        ...parseLatexExam(classified.part2),
+        ...parseLatexExam(classified.part3),
+        ...parseLatexExam(classified.part4),
+      ]);
       setPreviewData({ title: examTitle, questions: all });
       const missingAnswers = getMissingShortAnswerQuestionNumbers(all);
       if (missingAnswers.length > 0) {
@@ -189,6 +224,32 @@ export default function EditExamPage() {
     } catch (err) {
       console.error(err);
       alert("Có lỗi khi biên dịch LaTeX. Vui lòng kiểm tra lại cú pháp.");
+    }
+  };
+
+  const handleExamFile = async (file: File) => {
+    if (!user) return;
+    setImportingFile(true);
+    setImportWarnings([]);
+    setImportSummary(null);
+    try {
+      const token = await user.getIdToken();
+      const payload = await importExamFile(file, token);
+      const classified = smartParseLatex(payload.latex, { essay: true });
+      setSmartInput(payload.latex);
+      setPart1(classified.part1);
+      setPart2(classified.part2);
+      setPart3(classified.part3);
+      setPart4(classified.part4);
+      setSmartCounts(classified.counts);
+      if (classified.counts.p4 > 0) setStructure("p1234");
+      setPreviewData({ title: examTitle.trim() || payload.title || file.name.replace(/\.(docx|pdf|tex)$/i, ""), questions: orderQuestionsByPart(payload.questions) });
+      setImportWarnings(payload.warnings ?? []);
+      setImportSummary(payload.stats ?? null);
+    } catch (error) {
+      setImportWarnings([error instanceof Error ? error.message : "Không thể nhập file đề thi."]);
+    } finally {
+      setImportingFile(false);
     }
   };
 
@@ -207,7 +268,7 @@ export default function EditExamPage() {
       alert(timeError);
       return;
     }
-    if (targetType === "classes" && targetClassIds.length === 0) {
+    if (assignsClasses(targetType) && targetClassIds.length === 0) {
       alert("Vui lòng chọn ít nhất một lớp được phép làm bài.");
       return;
     }
@@ -231,6 +292,7 @@ export default function EditExamPage() {
           scoringConfig: {
             part1TotalScore: Number(scoringConfig.part1TotalScore),
             part3TotalScore: Number(scoringConfig.part3TotalScore),
+            part4TotalScore: Number(scoringConfig.part4TotalScore ?? 0),
           },
           duration: Number(duration),
           startTime: toStoredDateTime(startTime),
@@ -239,7 +301,7 @@ export default function EditExamPage() {
           gradeLevel,
           examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
           targetType,
-          targetClassIds: targetType === "classes" ? targetClassIds : [],
+          targetClassIds: assignsClasses(targetType) ? targetClassIds : [],
           isShared,
           passwordAction,
           ...(newPassword ? { password: newPassword } : {}),
@@ -269,6 +331,11 @@ export default function EditExamPage() {
     const missingAnswers = getMissingShortAnswerQuestionNumbers(previewData.questions);
     if (missingAnswers.length > 0) {
       alert(`Không thể cập nhật: câu ${missingAnswers.join(", ")} đang thiếu đáp án trả lời ngắn.`);
+      return;
+    }
+    const problems = structureProblems(structure, countQuestionsByPart(previewData.questions));
+    if (problems.length > 0) {
+      alert(`Không thể cập nhật: ${problems.join(" ")}`);
       return;
     }
 
@@ -329,18 +396,20 @@ export default function EditExamPage() {
         scoringConfig: {
           part1TotalScore: Number(scoringConfig.part1TotalScore),
           part3TotalScore: Number(scoringConfig.part3TotalScore),
+          ...(structure === "p1234" ? { part4TotalScore: Number(scoringConfig.part4TotalScore ?? 0) } : {}),
         },
+        structure,
         duration: Number(duration),
         startTime: toStoredDateTime(startTime),
         endTime: toStoredDateTime(endTime),
-        rawLatex: { part1, part2, part3 },
+        rawLatex: { part1, part2, part3, ...(structure === "p1234" ? { part4 } : {}) },
         tikzProcessed: processed.tikzProcessed,
         tikzImageCount: processed.convertedCount,
         maxRetries: Number(maxRetries),
         gradeLevel,
         examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
         targetType,
-        targetClassIds: targetType === "classes" ? targetClassIds : [],
+        targetClassIds: assignsClasses(targetType) ? targetClassIds : [],
       };
 
       if (!isOwnExam) {
@@ -373,7 +442,9 @@ export default function EditExamPage() {
             mode: "content",
             title: examTitle.trim(),
             questions: questionsToSave,
-            rawLatex: { part1, part2, part3 },
+            structure,
+            scoringConfig: examPayload.scoringConfig,
+            rawLatex: { part1, part2, part3, ...(structure === "p1234" ? { part4 } : {}) },
             tikzProcessed: processed.tikzProcessed,
             tikzImageCount: processed.convertedCount,
           }),
@@ -414,458 +485,170 @@ export default function EditExamPage() {
   }
 
   const isOwnExam = !originalAuthorEmail || originalAuthorEmail === user?.email;
+  const questions = previewData?.questions ?? [];
+  const missingAnswers = getMissingShortAnswerQuestionNumbers(questions);
+  const trueFalseCount = questions.filter((question) => question.type === "true_false").length;
+
+  const settingsButton = (extra = "") => (
+    <button type="button" onClick={handleSaveSettings} disabled={savingSettings || !isOwnExam} className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 shadow-sm transition hover:border-brand-300 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50 ${extra}`}>
+      {savingSettings ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+      {savingSettings ? "Đang lưu…" : "Lưu thiết lập"}
+    </button>
+  );
+  const contentButton = (extra = "") => (
+    <button type="button" onClick={handleUpdate} disabled={saving || !previewData} className={`edu-btn inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${extra}`}>
+      {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : isOwnExam ? <RefreshCw size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+      {saving ? "Đang biên dịch…" : isOwnExam ? "Lưu nội dung đề" : "Tạo bản sao"}
+    </button>
+  );
 
   return (
     <AdminGuard>
-      <div className="workspace-page mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-        {/* Header */}
-        <div className="mb-8 rounded-[2rem] border border-brand-200 bg-gradient-to-br from-white via-brand-50/60 to-orange-50 p-6 shadow-soft sm:p-8">
-          <div>
-            <Link href="/admin/exam-list" className="mb-3 inline-block text-sm font-semibold text-brand-700 transition hover:text-brand-900">
-              ← Quay lại danh sách
-            </Link>
-            <p className="text-xs font-extrabold uppercase tracking-[.18em] text-brand-700">Không gian biên soạn đề</p>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-950 sm:text-4xl">Chỉnh sửa bài thi</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-600">Cập nhật thông tin, nội dung và cách tổ chức bài thi trong cùng quy trình với trang tạo đề.</p>
-            {!isOwnExam && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
-                ⚠️ Đây là đề của giáo viên khác — lưu sẽ tạo bản sao cho bạn.
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="workspace-page mx-auto w-full max-w-[1500px] px-4 pb-6 pt-6 sm:px-6 sm:pt-8 lg:pb-10">
+        <header className="mb-6">
+          <Link href="/admin/exam-list" className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 transition hover:text-brand-700">
+            <ArrowLeft size={16} aria-hidden="true" />Danh sách đề
+          </Link>
+          <h1 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">Chỉnh sửa bài thi</h1>
+          <p className="mt-1.5 max-w-3xl text-sm leading-6 text-gray-500">Thông tin và thiết lập lưu riêng, không biên dịch lại đề. Chỉ bấm <b className="text-gray-700">Lưu nội dung đề</b> khi đã sửa mã LaTeX.</p>
+          {!isOwnExam && (
+            <p className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+              <AlertTriangle size={15} aria-hidden="true" />Đây là đề của giáo viên khác. Khi lưu, hệ thống tạo bản sao cho bạn.
+            </p>
+          )}
+        </header>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-2" aria-label="Hai khu vực chỉnh sửa độc lập">
-          <a href="#exam-settings" className="group rounded-2xl border border-success-200 bg-success-50 p-5 transition hover:-translate-y-0.5 hover:shadow-soft">
-            <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs font-black uppercase tracking-[.16em] text-success-700">Cấu hình bài thi</p><h2 className="mt-1 font-extrabold text-gray-900">Sửa điểm, thời gian, lớp và mật khẩu</h2><p className="mt-2 text-xs leading-5 text-gray-600">Lưu ngay, không chạy trình biên dịch và không chạm vào câu hỏi hoặc ảnh TikZ.</p></div>
-              <span className="rounded-xl bg-white px-3 py-2 text-success-700 shadow-sm transition group-hover:translate-x-0.5">↓</span>
-            </div>
-          </a>
-          <a href="#latex-content" className="group rounded-2xl border border-brand-200 bg-brand-50 p-5 transition hover:-translate-y-0.5 hover:shadow-soft">
-            <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs font-black uppercase tracking-[.16em] text-brand-700">Nội dung LaTeX / TikZ</p><h2 className="mt-1 font-extrabold text-gray-900">Biên dịch lại câu hỏi và hình vẽ</h2><p className="mt-2 text-xs leading-5 text-gray-600">Chỉ dùng khi mã đề thay đổi. Hình TikZ được render tuần tự và lưu lên R2.</p></div>
-              <span className="rounded-xl bg-white px-3 py-2 text-brand-700 shadow-sm transition group-hover:translate-x-0.5">↓</span>
-            </div>
-          </a>
-        </div>
-
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,.85fr)]">
-          {/* ── Editor ─────────────────────────────────────────────────── */}
-          <div className="space-y-6">
-            {/* Tên */}
-            <section id="exam-settings" className="scroll-mt-24 rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7" aria-labelledby="edit-basic-info-heading">
-              <div className="mb-5 flex items-center gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-700 text-sm font-extrabold text-white">1</span>
-                <div><h2 id="edit-basic-info-heading" className="font-extrabold text-gray-900">Thông tin đề thi</h2><p className="text-xs text-gray-500">Những nội dung học sinh nhìn thấy trong kho đề.</p></div>
-              </div>
-              <div className="space-y-5">
-                <div>
-                  <label htmlFor="edit-exam-title" className="mb-2 block text-sm font-bold text-gray-700">Tên bài thi</label>
-                  <input id="edit-exam-title" type="text" className="w-full rounded-xl border-2 border-gray-200 p-3.5 font-medium outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" value={examTitle} onChange={(event) => setExamTitle(event.target.value)} />
-                </div>
-                <div>
-                  <label htmlFor="edit-exam-description" className="mb-2 block text-sm font-bold text-gray-700">Mô tả <span className="font-normal text-gray-400">(không bắt buộc)</span></label>
-                  <textarea id="edit-exam-description" rows={4} maxLength={1000} className="w-full resize-y rounded-xl border-2 border-gray-200 p-3.5 text-sm leading-6 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" placeholder="Nêu nội dung trọng tâm, phạm vi kiến thức hoặc hướng dẫn trước khi làm bài…" value={description} onChange={(event) => setDescription(event.target.value)} />
-                  <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-gray-400"><span>Nội dung này sẽ xuất hiện trên card đề thi và trang làm bài.</span><span className="shrink-0 tabular-nums">{description.length}/1000</span></div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── Phân loại đề ────────────────────────────────────────── */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-7">
-              <h3 className="flex items-center gap-2 font-extrabold text-gray-800">
-                <span className="text-brand-500">🗂️</span> Phân loại đề thi
-              </h3>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="edit-grade-level" className="mb-2 block text-sm font-semibold text-gray-600">Phân loại đề thi</label>
-                  <select id="edit-grade-level" value={gradeLevel} onChange={(event) => setGradeLevel(event.target.value)} className="w-full rounded-xl border-2 border-gray-200 bg-white p-3.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-brand-500">
-                    {GRADE_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="edit-exam-type" className="mb-2 block text-sm font-semibold text-gray-600">Loại đề</label>
-                  <select id="edit-exam-type" value={examType} onChange={(event) => setExamType(event.target.value)} disabled={gradeLevel === "Thi Thử TN THPT"} className="w-full rounded-xl border-2 border-gray-200 bg-white p-3.5 text-sm font-semibold text-gray-700 outline-none transition focus:border-brand-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
-                    {EXAM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-                  </select>
-                </div>
-              </div>
-              {gradeLevel === "Thi Thử TN THPT" && <p className="mt-2 text-xs text-gray-400">Loại đề được ẩn với nhóm Thi thử TN THPT.</p>}
-            </section>
-
-            {/* ── Cấu hình làm bài ────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-danger-50 to-orange-50 border border-danger-100 rounded-2xl p-5 space-y-4">
-              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-danger-500">⚙️</span> Cấu hình làm bài
-              </h3>
-              <div className="bg-white rounded-xl border border-danger-100 p-4">
-                <label className="text-sm font-bold text-gray-700 block mb-2">Số lần làm lại</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number" min={0}
-                    className="w-24 p-2 border-2 border-danger-200 rounded-lg text-center font-bold text-danger-700 focus:border-danger-500 outline-none"
-                    value={maxRetries}
-                    onChange={(e) => setMaxRetries(parseInt(e.target.value) || 0)}
-                  />
-                  <span className="text-sm text-gray-500">lần</span>
-                </div>
-                <p className="text-xs text-gray-400 italic mt-1.5">💡 <strong>0</strong> = không giới hạn.</p>
-              </div>
-
-              <div className="bg-white rounded-xl border border-danger-100 p-4 space-y-3">
-                <div>
-                  <label className="text-sm font-bold text-gray-700 block mb-2">
-                    {hasPassword ? "Đổi mật khẩu mở đề" : "Đặt mật khẩu mở đề"}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={4}
-                    maxLength={128}
-                    value={newPassword}
-                    disabled={removePassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    placeholder={hasPassword ? "Bỏ trống để giữ mật khẩu hiện tại" : "Tối thiểu 4 ký tự (không bắt buộc)"}
-                    className="w-full p-2.5 border-2 border-danger-200 rounded-lg text-sm focus:border-danger-500 outline-none disabled:bg-gray-100"
-                  />
-                </div>
-                {hasPassword && (
-                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={removePassword}
-                      onChange={(event) => {
-                        setRemovePassword(event.target.checked);
-                        if (event.target.checked) setNewPassword("");
-                      }}
-                    />
-                    Gỡ mật khẩu khỏi đề thi
-                  </label>
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(400px,.85fr)]">
+          <div className="min-w-0 space-y-6">
+            <EditorCard id="exam-content" step={1} icon={FileCode2} title="Nội dung đề" description="Sửa trực tiếp mã LaTeX hoặc tải file mới để thay toàn bộ đề.">
+              <div className="mb-4">
+                <p className="mb-2 text-sm font-semibold text-gray-800">Cấu trúc đề</p>
+                <ExamStructurePicker value={structure} onChange={(value) => { setStructure(value); }} />
+                {structureParts(structure).includes("p4") && (
+                  <p className="mt-2 text-xs leading-5 text-gray-500">Khối <code className="rounded bg-gray-100 px-1">ex</code> không có lệnh đáp án là câu tự luận; <code className="rounded bg-gray-100 px-1">{"\\loigiai"}</code> là hướng dẫn chấm. Đổi cấu trúc được lưu khi bấm <b>Lưu nội dung đề</b>.</p>
                 )}
-              </div>
-
-              {/* isShared — chỉ hiện nếu là tác giả */}
-              {isOwnExam && (
-                <div className="bg-white rounded-xl border border-danger-100 p-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <div
-                      onClick={() => setIsShared(!isShared)}
-                      className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${isShared ? "bg-brand-500" : "bg-gray-300"}`}
-                    >
-                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isShared ? "translate-x-5" : ""}`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-700">Chia sẻ đề thi</p>
-                      <p className="text-xs text-gray-400">
-                        {isShared ? "Giáo viên khác có thể nhân bản đề này." : "Chỉ bạn mới thấy đề này."}
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              )}
-            </div>
-
-            {/* ── Đối tượng làm bài ────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-success-50 to-brand-50 border border-success-100 rounded-2xl p-5 space-y-4">
-              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-success-500">🎯</span> Đối tượng làm bài
-              </h3>
-              <div className="flex gap-3">
-                {([
-                  { value: "all", label: "Tất cả học sinh", desc: "Ai có link đề đều làm được" },
-                  { value: "classes", label: "Lớp cụ thể", desc: "Chỉ HS trong lớp được chọn" },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setTargetType(opt.value)}
-                    className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${
-                      targetType === opt.value
-                        ? "border-success-500 bg-success-50 text-success-800"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    <p className="font-bold text-sm">{opt.label}</p>
-                    <p className="text-xs opacity-70 mt-0.5">{opt.desc}</p>
-                  </button>
+                {questions.length > 0 && structureProblems(structure, countQuestionsByPart(questions)).map((problem) => (
+                  <p key={problem} role="alert" className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-amber-700"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />{problem}</p>
                 ))}
               </div>
-              {targetType === "classes" && (
-                <div className="bg-white rounded-xl border border-success-100 p-4">
-                  {classesLoading ? (
-                    <div className="flex justify-center py-3">
-                      <div className="w-5 h-5 border-2 border-success-200 border-t-success-500 rounded-full animate-spin" />
-                    </div>
-                  ) : myClasses.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-2">
-                      Bạn chưa có lớp nào. Tạo lớp tại{" "}
-                      <Link href="/teacher/classes" className="text-success-600 underline">Quản lý lớp học</Link>.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                        Chọn lớp được phép làm bài
-                      </p>
-                      <div className="space-y-2">
-                        {myClasses.map((cls) => (
-                          <label key={cls.id} className="flex items-center gap-3 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              checked={targetClassIds.includes(cls.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) setTargetClassIds((prev) => [...prev, cls.id]);
-                                else setTargetClassIds((prev) => prev.filter((x) => x !== cls.id));
-                              }}
-                              className="w-4 h-4 accent-success-600"
-                            />
-                            <span className="text-sm font-medium text-gray-700 group-hover:text-success-700 transition-colors">
-                              {cls.name}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                      {targetClassIds.length === 0 && (
-                        <p className="text-xs text-amber-600 mt-3 font-medium">
-                          ⚠️ Chưa chọn lớp nào — vui lòng chọn ít nhất một lớp.
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+              <ExamSourceInput
+                value={smartInput}
+                onChange={(value) => { setSmartInput(value); setPreviewData(null); setSmartCounts(null); }}
+                onAnalyze={handlePreview}
+                onFile={(file) => void handleExamFile(file)}
+                importing={importingFile}
+                counts={smartCounts}
+                importStats={importSummary}
+                warnings={importWarnings}
+              />
+            </EditorCard>
 
-            {/* LaTeX textareas */}
-            <div id="latex-content" className="scroll-mt-24 space-y-6 rounded-3xl border border-brand-200 bg-white p-6 shadow-soft sm:p-7">
-              <div className="rounded-2xl bg-slate-950 p-4 text-slate-100">
-                <p className="text-xs font-black uppercase tracking-[.16em] text-amber-300">Nội dung nguồn</p>
-                <p className="mt-1 text-sm font-extrabold">LaTeX và TikZ chỉ được cập nhật bằng nút biên dịch ở cuối khu vực này.</p>
-              </div>
-              {([
-                { label: "Phần 1: Trắc nghiệm nhiều phương án (\\choice)", value: part1, set: setPart1 },
-                { label: "Phần 2: Trắc nghiệm Đúng/Sai (\\choiceTF)",    value: part2, set: setPart2 },
-                { label: "Phần 3: Trả lời ngắn (\\shortans)",              value: part3, set: setPart3 },
-              ] as { label: string; value: string; set: (v: string) => void }[]).map(({ label, value, set }) => (
-                <div key={label}>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">{label}</label>
-                  <textarea
-                    className="w-full h-40 p-4 border-2 border-gray-200 rounded-xl font-mono text-sm focus:border-brand-500 outline-none transition-all resize-y"
-                    placeholder="\begin{ex}...\end{ex}"
-                    value={value}
-                    onChange={(e) => set(e.target.value)}
-                    spellCheck={false}
-                  />
-                </div>
-              ))}
-            </div>
+            <EditorCard id="exam-info" step={2} icon={PenLine} title="Thông tin đề" description="Học sinh nhìn thấy những thông tin này trong kho đề.">
+              <ExamInfoFields
+                idPrefix="edit"
+                title={examTitle}
+                onTitle={setExamTitle}
+                description={description}
+                onDescription={setDescription}
+                gradeLevel={gradeLevel}
+                onGradeLevel={setGradeLevel}
+                examType={examType}
+                onExamType={setExamType}
+              />
+            </EditorCard>
 
-            {/* Điểm số */}
-            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-6 space-y-5">
-              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-brand-500">🎯</span> Thiết lập điểm số
-              </h3>
-              <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-2">
-                <p className="text-sm font-bold text-gray-700">Phần 1 — Trắc nghiệm 1 đáp án</p>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600">Tổng điểm:</label>
-                  <input type="number" min={0} step={0.5}
-                    className="w-24 p-2 border-2 border-brand-200 rounded-lg text-center font-bold text-brand-700 focus:border-brand-500 outline-none"
-                    value={scoringConfig.part1TotalScore}
-                    onChange={(e) => setScoringConfig((s) => ({ ...s, part1TotalScore: parseFloat(e.target.value) || 0 }))}
-                  />
-                  <span className="text-sm text-gray-500">điểm</span>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl border border-amber-100 p-4 space-y-2">
-                <p className="text-sm font-bold text-gray-700">Phần 2 — Đúng/Sai (luật cố định)</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[{ label: "1 ý đúng", score: "0.10 đ" }, { label: "2 ý đúng", score: "0.25 đ" }, { label: "3 ý đúng", score: "0.50 đ" }, { label: "4 ý đúng", score: "1.00 đ" }].map(({ label, score }) => (
-                    <div key={label} className="flex justify-between items-center bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">
-                      <span className="text-gray-600">{label}</span>
-                      <span className="font-bold text-amber-700">{score}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-2">
-                <p className="text-sm font-bold text-gray-700">Phần 3 — Trả lời ngắn</p>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600">Tổng điểm:</label>
-                  <input type="number" min={0} step={0.5}
-                    className="w-24 p-2 border-2 border-brand-200 rounded-lg text-center font-bold text-brand-700 focus:border-brand-500 outline-none"
-                    value={scoringConfig.part3TotalScore}
-                    onChange={(e) => setScoringConfig((s) => ({ ...s, part3TotalScore: parseFloat(e.target.value) || 0 }))}
-                  />
-                  <span className="text-sm text-gray-500">điểm</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Thời gian */}
-            <div className="bg-gradient-to-br from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-6 space-y-4">
-              <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                <span className="text-brand-500">⏱</span> Cấu hình thời gian
-              </h3>
-              <div className="bg-white rounded-xl border border-brand-100 p-4">
-                <p className="text-sm font-bold text-gray-700 mb-2">Thời gian làm bài</p>
-                <div className="flex items-center gap-3">
-                  <input type="number" min={1} max={300}
-                    className="w-24 p-2 border-2 border-brand-200 rounded-lg text-center font-bold text-brand-700 focus:border-brand-500 outline-none"
-                    value={duration}
-                    onChange={(e) => setDuration(parseInt(e.target.value) || 90)}
-                  />
-                  <span className="text-sm text-gray-500">phút</span>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl border border-brand-100 p-4 space-y-3">
-                <p className="text-sm font-bold text-gray-700">Khung thời gian</p>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Mở đề từ <span className="font-normal text-gray-400">(bỏ trống = mở ngay)</span></label>
-                  <input type="datetime-local"
-                    className="w-full p-2.5 border-2 border-brand-200 rounded-lg text-sm focus:border-brand-500 outline-none transition-all"
-                    value={startTime} onChange={(e) => setStartTime(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Đóng đề lúc <span className="font-normal text-gray-400">(bỏ trống = không giới hạn)</span></label>
-                  <input type="datetime-local"
-                    className="w-full p-2.5 border-2 border-brand-200 rounded-lg text-sm focus:border-brand-500 outline-none transition-all"
-                    value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-success-200 bg-success-50 p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div><p className="font-extrabold text-success-900">Lưu cấu hình bài thi</p><p className="mt-1 text-xs leading-5 text-success-800/80">Lưu điểm, thời gian, phân loại, lớp và mật khẩu mà không biên dịch lại LaTeX/TikZ.</p></div>
-                <button type="button" onClick={handleSaveSettings} disabled={savingSettings || !isOwnExam} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-success-600 px-6 text-sm font-extrabold text-white shadow-sm transition hover:bg-success-700 disabled:cursor-not-allowed disabled:opacity-50">
-                  {savingSettings && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-                  {savingSettings ? "Đang lưu…" : "Lưu cấu hình"}
-                </button>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={handlePreview}
-                className="flex-1 py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5"
-              >
-                Xem trước LaTeX
-              </button>
-              <button
-                onClick={handleUpdate}
-                disabled={saving || !previewData}
-                className="flex-1 py-4 bg-success-500 hover:bg-success-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2"
-              >
-                {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {isOwnExam ? "Biên dịch TikZ & lưu nội dung" : "📋 Tạo bản sao"}
-              </button>
-            </div>
-            {!previewData && (
-              <p className="text-xs text-center text-amber-600 italic">Cần xem trước LaTeX trước khi biên dịch TikZ và lưu nội dung.</p>
-            )}
-          </div>
-
-          {/* ── Preview ──────────────────────────────────────────────────── */}
-          <div className="bg-gray-50 rounded-3xl shadow-inner border border-gray-200 p-8 min-h-[600px]">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Bản xem trước</h2>
-            {!previewData ? (
-              <div className="flex flex-col items-center justify-center h-[400px] text-gray-400 gap-4">
-                <div className="text-5xl">👀</div>
-                <p className="text-sm">Bấm &quot;Xem trước LaTeX&quot; để kiểm tra nội dung trước khi lưu.</p>
-              </div>
-            ) : (
-              <div className="space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <div className="text-center border-b border-gray-100 pb-6 mb-6">
-                  <h1 className="text-2xl font-extrabold text-gray-900">{previewData.title}</h1>
-                  {description.trim() && <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500">{description.trim()}</p>}
-                  <p className="text-gray-400 text-sm mt-1">{previewData.questions.length} câu hỏi</p>
-                </div>
-                {previewData.questions.map((q, index) => (
-                  <div key={q.id} className="mb-10 border-b border-gray-100 pb-8 last:border-0">
-                    <div className="flex gap-3 mb-4">
-                      <span className="font-bold text-brand-600 shrink-0">Câu {index + 1}:</span>
-                      {!q.tikzCode && <div className="text-gray-900 leading-relaxed font-medium">{processLatexText(q.questionText)}</div>}
-                    </div>
-                    {q.tikzCode ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                        <div className="space-y-4">
-                          <div className="text-gray-900 leading-relaxed">{processLatexText(q.questionText)}</div>
-                          <AnswerPreview q={q} />
-                        </div>
-                        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center min-h-[180px]">
-                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Hình vẽ</p>
-                          <TikzRenderer code={q.tikzCode} />
-                        </div>
-                      </div>
-                    ) : (
-                      <AnswerPreview q={q} />
-                    )}
-                    {q.explanation && (
-                      <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
-                        <span className="font-bold text-gray-500 block mb-1">Lời giải:</span>
-                        <ExplanationRenderer explanation={q.explanation} />
-                      </div>
+            <EditorCard id="exam-rules" step={3} icon={SlidersHorizontal} title="Thiết lập làm bài" description="Thời gian, điểm số và ai được làm bài.">
+              <ExamRulesFields
+                idPrefix="edit"
+                duration={duration}
+                onDuration={setDuration}
+                maxRetries={maxRetries}
+                onMaxRetries={setMaxRetries}
+                startTime={startTime}
+                onStartTime={setStartTime}
+                endTime={endTime}
+                onEndTime={setEndTime}
+                scoring={scoringConfig}
+                onScoring={setScoringConfig}
+                structure={structure}
+                trueFalseCount={trueFalseCount}
+                hasQuestions={questions.length > 0}
+                passwordSlot={
+                  <div className="space-y-3">
+                    <Field label={hasPassword ? "Đổi mật khẩu mở đề" : "Đặt mật khẩu mở đề"} optional={!hasPassword} htmlFor="edit-password" hint={hasPassword ? "Đề đang có mật khẩu. Bỏ trống để giữ nguyên." : "Tối thiểu 4 ký tự."}>
+                      <input id="edit-password" type="password" autoComplete="new-password" minLength={4} maxLength={128} value={newPassword} disabled={removePassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={hasPassword ? "Mật khẩu mới" : "Tối thiểu 4 ký tự"} className={`${inputClass} h-11`} />
+                    </Field>
+                    {hasPassword && (
+                      <Toggle checked={removePassword} onChange={(checked) => { setRemovePassword(checked); if (checked) setNewPassword(""); }} label="Gỡ mật khẩu" description="Học sinh vào làm bài không cần nhập mật khẩu." />
                     )}
                   </div>
-                ))}
+                }
+                share={isOwnExam ? { checked: isShared, onChange: setIsShared } : undefined}
+                targetType={targetType}
+                onTargetType={setTargetType}
+                targetClassIds={targetClassIds}
+                onTargetClassIds={setTargetClassIds}
+                classes={myClasses}
+                classesLoading={classesLoading}
+              />
+            </EditorCard>
+          </div>
+
+          <aside aria-label="Lưu và xem trước" className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)]">
+            <div className="shrink-0 rounded-3xl border border-gray-200 bg-white p-5 shadow-[var(--shadow-soft)]">
+              <h2 className="font-display text-base font-bold text-gray-900">Lưu thay đổi</h2>
+              <ul className="mt-3 space-y-3 text-sm">
+                <li className="flex gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><SlidersHorizontal size={13} aria-hidden="true" /></span>
+                  <span className="text-gray-600"><b className="text-gray-900">Lưu thiết lập</b>: tên, mô tả, điểm, thời gian, lớp, mật khẩu. Lưu ngay, không đụng tới câu hỏi và hình TikZ.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700"><FileCode2 size={13} aria-hidden="true" /></span>
+                  <span className="text-gray-600"><b className="text-gray-900">{isOwnExam ? "Lưu nội dung đề" : "Tạo bản sao"}</b>: biên dịch lại LaTeX/TikZ theo bản xem trước. {previewData ? "" : "Cần bấm Phân tích & xem trước trước."}</span>
+                </li>
+              </ul>
+              {missingAnswers.length > 0 && (
+                <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />Câu {missingAnswers.join(", ")} thiếu đáp án trả lời ngắn.</p>
+              )}
+              <div className="mt-4 hidden gap-2 lg:grid lg:grid-cols-2">
+                {settingsButton()}
+                {contentButton()}
               </div>
-            )}
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[var(--shadow-soft)]">
+              <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-5 py-3.5">
+                <Eye size={17} className="text-brand-600" aria-hidden="true" />
+                <h2 className="font-display text-base font-bold text-gray-900">Bản xem trước</h2>
+                {questions.length > 0 && <span className="ml-auto text-xs font-medium text-gray-500">{questions.length} câu · {duration} phút</span>}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-gray-50/60 p-4 sm:p-5">
+                {previewData ? (
+                  <ExamPreview
+                    questions={previewData.questions}
+                    title={examTitle.trim() || previewData.title}
+                    description={description.trim()}
+                    chips={[gradeLevel, ...(gradeLevel !== MOCK_EXAM_GRADE ? [examType] : []), `${duration} phút`]}
+                    part4TotalScore={structure === "p1234" ? scoringConfig.part4TotalScore ?? 0 : undefined}
+                  />
+                ) : (
+                  <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">
+                    <StateIcon icon="inbox" tone="muted" />
+                    <p className="max-w-xs text-sm text-gray-500">Mã đề vừa thay đổi. Bấm <b className="text-gray-700">Phân tích &amp; xem trước</b> để kiểm tra lại.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div className="sticky bottom-0 z-30 -mx-4 mt-6 border-t border-gray-200 bg-white/95 px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:-mx-6 sm:px-6 lg:hidden">
+          <div className="mx-auto grid max-w-3xl grid-cols-2 gap-2">
+            {settingsButton()}
+            {contentButton()}
           </div>
         </div>
       </div>
     </AdminGuard>
   );
-}
-
-function AnswerPreview({ q }: { q: ParsedQuestion }) {
-  if (q.type === "multiple_choice" && q.options) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-8">
-        {q.options.map((opt, i) => (
-          <div key={i} className={`p-3 rounded-xl border text-sm ${q.correctAnswer === i ? "border-success-500 bg-success-50 text-success-900" : "border-gray-200 text-gray-700"}`}>
-            <span className="font-bold mr-1">{String.fromCharCode(65 + i)}.</span>
-            {processLatexText(opt)}
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (q.type === "true_false" && q.options) {
-    return (
-      <div className="space-y-2 pl-8">
-        {q.options.map((opt, i) => (
-          <div key={i} className="p-3 rounded-xl border border-gray-200 text-sm text-gray-700 flex justify-between items-center gap-4">
-            <div className="flex-1"><span className="font-bold mr-1">{String.fromCharCode(97 + i)})</span>{processLatexText(opt)}</div>
-            <span className={`font-bold px-2 py-0.5 rounded text-xs shrink-0 ${(q.correctAnswer as boolean[])[i] ? "bg-success-100 text-success-700" : "bg-danger-100 text-danger-700"}`}>
-              {(q.correctAnswer as boolean[])[i] ? "ĐÚNG" : "SAI"}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (q.type === "short_answer") {
-    const missingAnswer = !String(q.correctAnswer ?? "").trim();
-    return (
-      <div className="pl-8">
-        <div className={`inline-block p-3 rounded-xl border text-sm ${missingAnswer ? "border-danger-300 bg-danger-50 text-danger-800" : "border-brand-200 bg-brand-50 text-brand-900"}`}>
-          <span className="font-bold mr-1">Đáp án:</span>
-          {missingAnswer ? (
-            <span className="font-bold">Thiếu đáp án — cần bổ sung trước khi lưu</span>
-          ) : q.correctAnswerImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={q.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-20 max-w-full align-middle" />
-          ) : (
-            <Latex>{String(q.correctAnswer ?? "")}</Latex>
-          )}
-          {q.requiresAnswerReview && <p className="mt-2 text-xs font-semibold text-amber-700">Cần nhập giá trị chữ/số để chấm tự động.</p>}
-        </div>
-      </div>
-    );
-  }
-  return null;
 }

@@ -9,6 +9,8 @@ import {
   type ExamSourceReference,
 } from "@/lib/examSourceStorage";
 import { verifyAuth } from "@/lib/verifyAuth";
+import { normalizeTargetType, sanitizeTargetClassIds } from "@/utils/examAudience";
+import { countQuestionsByPart, normalizeStructure, sanitizeScoringConfig, structureProblems } from "@/utils/examStructure";
 import { getMissingShortAnswerQuestionNumbers, type ParsedQuestion } from "@/utils/latexParser";
 
 export const runtime = "nodejs";
@@ -20,7 +22,8 @@ interface UpdateExamBody {
   title?: unknown;
   description?: unknown;
   questions?: unknown;
-  scoringConfig?: { part1TotalScore?: unknown; part3TotalScore?: unknown };
+  scoringConfig?: { part1TotalScore?: unknown; part3TotalScore?: unknown; part4TotalScore?: unknown };
+  structure?: unknown;
   duration?: unknown;
   startTime?: unknown;
   endTime?: unknown;
@@ -151,6 +154,10 @@ export async function PATCH(
           { status: 413 },
         );
       }
+      const problems = structureProblems(normalizeStructure(body.structure), countQuestionsByPart(questions));
+      if (problems.length > 0) {
+        return NextResponse.json({ error: "STRUCTURE_MISMATCH", message: problems.join(" ") }, { status: 422 });
+      }
       const missingShortAnswers = getMissingShortAnswerQuestionNumbers(questions);
       if (missingShortAnswers.length > 0) {
         return NextResponse.json({
@@ -204,17 +211,12 @@ export async function PATCH(
     };
 
     if (mode === "settings") {
-      const targetType = body.targetType === "classes" ? "classes" : "all";
-      const targetClassIds = targetType === "classes" && Array.isArray(body.targetClassIds)
-        ? body.targetClassIds.filter((value): value is string => typeof value === "string" && value.length <= 160).slice(0, 100)
-        : [];
+      const targetType = normalizeTargetType(body.targetType);
+      const targetClassIds = sanitizeTargetClassIds(targetType, body.targetClassIds);
       Object.assign(updates, {
         title,
         description,
-        scoringConfig: {
-          part1TotalScore: Number(body.scoringConfig?.part1TotalScore ?? 3),
-          part3TotalScore: Number(body.scoringConfig?.part3TotalScore ?? 3),
-        },
+        scoringConfig: sanitizeScoringConfig(body.scoringConfig, normalizeStructure(current.structure)),
         duration: Math.max(1, Math.min(600, Number(body.duration ?? 90))),
         startTime,
         endTime,
@@ -234,6 +236,13 @@ export async function PATCH(
       updates.part1Count = questions.filter((question) => question.type === "multiple_choice").length;
       updates.part2Count = questions.filter((question) => question.type === "true_false").length;
       updates.part3Count = questions.filter((question) => question.type === "short_answer").length;
+      updates.part4Count = questions.filter((question) => question.type === "essay").length;
+      updates.structure = normalizeStructure(body.structure);
+      // Đổi cấu trúc thì giữ điểm Phần I–III, thêm hoặc bỏ điểm Phần IV.
+      updates.scoringConfig = sanitizeScoringConfig(
+        { ...(current.scoringConfig ?? {}), ...(body.scoringConfig ?? {}) },
+        normalizeStructure(body.structure),
+      );
       updates.tikzProcessed = Boolean(body.tikzProcessed);
       updates.tikzImageCount = Math.max(0, Number(body.tikzImageCount ?? 0));
       updates.tikzFailedCount = 0;

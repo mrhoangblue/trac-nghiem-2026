@@ -17,6 +17,8 @@ import {
   QueryDocumentSnapshot,
   DocumentData,
 } from "firebase/firestore";
+import StateIcon from "@/components/StateIcon";
+import { BarChart3, Copy, Eye, Pencil, Share2, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -290,7 +292,7 @@ function ExamListContent() {
           <Spinner />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center text-gray-400">
-            <span className="text-5xl">📭</span>
+            <StateIcon icon="inbox" />
             <p>{search ? "Không tìm thấy đề thi phù hợp." : "Chưa có đề thi nào."}</p>
           </div>
         ) : (
@@ -373,31 +375,31 @@ function ExamListContent() {
                           target="_blank"
                           className="inline-flex items-center gap-1 text-gray-600 hover:text-brand-800 font-semibold border border-gray-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
-                          👁 Xem đề
+                          <Eye size={13} aria-hidden="true" /> Xem đề
                         </Link>
                         <Link
                           href={`/admin/exam/${exam.id}`}
                           className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-semibold border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
-                          📊 KQ
+                          <BarChart3 size={13} aria-hidden="true" /> KQ
                         </Link>
                         <button
                           type="button"
                           onClick={() => setSharingExam(exam)}
                           className="inline-flex items-center gap-1 text-success-700 hover:text-success-900 font-semibold border border-success-200 hover:border-success-400 bg-success-50/50 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
-                          ↗ Chia sẻ
+                          <Share2 size={13} aria-hidden="true" /> Chia sẻ
                         </button>
                         {canEdit(exam) ? (
                           <Link
                             href={`/admin/edit-exam/${exam.id}`}
                             className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 font-semibold border border-amber-200 hover:border-amber-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                           >
-                            {exam.authorEmail === userEmail ? "✏️ Sửa" : "📋 Nhân bản"}
+                            {exam.authorEmail === userEmail ? <><Pencil size={13} aria-hidden="true" />Sửa</> : <><Copy size={13} aria-hidden="true" />Nhân bản</>}
                           </Link>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-gray-300 font-semibold border border-gray-100 px-3 py-1.5 rounded-lg text-xs cursor-not-allowed" title="Không thể sửa">
-                            ✏️ Sửa
+                            <Pencil size={13} aria-hidden="true" /> Sửa
                           </span>
                         )}
                         {canDelete(exam) && (
@@ -409,7 +411,7 @@ function ExamListContent() {
                             {deleting === exam.id ? (
                               <span className="w-3 h-3 border-2 border-danger-400 border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              "🗑 Xóa"
+                              <><Trash2 size={13} aria-hidden="true" />Xóa</>
                             )}
                           </button>
                         )}

@@ -117,7 +117,7 @@ export default function LessonDiscussion({ classId, courseId, lessonId, resource
   };
 
   return (
-    <div className={`border-t border-gray-100 bg-[#fffdf9] ${persistent ? "flex h-full min-h-0 flex-col" : ""}`}>
+    <div className={`border-t border-gray-100 bg-[#F9FAFB] ${persistent ? "flex h-full min-h-0 flex-col" : ""}`}>
       {persistent ? (
         <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-brand-800 sm:px-5">
           <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Hỏi đáp{contextLabel ? ` · ${contextLabel}` : " bài học"}</span></span>

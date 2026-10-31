@@ -6,6 +6,7 @@ import { ArrowRight, BookOpen, Clock3, GraduationCap, UserRound } from "lucide-r
 import JoinClassSection from "@/components/classroom/JoinClassSection";
 import FindTeacherSection from "@/components/classroom/FindTeacherSection";
 import { useAuth } from "@/lib/AuthContext";
+import { useStudentMode } from "@/lib/StudentModeContext";
 
 interface MembershipClass {
   id: string;
@@ -19,10 +20,10 @@ interface MembershipClass {
 }
 
 const CARD_THEMES = [
-  "from-[#9f4f22] to-[#c87532]",
-  "from-[#235d66] to-[#398592]",
-  "from-[#5b547d] to-[#8179a7]",
-  "from-[#68733b] to-[#929b56]",
+  "from-indigo-500 via-violet-500 to-fuchsia-500",
+  "from-sky-500 via-blue-500 to-indigo-500",
+  "from-emerald-500 via-teal-500 to-cyan-500",
+  "from-amber-400 via-orange-500 to-rose-500",
 ];
 
 function Spinner() {
@@ -30,7 +31,10 @@ function Spinner() {
 }
 
 export default function StudentClassesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isMod, loading: authLoading } = useAuth();
+  const { isStudentMode } = useStudentMode();
+  const preview = isMod && isStudentMode;
+  const cacheKey = `student-classes:${user?.uid}${preview ? ":preview" : ""}`;
   const [memberships, setMemberships] = useState<MembershipClass[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -40,7 +44,7 @@ export default function StudentClassesPage() {
     if (showLoading) setClassesLoading(true);
     setLoadError(false);
     try {
-      const request = async (forceRefresh = false) => fetch("/api/classes/memberships", {
+      const request = async (forceRefresh = false) => fetch(`/api/classes/memberships${preview ? "?preview=student" : ""}`, {
         headers: { Authorization: `Bearer ${await user.getIdToken(forceRefresh)}` },
         cache: "no-store",
       });
@@ -50,17 +54,17 @@ export default function StudentClassesPage() {
       const payload = (await response.json()) as { memberships?: MembershipClass[] };
       const rows = payload.memberships ?? [];
       setMemberships(rows);
-      window.sessionStorage.setItem(`student-classes:${user.uid}`, JSON.stringify(rows));
+      window.sessionStorage.setItem(cacheKey, JSON.stringify(rows));
     } catch (error) {
       console.error("Failed to fetch classes:", error);
       if (showLoading) setLoadError(true);
     } finally {
       setClassesLoading(false);
     }
-  }, [user]);
+  }, [user, preview, cacheKey]);
 
   useEffect(() => {
-    const cached = user ? window.sessionStorage.getItem(`student-classes:${user.uid}`) : null;
+    const cached = user ? window.sessionStorage.getItem(cacheKey) : null;
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as MembershipClass[];
@@ -69,11 +73,11 @@ export default function StudentClassesPage() {
           setClassesLoading(false);
         });
       } catch {
-        window.sessionStorage.removeItem(`student-classes:${user?.uid}`);
+        window.sessionStorage.removeItem(cacheKey);
       }
     }
     queueMicrotask(() => void fetchMemberships(!cached));
-  }, [fetchMemberships, user]);
+  }, [fetchMemberships, user, cacheKey]);
 
   if (authLoading) return <Spinner />;
   if (!user) {
@@ -91,11 +95,11 @@ export default function StudentClassesPage() {
 
   return (
     <div className="workspace-page mx-auto w-full max-w-6xl space-y-9 px-4 py-8 sm:py-10">
-      <header className="relative overflow-hidden rounded-[2rem] bg-[#2f241d] px-6 py-8 text-white shadow-xl sm:px-9">
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#d58a50]/25 blur-2xl" />
+      <header className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-700 via-violet-700 to-fuchsia-600 px-6 py-8 text-white shadow-xl sm:px-9">
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#818CF8]/30 blur-2xl" />
         <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#efc49f]">Không gian học tập</p>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C7D2FE]">Không gian học tập</p>
             <h1 className="mt-2 text-3xl font-black sm:text-4xl">Lớp học của tôi</h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/70">Theo dõi lớp đang học, giáo viên phụ trách và các yêu cầu đang chờ duyệt.</p>
           </div>

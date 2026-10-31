@@ -282,7 +282,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         if (!previous || submittedAt >= previous.submittedAt) {
           submissions.set(data.examId, {
             id: document.id,
-            totalScore: typeof data.scores?.total === "number" ? data.scores.total : undefined,
+            // Chờ chấm tự luận: chưa công bố điểm.
+            totalScore: data.gradingStatus !== "pending" && typeof data.scores?.total === "number" ? data.scores.total : undefined,
             submittedAt,
           });
         }

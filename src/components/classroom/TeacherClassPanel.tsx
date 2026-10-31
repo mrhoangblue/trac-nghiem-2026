@@ -20,10 +20,10 @@ interface ClassRow {
 }
 
 const THEMES = [
-  { gradient: "from-[#7f3e1c] to-[#c46a2d]", pale: "bg-[#fff6ed]", label: "text-[#8e451f]" },
-  { gradient: "from-[#285c63] to-[#428890]", pale: "bg-[#effafb]", label: "text-[#285c63]" },
-  { gradient: "from-[#5c5378] to-[#81789e]", pale: "bg-[#f6f3fb]", label: "text-[#5c5378]" },
-  { gradient: "from-[#667039] to-[#909955]", pale: "bg-[#f7f8ed]", label: "text-[#667039]" },
+  { gradient: "from-indigo-500 via-violet-500 to-fuchsia-500", pale: "bg-indigo-50", label: "text-indigo-700" },
+  { gradient: "from-sky-500 via-blue-500 to-indigo-500", pale: "bg-sky-50", label: "text-sky-700" },
+  { gradient: "from-emerald-500 via-teal-500 to-cyan-500", pale: "bg-emerald-50", label: "text-emerald-700" },
+  { gradient: "from-amber-400 via-orange-500 to-rose-500", pale: "bg-orange-50", label: "text-orange-700" },
 ];
 
 function Skeleton() {

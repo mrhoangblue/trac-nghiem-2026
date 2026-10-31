@@ -1,8 +1,10 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { normalizeAnswer } from "@/utils/examTypes";
+import { ESSAY_UPLOAD_GRACE_MINUTES, hasEssayPart } from "@/utils/examStructure";
+import { uploadWindow } from "@/lib/essaySubmission";
 
 export const runtime = "nodejs";
 
@@ -80,9 +82,15 @@ export async function GET(request: NextRequest) {
         ?? timestampMillis(left.data.examStartTime)
         ?? 0
       ))[0];
+    // Bài đã nộp Phần I–III, còn trong thời gian bổ sung ảnh tự luận: tải lại trang thì quay về bước nộp ảnh.
+    const essayStage = owned.find(({ data }) => uploadWindow(data).open && data.status === "COMPLETED");
 
     return NextResponse.json({
       completedCount,
+      essayUpload: essayStage ? {
+        id: essayStage.id,
+        uploadDeadlineMillis: uploadWindow(essayStage.data).deadline,
+      } : null,
       inProgress: inProgress ? {
         id: inProgress.id,
         answersJson: typeof inProgress.data.answersJson === "string" ? inProgress.data.answersJson : "{}",
@@ -190,10 +198,14 @@ export async function POST(request: NextRequest) {
       ? p3Results.filter(Boolean).length * part3TotalScore / p3Questions.length
       : 0;
     const rounded = (value: number) => Math.round(value * 100) / 100;
+    // Đề có tự luận: Phần IV chờ giáo viên chấm, tổng tạm tính chỉ gồm Phần I–III.
+    const essayExam = hasEssayPart(exam.structure) && questions.some((question) => question?.type === "essay");
+    const uploadDeadline = essayExam ? Timestamp.fromMillis(Date.now() + ESSAY_UPLOAD_GRACE_MINUTES * 60 * 1000) : null;
     const scores = {
       p1: rounded(p1),
       p2: rounded(p2),
       p3: rounded(p3),
+      ...(essayExam ? { p4: null } : {}),
       total: rounded(p1 + p2 + p3),
       part1: { correct: p1Results.filter(Boolean).length, total: p1Questions.length, score: rounded(p1) },
       part2: {
@@ -230,6 +242,7 @@ export async function POST(request: NextRequest) {
       lastInteractionAtSeconds: clampInteger(body.lastInteractionAtSeconds, 0, 7 * 24 * 60 * 60),
       ...(isTeacherPreview ? { isTeacherPreview: true } : {}),
       ...(body.exitedEarly ? { exitedEarly: true } : {}),
+      ...(uploadDeadline ? { gradingStatus: "pending", essay: { uploadDeadline } } : {}),
     };
 
     let submissionRef = adminDb.collection("submissions").doc();
@@ -244,8 +257,13 @@ export async function POST(request: NextRequest) {
         submissionRef = candidate;
       }
     }
+    // merge giữ nguyên essay.files đã tải trong lúc làm bài.
     await submissionRef.set(payload, { merge: true });
 
+    if (uploadDeadline) {
+      // Không trả điểm: học sinh chỉ thấy kết quả khi giáo viên chấm xong.
+      return NextResponse.json({ id: submissionRef.id, essayUpload: { uploadDeadlineMillis: uploadDeadline.toMillis() } });
+    }
     return NextResponse.json({ id: submissionRef.id, scores });
   } catch (error) {
     console.error("POST /api/submissions failed:", error);

@@ -15,6 +15,8 @@ import {
   doc,
   Timestamp,
 } from "firebase/firestore";
+import StateIcon from "@/components/StateIcon";
+import { ClipboardList, FileCheck2, GraduationCap, Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExamRow {
@@ -116,24 +118,24 @@ export default function AdminDashboardPage() {
         </div>
         <Link
           href="/admin/create-exam"
-          className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-6 rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
+          className="edu-btn inline-flex min-h-12 items-center gap-2 rounded-xl px-6 font-semibold text-white"
         >
-          <span className="text-lg">＋</span> Tạo bài thi mới
+          <Plus size={18} aria-hidden="true" /> Tạo bài thi mới
         </Link>
       </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Tổng bài thi", value: exams.length, icon: "📋", color: "bg-brand-50 border-brand-100 text-brand-700" },
-          { label: "Lượt nộp bài", value: exams.reduce((s, e) => s + e.submissionCount, 0), icon: "📝", color: "bg-success-50 border-success-100 text-success-700" },
-          { label: "Học sinh hoạt động", value: exams.reduce((s, e) => s + e.submissionCount, 0), icon: "👨‍🎓", color: "bg-brand-50 border-brand-100 text-brand-700" },
-        ].map(({ label, value, icon, color }) => (
-          <div key={label} className={`rounded-2xl border p-5 flex items-center gap-4 ${color}`}>
-            <span className="text-2xl">{icon}</span>
+          { label: "Tổng bài thi", value: exams.length, Icon: ClipboardList, gradient: "from-indigo-500 to-violet-500 shadow-indigo-500/30" },
+          { label: "Lượt nộp bài", value: exams.reduce((s, e) => s + e.submissionCount, 0), Icon: FileCheck2, gradient: "from-emerald-400 to-teal-500 shadow-emerald-500/30" },
+          { label: "Học sinh hoạt động", value: exams.reduce((s, e) => s + e.submissionCount, 0), Icon: GraduationCap, gradient: "from-sky-400 to-blue-500 shadow-sky-500/30" },
+        ].map(({ label, value, Icon, gradient }) => (
+          <div key={label} className="flex items-center gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
+            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ${gradient}`}><Icon size={22} aria-hidden="true" /></span>
             <div>
-              <p className="text-2xl font-extrabold">{loading ? "…" : value}</p>
-              <p className="text-sm font-medium opacity-75">{label}</p>
+              <p className="font-display text-3xl font-extrabold leading-none text-gray-900">{loading ? "…" : value}</p>
+              <p className="mt-1.5 text-sm text-gray-500">{label}</p>
             </div>
           </div>
         ))}
@@ -149,7 +151,7 @@ export default function AdminDashboardPage() {
           <Spinner />
         ) : exams.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center text-gray-400">
-            <span className="text-5xl">📭</span>
+            <StateIcon icon="inbox" />
             <p>Chưa có bài thi nào. Hãy tạo bài thi đầu tiên!</p>
           </div>
         ) : (
@@ -187,20 +189,20 @@ export default function AdminDashboardPage() {
                           href={`/admin/exam/${exam.id}`}
                           className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-semibold border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
-                          🔍 Chi tiết
+                          <Search size={13} aria-hidden="true" /> Chi tiết
                         </Link>
                         <Link
                           href={`/admin/edit-exam/${exam.id}`}
                           className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 font-semibold border border-amber-200 hover:border-amber-400 px-3 py-1.5 rounded-lg transition-all text-xs"
                         >
-                          ✏️ Sửa
+                          <Pencil size={13} aria-hidden="true" /> Sửa
                         </Link>
                         <button
                           onClick={() => handleDelete(exam.id, exam.title)}
                           disabled={deleting === exam.id}
                           className="inline-flex items-center gap-1 text-danger-600 hover:text-danger-800 font-semibold border border-danger-200 hover:border-danger-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50"
                         >
-                          {deleting === exam.id ? "…" : "🗑 Xóa"}
+                          {deleting === exam.id ? "…" : <><Trash2 size={13} aria-hidden="true" />Xóa</>}
                         </button>
                       </div>
                     </td>

@@ -9,6 +9,8 @@ import {
   type PasswordSecret,
 } from "@/lib/examAccess";
 import { verifyAuth } from "@/lib/verifyAuth";
+import { hasEssayPart } from "@/utils/examStructure";
+import { isClassOnly } from "@/utils/examAudience";
 
 export const runtime = "nodejs";
 
@@ -40,6 +42,16 @@ export async function POST(
 
     const exam = examSnapshot.data()!;
     const metadata = publicMetadata(exam);
+
+    const isTeacher = authUser.role === "admin" || authUser.role === "mod";
+    if (!isTeacher && isClassOnly(exam.targetType, exam.targetClassIds)) {
+      const targets = new Set<string>(exam.targetClassIds);
+      const memberships = await adminDb.collection("classes").where("studentIds", "array-contains", authUser.uid).select().get();
+      if (!memberships.docs.some((item) => targets.has(item.id))) {
+        return NextResponse.json({ error: "NOT_IN_CLASS", metadata }, { status: 403 });
+      }
+    }
+
     const now = new Date();
     const opensAt = parseExamDateTime(exam.startTime);
     const closesAt = parseExamDateTime(exam.endTime);
@@ -64,6 +76,17 @@ export async function POST(
       }
     }
 
+    if (!isTeacher && hasEssayPart(exam.structure)) {
+      // \loigiai của câu tự luận là hướng dẫn chấm: không gửi cho học sinh.
+      const { rawLatex: _rawLatex, ...rest } = exam;
+      void _rawLatex;
+      const questions = Array.isArray(exam.questions)
+        ? exam.questions.map((question: Record<string, unknown>) => (
+          question?.type === "essay" ? { ...question, explanation: "", explanationTikzCode: undefined, explanationTikzImageUrl: undefined } : question
+        ))
+        : [];
+      return NextResponse.json({ exam: { id: examSnapshot.id, ...rest, questions } });
+    }
     return NextResponse.json({ exam: { id: examSnapshot.id, ...exam } });
   } catch (error) {
     console.error("POST /api/exams/[examId]/access failed:", error);

@@ -7,6 +7,8 @@ import { collection, query, where, getDocs, limit } from "firebase/firestore";
 import type { UserProfile } from "@/lib/AuthContext";
 import { normalizeTeacherSearchInput } from "@/utils/searchKeywords";
 import type { ClassDoc } from "@/utils/classroomTypes";
+import { AlertTriangle, UserSearch, Users } from "lucide-react";
+import StateIcon from "@/components/StateIcon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,8 +159,8 @@ export default function FindTeacherSection() {
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 bg-brand-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
-          🔍
+        <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30 rounded-2xl flex items-center justify-center shrink-0">
+          <UserSearch size={19} aria-hidden="true" />
         </div>
         <div>
           <h2 className="font-extrabold text-gray-900">Tìm giáo viên</h2>
@@ -206,7 +208,7 @@ export default function FindTeacherSection() {
       {/* Results area */}
       {error ? (
         <div className="flex items-center gap-2 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-          <span>⚠️</span> {error}
+          <AlertTriangle size={16} className="shrink-0" aria-hidden="true" /> {error}
         </div>
       ) : searchInput.trim().length < 2 ? (
         <div className="text-center py-8 text-gray-400">
@@ -214,7 +216,7 @@ export default function FindTeacherSection() {
         </div>
       ) : searching ? null : hasSearched && teachers.length === 0 ? (
         <div className="text-center py-10">
-          <span className="text-4xl">👀</span>
+          <StateIcon icon="inbox" tone="muted" size="sm" />
           <p className="text-gray-500 text-sm mt-3">Không tìm thấy giáo viên phù hợp</p>
           <p className="text-gray-400 text-xs mt-1">Thử tên khác hoặc liên hệ trực tiếp</p>
         </div>
@@ -284,7 +286,7 @@ export default function FindTeacherSection() {
                                 {cls.name}
                               </p>
                               <p className="text-xs text-gray-400 mt-0.5">
-                                👨‍🎓 {cls.studentCount} học sinh
+                                <span className="inline-flex items-center gap-1"><Users size={12} aria-hidden="true" />{cls.studentCount} học sinh</span>
                               </p>
                             </div>
                             <span className="shrink-0 text-xs text-brand-600 font-semibold whitespace-nowrap">

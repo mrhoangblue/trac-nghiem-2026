@@ -1,13 +1,13 @@
 @import "tailwindcss" source("../");
 
 :root {
-  --background: #FFFDF6;
-  --foreground: #1C1917;
-  --surface: #FFFEFB;
+  --background: #F7F8FC;
+  --foreground: #101828;
+  --surface: #FFFFFF;
   --surface-raised: #FFFFFF;
-  --line: #E8E0D3;
-  --academic-ink: #19324A;
-  --academic-blue: #2E6282;
+  --line: #EAECF0;
+  --academic-ink: #1E1B4B;
+  --academic-blue: #4F46E5;
 }
 
 @theme inline {
@@ -17,103 +17,220 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Design source: Website Gia Su — ivory / amber / earth / sunset (60/30/10). */
+/* Design: "Học Toán thông minh" — indigo learning palette, cool neutrals,
+   emerald for correct answers and rose for errors. Token names are kept from
+   the previous theme so every page re-skins from this one place. */
 @theme {
-  --color-ivory: #FFFDF6;
-  --color-earth: #78350F;
-  --color-sunset: #EA580C;
-  --color-brand-50: #FFFBEB;
-  --color-brand-100: #FEF3C7;
-  --color-brand-200: #FDE3A0;
-  --color-brand-300: #F4C570;
-  --color-brand-400: #EAA63D;
-  --color-brand-500: #D97706;
-  --color-brand-600: #B45309;
-  --color-brand-700: #92400E;
-  --color-brand-800: #78350F;
-  --color-brand-900: #451A03;
-  --color-brand-950: #2D170D;
-  --color-success-50: #FFFBEB;
-  --color-success-100: #FEF3C7;
-  --color-success-200: #FDE3A0;
-  --color-success-300: #F4C570;
-  --color-success-400: #EAA63D;
-  --color-success-500: #B45309;
-  --color-success-600: #92400E;
-  --color-success-700: #78350F;
-  --color-success-800: #5C280B;
-  --color-success-900: #451A03;
+  --color-ivory: #FFFFFF;
+  --color-earth: #3730A3;
+  --color-sunset: #4F46E5;
+  --color-brand-50: #EEF2FF;
+  --color-brand-100: #E0E7FF;
+  --color-brand-200: #C7D2FE;
+  --color-brand-300: #A5B4FC;
+  --color-brand-400: #818CF8;
+  --color-brand-500: #6366F1;
+  --color-brand-600: #4F46E5;
+  --color-brand-700: #4338CA;
+  --color-brand-800: #3730A3;
+  --color-brand-900: #312E81;
+  --color-brand-950: #1E1B4B;
+  --color-success-50: #ECFDF5;
+  --color-success-100: #D1FAE5;
+  --color-success-200: #A7F3D0;
+  --color-success-300: #6EE7B7;
+  --color-success-400: #34D399;
+  --color-success-500: #059669;
+  --color-success-600: #047857;
+  --color-success-700: #065F46;
+  --color-success-800: #064E3B;
+  --color-success-900: #022C22;
   --color-danger-50: #FFF1F2;
   --color-danger-100: #FFE4E6;
   --color-danger-200: #FECDD3;
   --color-danger-300: #FDA4AF;
-  --color-danger-400: #E56783;
-  --color-danger-500: #BE185D;
-  --color-danger-600: #9F1239;
-  --color-danger-700: #881337;
-  --color-danger-800: #701A35;
+  --color-danger-400: #FB7185;
+  --color-danger-500: #E11D48;
+  --color-danger-600: #BE123C;
+  --color-danger-700: #9F1239;
+  --color-danger-800: #881337;
   --color-danger-900: #4C0519;
-  --color-gray-50: #FAF8F2;
-  --color-gray-100: #F5F1E8;
-  --color-gray-200: #EDE7DA;
-  --color-gray-300: #DED6C4;
-  --color-gray-400: #8A7B68;
-  --color-gray-500: #786B5C;
-  --color-gray-600: #655848;
-  --color-gray-700: #534636;
-  --color-gray-800: #3D2E20;
-  --color-gray-900: #261C14;
-  --color-slate-50: #FAF8F2;
-  --color-slate-100: #F5F1E8;
-  --color-slate-200: #EDE7DA;
-  --color-slate-500: #786B5C;
-  --color-slate-600: #655848;
-  --color-slate-700: #534636;
-  --color-slate-800: #3D2E20;
-  --color-slate-900: #261C14;
-  --shadow-soft: 0 2px 8px -2px #451A0314, 0 10px 30px -12px #451A031f;
-  --shadow-lift: 0 8px 20px -6px #451A0324, 0 24px 48px -20px #451A0338;
+  --color-gray-50: #F9FAFB;
+  --color-gray-100: #F2F4F7;
+  --color-gray-200: #EAECF0;
+  --color-gray-300: #D0D5DD;
+  --color-gray-400: #98A2B3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1D2939;
+  --color-gray-900: #101828;
+  --color-slate-50: #F9FAFB;
+  --color-slate-100: #F2F4F7;
+  --color-slate-200: #EAECF0;
+  --color-slate-300: #D0D5DD;
+  --color-slate-400: #98A2B3;
+  --color-slate-500: #667085;
+  --color-slate-600: #475467;
+  --color-slate-700: #344054;
+  --color-slate-800: #1D2939;
+  --color-slate-900: #101828;
+  /* Homepage palette (indigo → violet learning gradient). Used via .home-edu. */
+  --font-display: var(--font-jakarta);
+  --color-edu-ink: #101828;
+  --color-edu-muted: #475467;
+  --color-edu-line: #E4E7F2;
+  --color-edu-surface: #F7F8FE;
+  --color-edu-indigo: #4F46E5;
+  --color-edu-violet: #7C3AED;
+  --color-edu-sky: #0EA5E9;
+  --color-edu-mint: #10B981;
+  --color-edu-amber: #F59E0B;
+  --color-edu-pink: #EC4899;
+  --shadow-edu: 0 1px 2px rgb(16 24 40 / .04), 0 8px 24px -8px rgb(79 70 229 / .14), 0 24px 48px -24px rgb(16 24 40 / .12);
+  --shadow-edu-lift: 0 2px 4px rgb(16 24 40 / .05), 0 18px 40px -12px rgb(79 70 229 / .28), 0 40px 70px -30px rgb(124 58 237 / .25);
+  --shadow-soft: 0 1px 2px rgb(16 24 40 / .04), 0 8px 24px -10px rgb(79 70 229 / .16);
+  --shadow-lift: 0 2px 4px rgb(16 24 40 / .05), 0 18px 40px -14px rgb(79 70 229 / .28);
 }
 
 @layer base {
   html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
   button:not(:disabled), select { cursor: pointer; }
-  :focus-visible { outline: 3px solid #B45309; outline-offset: 4px; }
-  ::selection { background: #FDE3A0; color: #451A03; }
+  :focus-visible { outline: 3px solid #6366F1; outline-offset: 3px; }
+  ::selection { background: #E0E7FF; color: #1E1B4B; }
   h1, h2, h3 { text-wrap: balance; }
   input, textarea, select, button { font: inherit; }
-  input::placeholder, textarea::placeholder { color: #9A8D7D; opacity: 1; }
+  input::placeholder, textarea::placeholder { color: #98A2B3; opacity: 1; }
 }
 
-.skip-link { position: fixed; top: -6rem; left: 1rem; z-index: 100; padding: .75rem 1rem; background: #78350F; color: white; border-radius: 1rem; }
+.skip-link { position: fixed; top: -6rem; left: 1rem; z-index: 100; padding: .75rem 1rem; background: #4F46E5; color: white; border-radius: 1rem; }
 .skip-link:focus { top: .5rem; }
-.site-header { background: #fffdf6f2; backdrop-filter: blur(16px); border-bottom: 1px solid #EDE7DA; }
-.site-sidebar { background: #FFFEFA; border-right: 1px solid #EDE7DA; }
-.home-hero { background: radial-gradient(ellipse at 82% 20%, #FDE3A070, transparent 55%), #FFFDF6; }
-.math-paper { background-color: #FFFEFA; background-image: linear-gradient(#78350F09 1px, transparent 1px), linear-gradient(90deg, #78350F09 1px, transparent 1px); background-size: 24px 24px; }
-.sunset-button { background: #EA580C; color: white; box-shadow: 0 8px 22px -9px #EA580C80; }
-.sunset-button:hover { background: #C2410C; }
-.exam-card { box-shadow: var(--shadow-soft); border: 1px solid #EDE7DA; }
-.exam-card:hover { border-color: #D9AA70; box-shadow: var(--shadow-lift); transform: translateY(-3px); }
+.site-header { background: rgb(255 255 255 / .78); backdrop-filter: blur(18px) saturate(1.6); -webkit-backdrop-filter: blur(18px) saturate(1.6); border-bottom: 1px solid rgb(234 236 240 / .9); }
+.site-sidebar { background: rgb(255 255 255 / .82); backdrop-filter: blur(14px); border-right: 1px solid #EAECF0; }
+.home-hero { background: radial-gradient(ellipse at 82% 20%, #E0E7FF, transparent 55%), #FFFFFF; }
+.math-paper { background-color: #FFFFFF; background-image: radial-gradient(rgb(79 70 229 / .1) 1px, transparent 1px); background-size: 22px 22px; }
+.sunset-button { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; box-shadow: 0 10px 24px -10px rgb(79 70 229 / .7); transition: transform .2s, box-shadow .2s; }
+.sunset-button:hover { transform: translateY(-1px); box-shadow: 0 14px 30px -12px rgb(79 70 229 / .8); }
+.exam-card { box-shadow: var(--shadow-soft); border: 1px solid #EAECF0; }
+.exam-card:hover { border-color: #C7D2FE; box-shadow: var(--shadow-lift); transform: translateY(-3px); }
+
+/* ── Homepage: modern learning platform ──────────────────────────────────
+   Soft aurora background, glass surfaces, layered shadows and gentle motion.
+   Everything is transform/opacity based and stops under reduced motion. */
+.home-edu { background: #FFFFFF; color: var(--color-edu-ink); }
+.home-edu :focus-visible { outline: 3px solid var(--color-edu-indigo); outline-offset: 3px; }
+.home-edu ::selection { background: #E0E7FF; color: var(--color-edu-ink); }
+
+.edu-aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.edu-aurora span { position: absolute; border-radius: 9999px; filter: blur(70px); opacity: .55; will-change: transform; }
+.edu-aurora span:nth-child(1) { width: 34rem; height: 34rem; left: -8rem; top: -10rem; background: #C7D2FE; animation: edu-drift 18s ease-in-out infinite; }
+.edu-aurora span:nth-child(2) { width: 28rem; height: 28rem; right: -6rem; top: 2rem; background: #DDD6FE; animation: edu-drift 22s ease-in-out infinite reverse; }
+.edu-aurora span:nth-child(3) { width: 24rem; height: 24rem; left: 40%; bottom: -12rem; background: #BAE6FD; animation: edu-drift 26s ease-in-out infinite; }
+.edu-dots {
+  background-image: radial-gradient(rgb(79 70 229 / .13) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+.edu-gradient-text {
+  background: linear-gradient(100deg, #4F46E5, #7C3AED 35%, #0EA5E9 70%, #4F46E5);
+  background-size: 220% auto;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: edu-gradient 8s linear infinite;
+}
+
+.edu-glass {
+  background: rgb(255 255 255 / .72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgb(255 255 255 / .8);
+  box-shadow: var(--shadow-edu);
+}
+
+.edu-btn {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: linear-gradient(135deg, #4F46E5, #7C3AED);
+  box-shadow: 0 10px 24px -10px rgb(79 70 229 / .7), inset 0 1px 0 rgb(255 255 255 / .25);
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s;
+}
+.edu-btn::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / .35) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform .7s ease;
+}
+.edu-btn:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -12px rgb(79 70 229 / .8), inset 0 1px 0 rgb(255 255 255 / .25); }
+.edu-btn:hover::after { transform: translateX(120%); }
+.edu-btn:active { transform: translateY(0) scale(.98); }
+
+/* Card with a cursor-following spotlight and gradient ring on hover. */
+.edu-card {
+  position: relative; isolation: isolate;
+  background: #FFFFFF;
+  border: 1px solid var(--color-edu-line);
+  box-shadow: var(--shadow-edu);
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s, border-color .35s;
+}
+.edu-card::before {
+  content: ""; position: absolute; inset: -1px; z-index: 2; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: linear-gradient(135deg, #818CF8, #C084FC, #38BDF8);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity .35s;
+}
+.edu-card::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 0%), rgb(124 58 237 / .09), transparent 45%);
+  opacity: 0; transition: opacity .35s;
+}
+.edu-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-edu-lift); border-color: transparent; }
+.edu-card:hover::before, .edu-card:hover::after { opacity: 1; }
+
+.edu-float { animation: edu-float 6s ease-in-out infinite; }
+.edu-float-slow { animation: edu-float 8s ease-in-out infinite reverse; }
+.edu-ring { stroke-dasharray: 264; stroke-dashoffset: 264; animation: edu-ring 1.8s .4s cubic-bezier(.2,.8,.2,1) forwards; }
+
+.edu-marquee-mask { mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent); }
+.edu-marquee { animation: edu-marquee 40s linear infinite; }
+.edu-marquee-mask:hover .edu-marquee { animation-play-state: paused; }
+
+/* Scroll reveal: content stays visible until JS opts the container in. */
+.edu-reveal-ready [data-reveal] { opacity: 0; transform: translateY(24px); transition: opacity .7s cubic-bezier(.2,.8,.2,1), transform .7s cubic-bezier(.2,.8,.2,1); transition-delay: var(--d, 0ms); }
+.edu-reveal-ready [data-reveal].is-visible { opacity: 1; transform: none; }
+
+.edu-rise { animation: edu-rise .8s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0ms); }
+@keyframes edu-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes edu-drift { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(3rem, 2rem) scale(1.08); } 66% { transform: translate(-2rem, 3rem) scale(.95); } }
+@keyframes edu-gradient { to { background-position: 220% center; } }
+@keyframes edu-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes edu-ring { to { stroke-dashoffset: 58; } }
+@keyframes edu-marquee { to { transform: translateX(-50%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .edu-reveal-ready [data-reveal] { opacity: 1; transform: none; }
+  .edu-ring { stroke-dashoffset: 58; }
+}
 
 /* Shared application shell: every signed-in workspace inherits the same
    spacing, paper-like background, control behavior and data presentation. */
 .app-main {
   min-height: calc(100dvh - 4rem);
   background:
-    linear-gradient(180deg, rgb(255 253 246 / .76), rgb(255 254 251 / .96)),
-    linear-gradient(90deg, rgb(120 53 15 / .025) 1px, transparent 1px),
-    linear-gradient(rgb(120 53 15 / .025) 1px, transparent 1px);
-  background-size: auto, 32px 32px, 32px 32px;
+    radial-gradient(60rem 30rem at 100% -10%, rgb(199 210 254 / .45), transparent 60%),
+    radial-gradient(50rem 26rem at -10% 0%, rgb(221 214 254 / .35), transparent 60%),
+    #F7F8FC;
 }
 
+/* backwards, not both: a transform left on after the animation turns this
+   wrapper into the containing block of every position:fixed descendant
+   (dialogs, bottom bars), pinning them to the page instead of the viewport. */
 .app-main > :where(div, main, section) {
-  animation: page-settle .22s ease-out both;
+  animation: page-settle .22s ease-out backwards;
 }
 
+/* No isolation/z-index here: a stacking context would trap page dialogs
+   (z-50/z-100) beneath the sticky site header (z-30). */
 .workspace-page {
   width: 100%;
-  isolation: isolate;
 }
 
 .workspace-header {
@@ -124,17 +241,20 @@
 .workspace-surface {
   border: 1px solid var(--line);
   background: var(--surface-raised);
-  box-shadow: 0 12px 32px -28px rgb(69 26 3 / .55);
+  box-shadow: var(--shadow-soft);
 }
 
-.app-main :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
-  min-height: 2.75rem;
-  color: #261C14;
-}
+/* Đặt trong layer base để lớp tiện ích (vd. ô LaTeX nền tối dùng text-slate-100) ghi đè được. */
+@layer base {
+  .app-main :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+    min-height: 2.75rem;
+    color: #101828;
+  }
 
-.app-main :where(input, textarea, select):disabled {
-  cursor: not-allowed;
-  opacity: .66;
+  .app-main :where(input, textarea, select):disabled {
+    cursor: not-allowed;
+    opacity: .66;
+  }
 }
 
 .app-main :where(table) {
@@ -186,7 +306,8 @@ body {
    glyphs and keeps Vietnamese prose, symbols and equations on one baseline. */
 .exam-reading {
   font-family: var(--font-stix-two-text), "Times New Roman", serif;
-  font-size: clamp(1rem, .35vw + .92rem, 1.125rem);
+  /* --exam-scale: cỡ chữ đề chọn ở trang Tài khoản (AuthContext). */
+  font-size: calc(clamp(1rem, .35vw + .92rem, 1.125rem) * var(--exam-scale, 1));
   line-height: 1.5;
   text-rendering: optimizeLegibility;
 }
@@ -214,7 +335,7 @@ body {
 }
 
 .exam-true-false {
-  font-size: clamp(.82rem, .25vw + .78rem, .95rem);
+  font-size: calc(clamp(.82rem, .25vw + .78rem, .95rem) * var(--exam-scale, 1));
 }
 
 @media (orientation: portrait) {
@@ -227,7 +348,7 @@ body {
 
 @media (orientation: landscape) and (max-height: 760px) {
   .quiz-question-shell { padding: .875rem; }
-  .exam-reading { font-size: clamp(.9rem, 1.8vh, 1rem); line-height: 1.38; }
+  .exam-reading { font-size: calc(clamp(.9rem, 1.8vh, 1rem) * var(--exam-scale, 1)); line-height: 1.38; }
   .exam-question-visual { gap: .75rem; margin-bottom: .75rem; }
   .exam-figure img,
   .exam-figure svg,
@@ -236,3 +357,16 @@ body {
   }
   .exam-reading :where(button) { padding-top: .55rem; padding-bottom: .55rem; }
 }
+
+/* ── Exam & result screens ─────────────────────────────────────────────── */
+.result-pop { animation: result-pop .7s cubic-bezier(.2,.9,.3,1.2) both; }
+.result-rise { animation: edu-rise .7s cubic-bezier(.2,.8,.2,1) both; }
+.result-confetti { animation: result-confetti linear infinite; opacity: 0; }
+.quiz-option-enter { animation: edu-rise .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes result-pop { from { opacity: 0; transform: scale(.94) translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes result-confetti {
+  0% { opacity: 0; transform: translate3d(0, -20px, 0) rotate(0deg); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(30px, 420px, 0) rotate(540deg); }
+}
+@media (prefers-reduced-motion: reduce) { .result-confetti { display: none; } }

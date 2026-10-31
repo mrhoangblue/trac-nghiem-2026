@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
+import { useStudentMode } from "@/lib/StudentModeContext";
 const LessonDiscussion = dynamic(() => import("@/components/classroom/LessonDiscussion"), { loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang tải nội dung…</p> });
 const ClassActivityHub = dynamic(() => import("@/components/classroom/ClassActivityHub"), { loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang tải nội dung…</p> });
 import ClassTabs from "@/components/classroom/ClassTabs";
@@ -18,6 +19,9 @@ import type {
   ClassResourceSource,
   ClassResourceType,
 } from "@/utils/classroomTypes";
+import StateIcon from "@/components/StateIcon";
+import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, ListChecks, Loader2, Lock, MessagesSquare, PanelLeftClose, PanelLeftOpen, Pencil, PlayCircle, Plus, Presentation, Trash2, Trophy, type LucideIcon } from "lucide-react";
+const PdfViewer = dynamic(() => import("@/components/classroom/PdfViewer"), { ssr: false, loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang mở tài liệu…</p> });
 
 interface CourseView {
   id: string;
@@ -125,10 +129,10 @@ const STATUS_META: Record<ClassExamStatus, { label: string; classes: string; ord
   closed: { label: "Đã đóng", classes: "bg-gray-100 text-gray-600", order: 2 },
 };
 
-const RESOURCE_META: Record<ClassResourceType, { label: string; icon: string }> = {
-  pdf: { label: "PDF / tài liệu", icon: "📄" },
-  video: { label: "Video", icon: "▶️" },
-  slides: { label: "PPTX / Slides", icon: "📊" },
+const RESOURCE_META: Record<ClassResourceType, { label: string; icon: LucideIcon }> = {
+  pdf: { label: "PDF / tài liệu", icon: FileText },
+  video: { label: "Video", icon: PlayCircle },
+  slides: { label: "PPTX / Slides", icon: Presentation },
 };
 
 function resourceExtension(resource: ClassCourseResource): string {
@@ -136,7 +140,19 @@ function resourceExtension(resource: ClassCourseResource): string {
   return candidate.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() ?? "";
 }
 
-function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCourseResource; fillViewport?: boolean }) {
+const DESKTOP_QUERY = "(min-width: 1024px)";
+
+function subscribeDesktop(callback: () => void) {
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function useIsDesktop(): boolean {
+  return useSyncExternalStore(subscribeDesktop, () => window.matchMedia(DESKTOP_QUERY).matches, () => false);
+}
+
+function ResourceViewer({ resource, fillViewport = false, contained = false }: { resource: ClassCourseResource; fillViewport?: boolean; contained?: boolean }) {
   const extension = resourceExtension(resource);
   const contentType = resource.contentType?.toLowerCase() ?? "";
   const isImage = contentType.startsWith("image/")
@@ -155,16 +171,8 @@ function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCou
   }
 
   if (isPdf) {
-    return (
-      <iframe
-        src={`${resource.embedUrl}#toolbar=1&navpanes=0&view=FitH`}
-        title={resource.title}
-        className={fillViewport ? "h-[68dvh] min-h-[560px] w-full bg-white lg:h-full lg:min-h-0" : "h-[620px] w-full bg-white sm:h-[780px]"}
-        loading="lazy"
-        allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin"
-      />
-    );
+    // pdf.js hiển thị mọi trang liền mạch, vừa chiều ngang; iframe PDF không cuộn được trên iOS và không hiện trên Android.
+    return <PdfViewer url={resource.embedUrl} title={resource.title} contained={fillViewport && contained} />;
   }
 
   if (isOffice) {
@@ -185,7 +193,9 @@ function ResourceViewer({ resource, fillViewport = false }: { resource: ClassCou
     <iframe
       src={resource.embedUrl}
       title={resource.title}
-      className={fillViewport ? "h-[62dvh] min-h-[480px] w-full lg:h-full lg:min-h-0" : "h-[520px] w-full sm:h-[680px]"}
+      className={resource.type === "video"
+        ? `aspect-video w-full bg-black ${fillViewport ? "lg:aspect-auto lg:h-full" : ""}`
+        : fillViewport ? "h-[62dvh] min-h-[480px] w-full lg:h-full lg:min-h-0" : "h-[520px] w-full sm:h-[680px]"}
       loading="lazy"
       allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
       allowFullScreen
@@ -237,8 +247,16 @@ export default function ClassLearningContent({
   management,
 }: Props) {
   const { user } = useAuth();
+  const { isStudentMode } = useStudentMode();
   const router = useRouter();
-  const [data, setData] = useState<ContentResponse | null>(null);
+  const [rawData, setData] = useState<ContentResponse | null>(null);
+  // Giáo viên bật Chế độ học sinh ở trang lớp của học sinh: hiện đúng như học
+  // sinh (ẩn khóa học nháp, khóa bài theo thứ tự) và chỉ giữ tiến độ tạm thời.
+  const previewAsStudent = !teacherMode && isStudentMode && rawData?.viewerRole === "teacher";
+  const data = useMemo<ContentResponse | null>(() => {
+    if (!rawData || !previewAsStudent) return rawData;
+    return { ...rawData, viewerRole: "student", courses: rawData.courses.filter((course) => course.published !== false) };
+  }, [rawData, previewAsStudent]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingResource, setUploadingResource] = useState(false);
@@ -252,6 +270,31 @@ export default function ClassLearningContent({
   const [examFilter, setExamFilter] = useState<"all" | ClassExamStatus>("all");
   const [examSort, setExamSort] = useState<"status" | "newest" | "oldest">("status");
   const [curriculumOpen, setCurriculumOpen] = useState(true);
+  const [mobileListOpen, setMobileListOpen] = useState(false);
+  const curriculumScrollRef = useRef<HTMLDivElement>(null);
+  const isDesktop = useIsDesktop();
+
+  // Trên điện thoại, đổi nội dung thì đưa tài liệu lên đầu màn hình thay vì để học sinh tự cuộn tìm.
+  const revealViewer = useCallback(() => {
+    if (window.matchMedia(DESKTOP_QUERY).matches) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const viewer = document.getElementById("course-viewer");
+      if (!viewer) return;
+      window.scrollTo({ top: viewer.getBoundingClientRect().top + window.scrollY - 76, behavior: "smooth" });
+    }));
+  }, []);
+
+  const selectResource = useCallback((resourceId: string) => {
+    setActiveResourceId(resourceId);
+    setMobileListOpen(false);
+    revealViewer();
+  }, [revealViewer]);
+
+  useEffect(() => {
+    if (!activeResourceId) return;
+    const row = curriculumScrollRef.current?.querySelector<HTMLElement>(`[data-resource="${activeResourceId}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [activeResourceId]);
 
   const loadContent = useCallback(async () => {
     if (!user) return;
@@ -589,6 +632,16 @@ export default function ClassLearningContent({
 
   const completeResource = async (course: CourseView, resource: ClassCourseResource) => {
     if (!user) return;
+    if (previewAsStudent) {
+      const resources = flattenCourseResources(course.lessons);
+      const currentIndex = resources.findIndex((item) => item.id === resource.id);
+      setData((previous) => previous && {
+        ...previous,
+        progress: { ...previous.progress, [course.id]: [...new Set([...(previous.progress[course.id] ?? []), resource.id])] },
+      });
+      setActiveResourceId(resources[currentIndex + 1]?.id ?? resource.id);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -765,7 +818,7 @@ export default function ClassLearningContent({
 
         {!courseId && (data.courses.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-            <div className="text-4xl">📚</div>
+            <StateIcon icon="book" />
             <p className="mt-3 font-bold text-gray-700">Chưa có khóa học nào</p>
             <p className="mt-1 text-sm text-gray-400">{canEdit ? "Hãy tạo khóa học đầu tiên và thêm tài liệu cho học sinh." : "Giáo viên chưa xuất bản nội dung học tập."}</p>
           </div>
@@ -780,30 +833,31 @@ export default function ClassLearningContent({
                   ? `/teacher/classes/${classId}/courses/${course.id}`
                   : `/student/classes/${classId}/courses/${course.id}`;
                 return (
-                  <article key={course.id} className={`group overflow-hidden rounded-3xl border bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${selectedCourseId === course.id ? "border-brand-400 ring-2 ring-brand-100" : "border-gray-200"}`}>
+                  <article key={course.id} className={`group overflow-hidden rounded-3xl border bg-white shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[var(--shadow-lift)] ${selectedCourseId === course.id ? "border-brand-400 ring-2 ring-brand-100" : "border-gray-200"}`}>
                     <div
-                      className="relative h-44 bg-gradient-to-br from-brand-800 via-brand-600 to-sunset bg-cover bg-center"
-                      style={course.coverImageUrl ? { backgroundImage: `linear-gradient(180deg, transparent 30%, rgba(69,35,15,.68)), url(${JSON.stringify(course.coverImageUrl)})` } : undefined}
+                      className="relative h-44 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 bg-cover bg-center"
+                      style={course.coverImageUrl ? { backgroundImage: `linear-gradient(180deg, transparent 30%, rgba(30,27,75,.62)), url(${JSON.stringify(course.coverImageUrl)})` } : undefined}
                     >
+                      {!course.coverImageUrl && <><div aria-hidden="true" className="edu-dots absolute inset-0 opacity-50 mix-blend-overlay" /><BookOpen aria-hidden="true" size={96} strokeWidth={1.25} className="absolute -right-3 -top-3 text-white/15 transition-transform duration-500 group-hover:rotate-[-6deg] group-hover:scale-110" /></>}
                       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white">
-                        <span className="rounded-full bg-black/30 px-3 py-1 text-xs font-bold backdrop-blur-sm">{course.lessonCount ?? course.lessons.length} bài học</span>
+                        <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold ring-1 ring-white/30 backdrop-blur-md">{course.lessonCount ?? course.lessons.length} bài học</span>
                         {canEdit && <span className={`rounded-full px-3 py-1 text-xs font-bold backdrop-blur-sm ${course.published ? "bg-success-600/90" : "bg-gray-700/90"}`}>{course.published ? "Đã xuất bản" : "Bản nháp"}</span>}
                       </div>
                     </div>
                     <div className="p-5">
-                      <h3 className="line-clamp-2 text-xl font-extrabold leading-7 text-gray-900">{course.title}</h3>
+                      <h3 className="line-clamp-2 font-display text-xl font-bold leading-7 text-gray-900 transition-colors group-hover:text-brand-700">{course.title}</h3>
                       <p className="mt-2 line-clamp-2 min-h-12 text-sm leading-6 text-gray-500">{course.description || "Lộ trình học tập được giáo viên thiết kế cho lớp."}</p>
                       {isStudentViewer && (
                         <div className="mt-4">
                           <div className="mb-1.5 flex justify-between text-xs font-semibold text-gray-500"><span>Tiến độ</span><span>{progressPercent}%</span></div>
-                          <div className="h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-gradient-to-r from-brand-600 to-sunset transition-all" style={{ width: `${progressPercent}%` }} /></div>
+                          <div className="h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-700" style={{ width: `${progressPercent}%` }} /></div>
                         </div>
                       )}
                       <div className="mt-5 flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
                         <span className="text-xs text-gray-400">{resourceCount} tài nguyên</span>
                         <div className="flex gap-2">
                           {canEdit && <button type="button" onClick={() => setCourseDraft({ id: course.id, title: course.title, description: course.description, coverImageUrl: course.coverImageUrl, coverImageKey: course.coverImageKey, published: course.published })} className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200">Sửa</button>}
-                          <Link href={courseHref} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700">{canEdit ? "Quản lý" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu"}</Link>
+                          <Link href={courseHref} className="edu-btn inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-white">{canEdit ? "Quản lý" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu"}</Link>
                         </div>
                       </div>
                     </div>
@@ -821,96 +875,209 @@ export default function ClassLearningContent({
               const progressPercent = resources.length ? Math.round((completedCount / resources.length) * 100) : 0;
               const activeIndex = resources.findIndex((resource) => resource.id === activeResource?.id);
               const activeCompleted = activeResource ? completedIds.has(activeResource.id) : false;
-              return (
-                <>
-                <div className={`${courseId ? `lg:grid lg:h-[calc(100dvh-5rem)] lg:min-h-[860px] ${curriculumOpen ? "lg:grid-cols-[18.5rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"} lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden` : "mt-8"} overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-xl`}>
-                  <div className={`relative overflow-hidden bg-[linear-gradient(120deg,#351c12_0%,#61341f_58%,#8b542d_100%)] px-6 py-5 text-white sm:px-8 ${courseId && curriculumOpen ? "lg:col-span-2" : "lg:col-span-1"} lg:row-start-1 lg:py-4`}>
-                    <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[54px] border-white/[0.04]" />
-                    <div className="pointer-events-none absolute bottom-0 right-[22%] h-32 w-48 skew-x-[-24deg] border-l border-t border-brand-200/10" />
-                    <div className="relative">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        {courseId ? <Link href={teacherMode ? `/teacher/classes/${classId}` : `/student/classes/${classId}`} className="inline-flex text-xs font-bold text-brand-100 hover:text-white">← Quay lại lớp học</Link> : <span />}
-                        <div className="flex flex-wrap items-center gap-2">
-                          {courseId && <button type="button" onClick={() => setCurriculumOpen((current) => !current)} className="hidden rounded-xl bg-white/10 px-3.5 py-2 text-xs font-bold ring-1 ring-white/15 hover:bg-white/20 lg:inline-flex">{curriculumOpen ? "Thu gọn nội dung" : "Mở nội dung khóa học"}</button>}
-                          {canEdit && <><button onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, coverImageKey: selectedCourse.coverImageKey, published: selectedCourse.published })} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25">Sửa khóa học</button><button disabled={saving} onClick={() => void deleteCourse(selectedCourse)} className="rounded-xl bg-danger-500/80 px-4 py-2 text-sm font-bold hover:bg-danger-500">Xóa</button></>}
-                        </div>
-                      </div>
-                      <div className="mt-4 max-w-4xl lg:mt-3">
-                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#f4d58b]">Lộ trình học tuần tự</p>
-                        <h3 className="mt-1.5 text-2xl font-extrabold leading-tight">{selectedCourse.title}</h3>
-                        {selectedCourse.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-brand-100">{selectedCourse.description}</p>}
-                      </div>
-                    </div>
-                    {isStudentViewer && (
-                      <div className="relative mt-3 max-w-xl">
-                        <div className="mb-2 flex justify-between text-xs font-bold text-brand-100"><span>{completedCount}/{resources.length} nội dung đã hoàn thành</span><span>{progressPercent}%</span></div>
-                        <div className="h-2.5 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-sunset transition-all" style={{ width: `${progressPercent}%` }} /></div>
-                      </div>
-                    )}
-                  </div>
+              const prevResource = activeIndex > 0 ? resources[activeIndex - 1] : null;
+              const nextResource = activeIndex >= 0 ? resources[activeIndex + 1] ?? null : null;
+              const nextUnlocked = Boolean(nextResource) && (!isStudentViewer || activeCompleted);
+              const showCurriculumDesktop = !courseId || curriculumOpen;
+              const backHref = teacherMode ? `/teacher/classes/${classId}` : `/student/classes/${classId}`;
+              const ActiveIcon = activeResource ? RESOURCE_META[activeResource.type].icon : FileText;
+              const iconButton = "flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-white hover:text-gray-900 disabled:pointer-events-none disabled:opacity-30";
 
-                  {activeResource && (
-                    <div className={`border-b border-gray-200 bg-[#fffdf9] p-5 sm:p-7 ${curriculumOpen ? "lg:col-start-2" : "lg:col-start-1"} lg:row-start-2 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:p-4`}>
-                      <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Nội dung {activeIndex + 1}/{resources.length} · {RESOURCE_META[activeResource.type].label}</p>
-                          <h4 className="mt-1 text-xl font-extrabold text-gray-900">{activeResource.title}</h4>
-                          {activeResource.description && <p className="mt-2 text-sm leading-6 text-gray-500">{activeResource.description}</p>}
-                        </div>
-                        {activeCompleted && <span className="rounded-full bg-success-100 px-3 py-1.5 text-xs font-bold text-success-700">✓ Đã hoàn thành</span>}
-                      </div>
-                      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-inner lg:min-h-0 lg:flex-1">
-                        {activeResource.embedUrl ? (
-                          <ResourceViewer resource={activeResource} fillViewport={Boolean(courseId)} />
-                        ) : (
-                          <div className="flex h-64 flex-col items-center justify-center gap-3 px-5 text-center text-gray-500"><span className="text-3xl">🔒</span><p className="text-sm font-semibold">Hoàn thành nội dung trước để mở tài liệu này.</p></div>
-                        )}
-                      </div>
-                      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
-                        {activeResource.url ? <a href={activeResource.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-brand-700 hover:underline">Mở liên kết gốc ↗</a> : <span />}
-                        {isStudentViewer && (
-                          <button type="button" disabled={saving || activeCompleted || !activeResource.embedUrl} onClick={() => void completeResource(selectedCourse, activeResource)} className="rounded-xl bg-gradient-to-r from-brand-700 to-brand-600 px-5 py-3 text-sm font-bold text-white shadow-sm disabled:bg-none disabled:bg-success-600 disabled:opacity-80">
-                            {activeCompleted ? "✓ Đã học xong" : saving ? "Đang lưu tiến độ…" : activeIndex === resources.length - 1 ? "Hoàn thành khóa học" : "Đã học xong · Mở nội dung tiếp theo →"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
+              const curriculum = (
+                <div className="space-y-3">
+                  {canEdit && (
+                    <button type="button" onClick={() => setLessonDraft({ courseId: selectedCourse.id, title: "", description: "" })} className="edu-btn inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white">
+                      <Plus size={16} aria-hidden="true" />Thêm bài học
+                    </button>
                   )}
-
-                  <div className={`space-y-4 p-5 sm:p-7 ${courseId ? `${curriculumOpen ? `${activeResource ? "lg:col-start-1 lg:row-start-2 lg:border-r" : "lg:col-span-2 lg:row-start-2"}` : "lg:hidden"} lg:overflow-y-auto lg:overscroll-contain` : ""}`}>
-                    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Chương trình học</p><h4 className="mt-1 text-xl font-extrabold text-gray-900">Nội dung khóa học</h4></div>{canEdit && <button type="button" onClick={() => setLessonDraft({ courseId: selectedCourse.id, title: "", description: "" })} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white">+ Bài học</button>}</div>
-                    {selectedCourse.lessons.map((lesson, lessonIndex) => (
-                      <section key={lesson.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/60">
-                        <div className="border-b border-gray-200 px-4 py-4 sm:px-5">
-                          <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600">Bài học {lessonIndex + 1}</p><h5 className="mt-1 text-base font-extrabold leading-6 text-gray-900">{lesson.title}</h5>{lesson.description && <p className="mt-1 text-sm leading-6 text-gray-500">{lesson.description}</p>}</div>
-                          {canEdit && <div className="mt-3 flex flex-wrap gap-1.5 border-t border-gray-200/80 pt-3"><button aria-label="Đưa bài học lên" disabled={saving || lessonIndex === 0} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "up")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold shadow-sm disabled:opacity-30">↑</button><button aria-label="Đưa bài học xuống" disabled={saving || lessonIndex === selectedCourse.lessons.length - 1} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "down")} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold shadow-sm disabled:opacity-30">↓</button><button onClick={() => setLessonDraft({ courseId: selectedCourse.id, lessonId: lesson.id, title: lesson.title, description: lesson.description ?? "" })} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700 shadow-sm">Sửa</button><button onClick={() => void lessonAction(selectedCourse.id, lesson, "delete_lesson")} className="rounded-lg bg-danger-50 px-3 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
+                  {selectedCourse.lessons.map((lesson, lessonIndex) => {
+                    const lessonDone = lesson.resources.filter((resource) => completedIds.has(resource.id)).length;
+                    const lessonComplete = lesson.resources.length > 0 && lessonDone === lesson.resources.length;
+                    return (
+                      <section key={lesson.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                        <div className="flex items-start gap-3 bg-gray-50/80 px-3.5 py-3">
+                          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-display text-xs font-bold ${lessonComplete ? "bg-emerald-100 text-emerald-700" : "bg-brand-100 text-brand-700"}`}>{lessonComplete ? <Check size={14} aria-hidden="true" /> : lessonIndex + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <h5 className="text-sm font-bold leading-5 text-gray-900">{lesson.title}</h5>
+                            {lesson.description && <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-gray-500">{lesson.description}</p>}
+                          </div>
+                          {isStudentViewer && lesson.resources.length > 0 && <span className={`shrink-0 rounded-full px-2 py-0.5 font-display text-[11px] font-bold tabular-nums ${lessonComplete ? "bg-emerald-100 text-emerald-700" : "bg-white text-gray-500 ring-1 ring-gray-200"}`}>{lessonDone}/{lesson.resources.length}</span>}
                         </div>
-                        <div className="divide-y divide-gray-100 bg-white">
+                        {canEdit && (
+                          <div className="flex items-center gap-0.5 border-t border-gray-100 bg-gray-50/80 px-2.5 py-1">
+                            <button type="button" aria-label="Đưa bài học lên" title="Đưa lên" disabled={saving || lessonIndex === 0} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "up")} className={iconButton}><ArrowUp size={15} aria-hidden="true" /></button>
+                            <button type="button" aria-label="Đưa bài học xuống" title="Đưa xuống" disabled={saving || lessonIndex === selectedCourse.lessons.length - 1} onClick={() => void lessonAction(selectedCourse.id, lesson, "move_lesson", "down")} className={iconButton}><ArrowDown size={15} aria-hidden="true" /></button>
+                            <button type="button" aria-label="Sửa bài học" title="Sửa bài học" onClick={() => setLessonDraft({ courseId: selectedCourse.id, lessonId: lesson.id, title: lesson.title, description: lesson.description ?? "" })} className={iconButton}><Pencil size={14} aria-hidden="true" /></button>
+                            <button type="button" aria-label="Xóa bài học" title="Xóa bài học" onClick={() => void lessonAction(selectedCourse.id, lesson, "delete_lesson")} className={`${iconButton} hover:!text-danger-600`}><Trash2 size={14} aria-hidden="true" /></button>
+                          </div>
+                        )}
+                        <ol className="divide-y divide-gray-100">
                           {lesson.resources.map((resource, resourceIndex) => {
                             const globalIndex = resources.findIndex((item) => item.id === resource.id);
                             const completed = completedIds.has(resource.id);
                             const locked = isStudentViewer && !resources.slice(0, globalIndex).every((item) => completedIds.has(item.id));
                             const active = activeResourceId === resource.id;
+                            const Icon = completed ? Check : locked ? Lock : RESOURCE_META[resource.type].icon;
                             return (
-                              <div key={resource.id} className={`px-4 py-3.5 sm:px-5 ${active ? "bg-brand-50" : ""}`}>
-                                <div className="flex items-start gap-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${completed ? "bg-success-100 text-success-700" : locked ? "bg-gray-100 text-gray-400" : "bg-brand-100 text-brand-700"}`}>{completed ? "✓" : locked ? "🔒" : RESOURCE_META[resource.type].icon}</span><button type="button" disabled={locked} onClick={() => setActiveResourceId(resource.id)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"><span className={`block text-sm font-bold leading-5 ${locked ? "text-gray-400" : "text-gray-800"}`}>{globalIndex + 1}. {resource.title}</span><span className="mt-1 block text-xs leading-5 text-gray-400">{locked ? "Hoàn thành nội dung trước để mở khóa" : `${RESOURCE_META[resource.type].label} · ${resource.provider} · ${resource.source === "upload" || resource.storageKey ? "R2" : "Liên kết"}`}</span></button></div>
-                                {canEdit && <div className="mt-3 flex flex-wrap gap-1.5 pl-12"><button aria-label="Đưa nội dung lên" disabled={saving || resourceIndex === 0} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "up")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↑</button><button aria-label="Đưa nội dung xuống" disabled={saving || resourceIndex === lesson.resources.length - 1} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "down")} className="rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-bold disabled:opacity-30">↓</button><button onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id, resource))} className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700">Sửa</button><button onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "delete_resource")} className="rounded-lg bg-danger-50 px-2.5 py-1.5 text-xs font-bold text-danger-600">Xóa</button></div>}
-                              </div>
+                              <li key={resource.id} data-resource={resource.id} className={`group relative transition-colors ${active ? "bg-gradient-to-r from-brand-50 to-violet-50/40" : locked ? "" : "hover:bg-gray-50"}`}>
+                                {active && <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" />}
+                                <button
+                                  type="button"
+                                  disabled={locked}
+                                  aria-current={active ? "step" : undefined}
+                                  title={locked ? "Hoàn thành nội dung trước để mở khóa" : undefined}
+                                  onClick={() => selectResource(resource.id)}
+                                  className="flex min-h-14 w-full items-center gap-3 px-3.5 py-2.5 text-left disabled:cursor-not-allowed"
+                                >
+                                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${completed ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-sm shadow-emerald-500/30" : locked ? "bg-gray-100 text-gray-400" : active ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm shadow-indigo-500/30" : "bg-brand-50 text-brand-600 ring-1 ring-brand-100"}`}><Icon size={15} aria-hidden="true" /></span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={`line-clamp-2 text-sm leading-5 ${active ? "font-bold text-brand-900" : locked ? "font-medium text-gray-400" : "font-semibold text-gray-800"}`}>{resource.title}</span>
+                                    <span className="mt-0.5 block truncate text-xs text-gray-400">
+                                      {locked ? "Đang khóa" : `${globalIndex + 1}/${resources.length} · ${RESOURCE_META[resource.type].label}${canEdit ? ` · ${resource.source === "upload" || resource.storageKey ? "R2" : "Liên kết"}` : ""}`}
+                                    </span>
+                                  </span>
+                                </button>
+                                {canEdit && (
+                                  <div className="-mt-1 flex items-center gap-0.5 pb-1.5 pl-[3.6rem] pr-3">
+                                    <button type="button" aria-label="Đưa nội dung lên" title="Đưa lên" disabled={saving || resourceIndex === 0} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "up")} className={iconButton}><ArrowUp size={14} aria-hidden="true" /></button>
+                                    <button type="button" aria-label="Đưa nội dung xuống" title="Đưa xuống" disabled={saving || resourceIndex === lesson.resources.length - 1} onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "move_resource", "down")} className={iconButton}><ArrowDown size={14} aria-hidden="true" /></button>
+                                    <button type="button" aria-label="Sửa nội dung" title="Sửa nội dung" onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id, resource))} className={iconButton}><Pencil size={13} aria-hidden="true" /></button>
+                                    <button type="button" aria-label="Xóa nội dung" title="Xóa nội dung" onClick={() => void resourceAction(selectedCourse.id, lesson.id, resource.id, "delete_resource")} className={`${iconButton} hover:!text-danger-600`}><Trash2 size={13} aria-hidden="true" /></button>
+                                  </div>
+                                )}
+                              </li>
                             );
                           })}
-                          {lesson.resources.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">Bài học chưa có tài nguyên.</p>}
-                          {canEdit && <button type="button" onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id))} className="m-3 rounded-xl border-2 border-dashed border-brand-200 px-4 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-50">+ Thêm nội dung</button>}
+                        </ol>
+                        {lesson.resources.length === 0 && <p className="px-4 py-3 text-xs text-gray-400">Bài học chưa có nội dung.</p>}
+                        {canEdit && (
+                          <button type="button" onClick={() => setResourceDraft(resourceToDraft(selectedCourse.id, lesson.id))} className="flex min-h-10 w-full items-center justify-center gap-1.5 border-t border-dashed border-gray-200 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                            <Plus size={14} aria-hidden="true" />Thêm nội dung
+                          </button>
+                        )}
+                      </section>
+                    );
+                  })}
+                  {selectedCourse.lessons.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">Khóa học chưa có bài học.</div>}
+                </div>
+              );
+
+              return (
+                <>
+                <div className={`${courseId ? "lg:flex lg:h-[calc(100dvh-6.5rem)] lg:min-h-[620px] lg:flex-col" : "mt-8"} space-y-3 lg:space-y-4`}>
+                  <header className="relative shrink-0 overflow-hidden rounded-3xl bg-[linear-gradient(120deg,#1E1B4B_0%,#3730A3_55%,#6D28D9_100%)] px-4 py-4 text-white shadow-[var(--shadow-soft)] sm:px-6">
+                    <div aria-hidden="true" className="edu-dots pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay" />
+                    <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-60 w-60 rounded-full bg-fuchsia-400/25 blur-3xl" />
+                    <div className="relative flex flex-wrap items-center gap-x-5 gap-y-3">
+                      {courseId && (
+                        <Link href={backHref} aria-label="Quay lại lớp học" title="Quay lại lớp học" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20">
+                          <ArrowLeft size={18} aria-hidden="true" />
+                        </Link>
+                      )}
+                      <div className="order-last min-w-0 basis-full sm:order-none sm:basis-0 sm:flex-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200">{selectedCourse.lessons.length} bài học · {resources.length} nội dung</p>
+                        <h3 className="mt-0.5 truncate font-display text-xl font-extrabold tracking-tight sm:text-2xl">{selectedCourse.title}</h3>
+                        {selectedCourse.description && <p className="mt-1 hidden text-sm text-indigo-100/80 sm:line-clamp-1">{selectedCourse.description}</p>}
+                      </div>
+                      {isStudentViewer && (
+                        <div className="order-last flex w-full items-center gap-3 sm:order-none sm:w-64">
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1.5 flex justify-between text-xs font-semibold text-indigo-100"><span>{completedCount}/{resources.length} đã học</span><span className="font-display tabular-nums">{progressPercent}%</span></div>
+                            <div className="h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-teal-300 shadow-[0_0_12px_rgb(110_231_183/.6)] transition-all duration-700" style={{ width: `${progressPercent}%` }} /></div>
+                          </div>
+                        </div>
+                      )}
+                      {canEdit && (
+                        <div className="ml-auto flex gap-2 sm:ml-0">
+                          <button type="button" onClick={() => setCourseDraft({ id: selectedCourse.id, title: selectedCourse.title, description: selectedCourse.description, coverImageUrl: selectedCourse.coverImageUrl, coverImageKey: selectedCourse.coverImageKey, published: selectedCourse.published })} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-white/15 px-3.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white/25"><Pencil size={15} aria-hidden="true" />Sửa khóa học</button>
+                          <button type="button" disabled={saving} onClick={() => void deleteCourse(selectedCourse)} aria-label="Xóa khóa học" title="Xóa khóa học" className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/80 transition hover:bg-rose-500"><Trash2 size={16} aria-hidden="true" /></button>
+                        </div>
+                      )}
+                    </div>
+                  </header>
+
+                  <div className={`gap-4 lg:grid lg:min-h-0 lg:flex-1 ${showCurriculumDesktop ? "lg:grid-cols-[20rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}>
+                    {/* Mobile: danh sách thu gọn để tài liệu luôn ở trên cùng */}
+                    <div className="mb-3 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[var(--shadow-soft)] lg:hidden">
+                      <button type="button" aria-expanded={mobileListOpen} onClick={() => setMobileListOpen((open) => !open)} className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><ListChecks size={18} aria-hidden="true" /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold text-gray-500">Nội dung khóa học · {activeIndex + 1}/{resources.length}</span>
+                          <span className="block truncate text-sm font-bold text-gray-900">{activeResource?.title ?? "Chọn nội dung để học"}</span>
+                        </span>
+                        <ChevronDown size={18} aria-hidden="true" className={`shrink-0 text-gray-400 transition-transform ${mobileListOpen ? "rotate-180" : ""}`} />
+                      </button>
+                      {mobileListOpen && <div className="max-h-[65dvh] overflow-y-auto overscroll-contain border-t border-gray-100 bg-gray-50/60 p-3">{curriculum}</div>}
+                    </div>
+
+                    {showCurriculumDesktop && (
+                      <aside aria-label="Nội dung khóa học" className="hidden min-h-0 flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white/80 shadow-[var(--shadow-soft)] backdrop-blur lg:flex">
+                        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
+                          <h4 className="font-display text-sm font-bold text-gray-900">Nội dung khóa học</h4>
+                          {courseId && <button type="button" onClick={() => setCurriculumOpen(false)} aria-label="Thu gọn danh sách" title="Thu gọn danh sách" className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100"><PanelLeftClose size={16} aria-hidden="true" /></button>}
+                        </div>
+                        <div ref={curriculumScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">{curriculum}</div>
+                      </aside>
+                    )}
+
+                    {activeResource ? (
+                      <section id="course-viewer" aria-label={activeResource.title} className="scroll-mt-20 rounded-3xl border border-gray-200 bg-white shadow-[var(--shadow-soft)] lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
+                        <div className="flex shrink-0 items-center gap-3 px-4 py-3 sm:px-5">
+                          {courseId && !curriculumOpen && (
+                            <button type="button" onClick={() => setCurriculumOpen(true)} aria-label="Mở danh sách nội dung" title="Mở danh sách nội dung" className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200 lg:flex"><PanelLeftOpen size={17} aria-hidden="true" /></button>
+                          )}
+                          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/25 sm:flex"><ActiveIcon size={18} aria-hidden="true" /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-gray-500">{activeLesson?.title ?? "Nội dung"} · {activeIndex + 1}/{resources.length}</p>
+                            <h4 className="line-clamp-2 font-display text-base font-bold leading-6 text-gray-900 sm:text-lg">{activeResource.title}</h4>
+                          </div>
+                          {activeCompleted && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200"><Check size={13} aria-hidden="true" /><span className="hidden sm:inline">Đã hoàn thành</span></span>}
+                        </div>
+                        {activeResource.description && <p className="-mt-1 shrink-0 px-4 pb-3 text-sm leading-6 text-gray-500 sm:px-5">{activeResource.description}</p>}
+
+                        <div className="border-y border-gray-200 bg-gray-100 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+                          {activeResource.embedUrl ? (
+                            <ResourceViewer key={activeResource.id} resource={activeResource} fillViewport={Boolean(courseId)} contained={isDesktop} />
+                          ) : (
+                            <div className="flex h-64 flex-col items-center justify-center gap-3 px-5 text-center text-gray-500"><StateIcon icon="lock" tone="muted" size="sm" /><p className="text-sm font-semibold">Hoàn thành nội dung trước để mở tài liệu này.</p></div>
+                          )}
+                        </div>
+
+                        <div className="sticky bottom-0 z-10 flex shrink-0 items-center gap-2 rounded-b-3xl border-t border-gray-100 bg-white/95 px-3 py-2.5 pb-[max(.625rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-5 lg:static lg:border-t-0">
+                          <button type="button" disabled={!prevResource} onClick={() => prevResource && selectResource(prevResource.id)} aria-label="Nội dung trước" className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 transition hover:border-brand-300 hover:text-brand-700 disabled:opacity-40">
+                            <ChevronLeft size={18} aria-hidden="true" /><span className="hidden sm:inline">Trước</span>
+                          </button>
+                          <span className="flex-1" />
+                          {isStudentViewer && !activeCompleted ? (
+                            <button type="button" disabled={saving || !activeResource.embedUrl} onClick={() => void completeResource(selectedCourse, activeResource).then(revealViewer)} className="edu-btn inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60 sm:px-5">
+                              {saving ? <Loader2 size={16} aria-hidden="true" className="animate-spin" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+                              <span>{saving ? "Đang lưu…" : nextResource ? "Đã học xong, học tiếp" : "Hoàn thành khóa học"}</span>
+                            </button>
+                          ) : nextResource ? (
+                            <button type="button" disabled={!nextUnlocked} onClick={() => selectResource(nextResource.id)} className="edu-btn inline-flex h-11 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 sm:px-5">
+                              Nội dung tiếp<ChevronRight size={18} aria-hidden="true" />
+                            </button>
+                          ) : isStudentViewer ? (
+                            <span className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-sm font-semibold text-white shadow-md shadow-emerald-500/25"><Trophy size={17} aria-hidden="true" />Đã hoàn thành khóa học</span>
+                          ) : null}
                         </div>
                       </section>
-                    ))}
-                    {selectedCourse.lessons.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">Khóa học chưa có bài học.</div>}
+                    ) : (
+                      <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+                        <StateIcon icon="book" tone="muted" size="sm" />
+                        {resources.length ? "Chọn một nội dung trong danh sách để bắt đầu." : canEdit ? "Thêm bài học và tài liệu đầu tiên cho khóa học." : "Giáo viên chưa thêm nội dung cho khóa học này."}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {activeLesson && activeResource && (
-                  <section className="mt-6 overflow-hidden rounded-[2rem] border border-brand-200 bg-white shadow-soft" aria-label={`Hỏi đáp về ${activeResource.title}`}>
-                    <div className="border-b border-brand-100 bg-gradient-to-r from-brand-50 to-white px-5 py-4 sm:px-7">
-                      <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-600">Trao đổi theo nội dung đang xem</p>
-                      <h4 className="mt-1 text-lg font-extrabold text-brand-950">Hỏi đáp · {activeResource.title}</h4>
+                  <section className="mt-6 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[var(--shadow-soft)]" aria-label={`Hỏi đáp về ${activeResource.title}`}>
+                    <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 text-white shadow-md shadow-sky-500/25"><MessagesSquare size={18} aria-hidden="true" /></span>
+                      <div className="min-w-0">
+                        <h4 className="font-display text-base font-bold text-gray-900">Hỏi đáp về nội dung này</h4>
+                        <p className="truncate text-xs text-gray-500">Chỗ nào chưa hiểu trong “{activeResource.title}”, hãy hỏi thầy và các bạn.</p>
+                      </div>
                     </div>
                     <LessonDiscussion
                       key={`${activeLesson.id}:${activeResource.id}`}
@@ -1031,7 +1198,7 @@ export default function ClassLearningContent({
                   })}
                   className={`rounded-2xl border-2 p-4 text-left transition ${resourceDraft.source === "link" ? "border-brand-500 bg-brand-50 shadow-sm" : "border-gray-200 bg-white hover:border-brand-200"}`}
                 >
-                  <span className="block font-extrabold text-gray-900">🔗 Dán link / Embed</span>
+                  <span className="block font-extrabold text-gray-900">Dán link / Embed</span>
                   <span className="mt-1 block text-xs leading-5 text-gray-500">Google Drive, YouTube, Vimeo, Google Slides hoặc URL công khai.</span>
                 </button>
               </div>

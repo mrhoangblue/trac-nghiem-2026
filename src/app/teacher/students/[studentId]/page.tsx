@@ -26,6 +26,8 @@ interface SubmissionDisplay {
   submittedAt: Timestamp | null;
   attemptForExam: number;
   scores: { total: number; p1: number; p2: number; p3: number };
+  /** Bài tự luận chưa chấm: tổng chỉ là tạm tính Phần I–III. */
+  essayPending?: boolean;
 }
 
 function Spinner() {
@@ -128,6 +130,7 @@ export default function TeacherStudentDetailPage() {
                 sd.scores && typeof sd.scores === "object"
                   ? (sd.scores as SubmissionDisplay["scores"])
                   : { total: 0, p1: 0, p2: 0, p3: 0 },
+              essayPending: sd.gradingStatus === "pending",
             };
           })
           .filter((s) => s.examId.length > 0);
@@ -178,6 +181,7 @@ export default function TeacherStudentDetailPage() {
             examTitle: s.examTitle || examTitles.get(s.examId) || "—",
             submittedAt: s.submittedAt,
             scores: s.scores,
+            essayPending: s.essayPending,
           }));
 
         // ── Debug logs (check browser console to trace failures) ───────────────
@@ -313,6 +317,7 @@ export default function TeacherStudentDetailPage() {
                             <span className="inline-flex px-2.5 py-0.5 rounded-full bg-success-50 text-success-700 text-xs font-extrabold border border-success-100">
                               {typeof r.scores.total === "number" ? r.scores.total : "—"}/10
                             </span>
+                            {r.essayPending && <span className="mt-1 block text-[10px] font-bold text-violet-700">Tạm tính · tự luận chờ chấm</span>}
                           </td>
                           <td className="px-4 py-3 align-middle text-gray-500 whitespace-nowrap text-xs">
                             {formatDateTime(r.submittedAt)}

@@ -13,6 +13,8 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { formatDateTime } from "@/utils/examTypes";
+import StateIcon from "@/components/StateIcon";
+import { FileCheck2, GraduationCap, Hourglass, TrendingUp, Trophy } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -24,7 +26,11 @@ interface Submission {
     p1: number;
     p2: number;
     p3: number;
+    /** Phần IV tự luận; null khi chưa chấm. */
+    p4?: number | null;
   };
+  /** "pending": bài tự luận chờ giáo viên chấm, chưa công bố điểm. */
+  gradingStatus?: "pending" | "graded" | null;
   /** True when submitted by a teacher in student-preview mode */
   isTeacherPreview?: boolean;
 }
@@ -59,6 +65,7 @@ export default function StudentHistoryPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const hasEssay = submissions.some((submission) => submission.gradingStatus);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +100,7 @@ export default function StudentHistoryPage() {
               submittedAt: d.submittedAt,
               scores: d.scores ?? { total: 0, p1: 0, p2: 0, p3: 0 },
               isTeacherPreview: d.isTeacherPreview === true,
+              gradingStatus: d.gradingStatus === "pending" || d.gradingStatus === "graded" ? d.gradingStatus : null,
             } as Submission;
           })
           // Sort client-side: mới nhất trước (tránh cần composite index)
@@ -121,7 +129,7 @@ export default function StudentHistoryPage() {
   if (!user) {
     return (
       <div className="max-w-md mx-auto px-4 py-24 text-center">
-        <div className="text-6xl mb-6">🔐</div>
+        <StateIcon icon="lock" className="mb-6" />
         <h2 className="text-2xl font-extrabold text-gray-800 mb-3">Cần đăng nhập</h2>
         <p className="text-gray-500 mb-8">
           Vui lòng đăng nhập để xem lịch sử bài làm của bạn.
@@ -162,12 +170,12 @@ export default function StudentHistoryPage() {
         <Spinner />
       ) : error ? (
         <div className="text-center py-16">
-          <div className="text-4xl mb-4">⚠️</div>
+          <StateIcon icon="alert" tone="danger" className="mb-4" />
           <p className="text-danger-500 font-medium">{error}</p>
         </div>
       ) : submissions.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
-          <div className="text-6xl mb-4">📭</div>
+          <StateIcon icon="inbox" className="mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">Chưa có bài nào</h2>
           <p className="text-gray-500 mb-8">Bạn chưa nộp bài thi nào. Hãy làm một bài ngay!</p>
           <Link
@@ -181,33 +189,29 @@ export default function StudentHistoryPage() {
         <>
           {/* Tổng kết nhanh — only counts real (non-preview) submissions */}
           {(() => {
-            const real = submissions.filter((s) => !s.isTeacherPreview);
+            // Bài chờ chấm tự luận chưa có điểm chính thức nên không tính vào thống kê.
+            const real = submissions.filter((s) => !s.isTeacherPreview && s.gradingStatus !== "pending");
             const preview = submissions.filter((s) => s.isTeacherPreview);
             return (
               <>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                    <p className="text-3xl font-extrabold text-brand-600">{real.length}</p>
-                    <p className="text-sm text-gray-500 mt-1">Bài đã nộp</p>
-                  </div>
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                    <p className="text-3xl font-extrabold text-success-600">
-                      {real.length > 0 ? Math.max(...real.map((s) => s.scores.total)) : "—"}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">Điểm cao nhất</p>
-                  </div>
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                    <p className="text-3xl font-extrabold text-brand-600">
-                      {real.length > 0
-                        ? (real.reduce((sum, s) => sum + s.scores.total, 0) / real.length).toFixed(1)
-                        : "—"}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">Điểm trung bình</p>
-                  </div>
+                <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {[
+                    { label: "Bài đã nộp", value: submissions.filter((s) => !s.isTeacherPreview).length, Icon: FileCheck2, gradient: "from-indigo-500 to-violet-500", shadow: "shadow-indigo-500/30" },
+                    { label: "Điểm cao nhất", value: real.length > 0 ? Math.max(...real.map((s) => s.scores.total)) : "—", Icon: Trophy, gradient: "from-amber-400 to-orange-500", shadow: "shadow-orange-500/30" },
+                    { label: "Điểm trung bình", value: real.length > 0 ? (real.reduce((sum, s) => sum + s.scores.total, 0) / real.length).toFixed(1) : "—", Icon: TrendingUp, gradient: "from-emerald-400 to-teal-500", shadow: "shadow-emerald-500/30" },
+                  ].map(({ label, value, Icon, gradient, shadow }) => (
+                    <div key={label} className="flex items-center gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
+                      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ${gradient} ${shadow}`}><Icon size={22} aria-hidden="true" /></span>
+                      <div>
+                        <p className="font-display text-3xl font-extrabold leading-none text-gray-900">{value}</p>
+                        <p className="mt-1.5 text-sm text-gray-500">{label}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 {preview.length > 0 && (
                   <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
-                    <span>🎓</span>
+                    <GraduationCap size={16} className="shrink-0" aria-hidden="true" />
                     <span>Có {preview.length} bài làm từ <strong>Chế độ học sinh</strong> (được đánh dấu "Xem trước") — chỉ giáo viên/admin thấy.</span>
                   </div>
                 )}
@@ -234,6 +238,11 @@ export default function StudentHistoryPage() {
                     <th className="text-center px-4 py-4 font-bold text-success-600 whitespace-nowrap">
                       P3
                     </th>
+                    {hasEssay && (
+                      <th className="text-center px-4 py-4 font-bold text-violet-600 whitespace-nowrap">
+                        P4
+                      </th>
+                    )}
                     <th className="text-center px-4 py-4 font-bold text-gray-700 whitespace-nowrap">
                       Tổng
                     </th>
@@ -254,32 +263,47 @@ export default function StudentHistoryPage() {
                         </p>
                         {sub.isTeacherPreview && (
                           <span className="inline-flex items-center gap-1 mt-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">
-                            🎓 Xem trước
+                            <GraduationCap size={11} aria-hidden="true" /> Xem trước
                           </span>
                         )}
                       </td>
                       <td className="px-4 py-4 text-center text-gray-500 whitespace-nowrap">
                         {formatDateTime(sub.submittedAt)}
                       </td>
-                      <td className="px-4 py-4 text-center font-semibold text-brand-600">
-                        {sub.scores.p1 ?? "—"}
-                      </td>
-                      <td className="px-4 py-4 text-center font-semibold text-amber-600">
-                        {sub.scores.p2 ?? "—"}
-                      </td>
-                      <td className="px-4 py-4 text-center font-semibold text-success-600">
-                        {sub.scores.p3 ?? "—"}
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <ScoreBadge score={sub.scores.total} />
-                      </td>
+                      {sub.gradingStatus === "pending" ? (
+                        <td colSpan={hasEssay ? 5 : 4} className="px-4 py-4 text-center">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">
+                            <Hourglass size={13} aria-hidden="true" />Chờ giáo viên chấm tự luận
+                          </span>
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-4 py-4 text-center font-semibold text-brand-600">
+                            {sub.scores.p1 ?? "—"}
+                          </td>
+                          <td className="px-4 py-4 text-center font-semibold text-amber-600">
+                            {sub.scores.p2 ?? "—"}
+                          </td>
+                          <td className="px-4 py-4 text-center font-semibold text-success-600">
+                            {sub.scores.p3 ?? "—"}
+                          </td>
+                          {hasEssay && (
+                            <td className="px-4 py-4 text-center font-semibold text-violet-600">
+                              {sub.gradingStatus === "graded" ? sub.scores.p4 ?? "—" : "—"}
+                            </td>
+                          )}
+                          <td className="px-4 py-4 text-center">
+                            <ScoreBadge score={sub.scores.total} />
+                          </td>
+                        </>
+                      )}
                       <td className="px-4 py-4 text-right">
-                        <Link
+                        {sub.gradingStatus !== "pending" && <Link
                           href={`/student/review/${sub.id}`}
                           className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 font-semibold rounded-lg text-xs transition-colors whitespace-nowrap"
                         >
                           Xem lại →
-                        </Link>
+                        </Link>}
                       </td>
                     </tr>
                   ))}
