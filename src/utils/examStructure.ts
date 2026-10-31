@@ -116,3 +116,17 @@ export function sanitizeScoringConfig(value: unknown, structure: ExamStructure) 
 export function isAwaitingGrading(submission: { gradingStatus?: unknown } | null | undefined): boolean {
   return submission?.gradingStatus === "pending";
 }
+
+/** Số câu từng phần cho thẻ đề; null khi đề cũ chưa lưu các trường đếm. */
+export type PartCounts = Record<ExamPart, number>;
+
+export function partCountsFromDoc(data: Record<string, unknown>): PartCounts | null {
+  const counts = {
+    p1: Number(data.part1Count),
+    p2: Number(data.part2Count),
+    p3: Number(data.part3Count),
+    p4: Number(data.part4Count ?? 0),
+  };
+  if (![counts.p1, counts.p2, counts.p3].every(Number.isFinite)) return null;
+  return { p1: counts.p1, p2: counts.p2, p3: counts.p3, p4: Number.isFinite(counts.p4) ? counts.p4 : 0 };
+}

@@ -4,24 +4,26 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, ChevronRight, CirclePlus, FileStack, Gauge, GraduationCap, History, Home, LibraryBig, LogOut, School, ShieldCheck, Target, UserRound, UsersRound, X } from "lucide-react";
+import { ChevronRight, CirclePlus, FileStack, Gauge, GraduationCap, History, Home, LibraryBig, LogOut, School, ShieldCheck, Target, UserRound, UsersRound, X } from "lucide-react";
 import Image from "next/image";
 import { gradeHref } from "@/lib/seo";
 import { useAuth } from "@/lib/AuthContext";
 import { useStudentMode, useSwitchStudentMode } from "@/lib/StudentModeContext";
-import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
+import { GRADE_LEVELS, EXAM_TYPES, GRADE_TONES, NavGlyph, type NavTone } from "@/components/Sidebar";
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function DrawerLink({
   href,
-  icon: Icon,
+  icon,
+  tone = "indigo",
   children,
   active,
   onClose,
 }: {
   href: string;
   icon: LucideIcon;
+  tone?: NavTone;
   children: React.ReactNode;
   active?: boolean;
   onClose: () => void;
@@ -31,13 +33,13 @@ function DrawerLink({
       href={href}
       onClick={onClose}
       aria-current={active ? "page" : undefined}
-      className={`mb-0.5 flex min-h-11 items-center gap-3 rounded-xl px-2.5 text-sm font-semibold transition-all ${
+      className={`group mb-0.5 flex min-h-11 items-center gap-3 rounded-xl px-2 text-sm font-semibold transition-all ${
         active
-          ? "bg-gradient-to-r from-brand-50 to-violet-50 text-brand-700"
-          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          ? "bg-white text-gray-900 shadow-[var(--shadow-soft)] ring-1 ring-indigo-100"
+          : "text-gray-600 hover:bg-white hover:text-gray-900"
       }`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30" : "bg-gray-100 text-gray-500"}`}><Icon size={17} aria-hidden="true" /></span>
+      <NavGlyph icon={icon} tone={tone} active={active} />
       <span className="truncate">{children}</span>
     </Link>
   );
@@ -45,8 +47,9 @@ function DrawerLink({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-2.5 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+    <p className="flex items-center gap-2 px-2 pb-1.5 pt-5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-gray-400">
       {children}
+      <span aria-hidden="true" className="h-px flex-1 bg-gradient-to-r from-gray-200 to-transparent" />
     </p>
   );
 }
@@ -107,7 +110,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
       <aside
         inert={!open}
         aria-hidden={!open}
-        className={`fixed top-0 left-0 z-50 h-full w-80 max-w-[85vw] bg-white flex rounded-r-3xl flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 z-50 h-full w-80 max-w-[85vw] site-sidebar flex rounded-r-3xl flex-col transition-transform duration-300 ease-in-out ${
           open ? "translate-x-0 shadow-2xl" : "-translate-x-full shadow-none"
         }`}
       >
@@ -139,19 +142,20 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
         {/* User info strip */}
         {user && (
-          <div className="relative mx-3 mt-3 flex shrink-0 items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500 px-4 py-3 text-white shadow-lg shadow-indigo-500/25">
+          <div className="relative mx-3 mt-3 flex shrink-0 items-center gap-3 overflow-hidden rounded-2xl bg-white px-3 py-2.5 shadow-[var(--shadow-soft)] ring-1 ring-gray-200/70">
+            <span aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
             {(userProfile?.avatarUrl || user.photoURL) && (
               <img
                 src={userProfile?.avatarUrl || user.photoURL || ""}
                 alt={user.displayName ?? "Avatar"}
                 width={36}
                 height={36}
-                className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40 shrink-0"
+                className="w-10 h-10 rounded-xl object-cover ring-2 ring-indigo-100 shrink-0"
                 referrerPolicy="no-referrer"
               />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold truncate">
+              <p className="text-sm font-bold text-gray-900 truncate">
                 {userProfile?.fullName ?? user.displayName}
               </p>
               {roleBadge && (
@@ -169,7 +173,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
             <>
               <SectionLabel>Quản lý</SectionLabel>
               <DrawerLink
-                href="/admin/dashboard"
+                href="/admin/dashboard" tone="indigo"
                 icon={Gauge}
                 active={pathname === "/admin/dashboard"}
                 onClose={onClose}
@@ -177,7 +181,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 Dashboard
               </DrawerLink>
               <DrawerLink
-                href="/admin/create-exam"
+                href="/admin/create-exam" tone="emerald"
                 icon={CirclePlus}
                 active={pathname === "/admin/create-exam"}
                 onClose={onClose}
@@ -186,10 +190,10 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
               </DrawerLink>
 
               <SectionLabel>Kho đề thi</SectionLabel>
-              <DrawerLink href="/admin/exam-list?tab=mine" icon={FileStack} onClose={onClose}>
+              <DrawerLink href="/admin/exam-list?tab=mine" tone="violet" icon={FileStack} onClose={onClose}>
                 Đề của tôi
               </DrawerLink>
-              <DrawerLink href="/admin/exam-list?tab=shared" icon={LibraryBig} onClose={onClose}>
+              <DrawerLink href="/admin/exam-list?tab=shared" tone="fuchsia" icon={LibraryBig} onClose={onClose}>
                 Đề được chia sẻ
               </DrawerLink>
 
@@ -197,7 +201,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 <>
                   <SectionLabel>Admin</SectionLabel>
                   <DrawerLink
-                    href="/admin/exam-list"
+                    href="/admin/exam-list" tone="slate"
                     icon={ShieldCheck}
                     active={pathname === "/admin/exam-list"}
                     onClose={onClose}
@@ -205,7 +209,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                     Tất cả đề thi
                   </DrawerLink>
                   <DrawerLink
-                    href="/admin/users"
+                    href="/admin/users" tone="rose"
                     icon={UsersRound}
                     active={pathname.startsWith("/admin/users")}
                     onClose={onClose}
@@ -217,7 +221,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
               <SectionLabel>Lớp học</SectionLabel>
               <DrawerLink
-                href="/teacher/classes"
+                href="/teacher/classes" tone="sky"
                 icon={School}
                 active={pathname.startsWith("/teacher/classes")}
                 onClose={onClose}
@@ -227,7 +231,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
               <SectionLabel>Cá nhân</SectionLabel>
               <DrawerLink
-                href="/tai-khoan"
+                href="/tai-khoan" tone="amber"
                 icon={UserRound}
                 active={pathname === "/tai-khoan"}
                 onClose={onClose}
@@ -235,7 +239,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 Tài khoản & cài đặt
               </DrawerLink>
               <DrawerLink
-                href="/student/history"
+                href="/student/history" tone="violet"
                 icon={History}
                 active={pathname === "/student/history"}
                 onClose={onClose}
@@ -246,7 +250,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
           ) : (
             /* Student nav */
             <>
-              <DrawerLink href="/" icon={Home} active={pathname === "/"} onClose={onClose}>
+              <DrawerLink href="/" tone="indigo" icon={Home} active={pathname === "/"} onClose={onClose}>
                 Tất cả đề thi
               </DrawerLink>
 
@@ -262,6 +266,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                       key={grade}
                       href={gradeHref(grade)}
                       icon={Target}
+                      tone="amber"
                       onClose={onClose}
                     >
                       {grade}
@@ -274,10 +279,10 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                     <button
                       onClick={() => setExpandedGrade(isExpanded ? null : grade)}
                       aria-expanded={isExpanded}
-                      className="mb-0.5 flex min-h-11 w-full items-center justify-between rounded-xl px-2.5 text-sm font-semibold text-gray-600 transition-all hover:bg-gray-50 hover:text-gray-900"
+                      className={`group mb-0.5 flex min-h-11 w-full items-center justify-between rounded-xl px-2 text-sm font-semibold transition-all ${isExpanded ? "bg-white text-gray-900" : "text-gray-600 hover:bg-white hover:text-gray-900"}`}
                     >
                       <span className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500"><BookOpen size={17} aria-hidden="true" /></span>
+                        <NavGlyph text={grade.replace("Lớp ", "")} tone={GRADE_TONES[grade]} active={isExpanded} />
                         {grade}
                       </span>
                       <ChevronRight size={16} aria-hidden="true" className={`text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
@@ -310,7 +315,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
               <div className="pt-2 space-y-0.5">
                 <DrawerLink
-                  href="/student/classes"
+                  href="/student/classes" tone="sky"
                   icon={GraduationCap}
                   active={pathname.startsWith("/student/classes")}
                   onClose={onClose}
@@ -318,7 +323,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                   Lớp học của tôi
                 </DrawerLink>
                 <DrawerLink
-                  href="/student/history"
+                  href="/student/history" tone="violet"
                   icon={History}
                   active={pathname === "/student/history"}
                   onClose={onClose}
@@ -326,7 +331,7 @@ export default function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                   Lịch sử làm bài
                 </DrawerLink>
                 <DrawerLink
-                  href="/tai-khoan"
+                  href="/tai-khoan" tone="amber"
                   icon={UserRound}
                   active={pathname === "/tai-khoan"}
                   onClose={onClose}

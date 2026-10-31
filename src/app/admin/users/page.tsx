@@ -120,7 +120,7 @@ export default function AdminUsersPage() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { queueMicrotask(() => void fetchData()); }, [fetchData]);
 
   const approveTeacher = async (uid: string) => {
     setActionId(uid);
@@ -200,7 +200,8 @@ export default function AdminUsersPage() {
   ];
 
   // ── Shared table columns ───────────────────────────────────────────────────
-  function UserTable({
+  // Hàm render thường (không phải component) vì dùng chung state của trang.
+  function renderUserTable({
     rows,
     showActions = false,
     showClass = false,
@@ -417,12 +418,12 @@ export default function AdminUsersPage() {
                       <p className="text-sm">Không có giáo viên nào đang chờ duyệt.</p>
                     </div>
                   ) : (
-                    <UserTable rows={pendingTeachers} showActions />
+                    renderUserTable({ rows: pendingTeachers, showActions: true })
                   )}
                 </>
               )}
-              {activeTab === "staff" && <UserTable rows={staff} showTeachingView />}
-              {activeTab === "students" && <UserTable rows={students} showClass />}
+              {activeTab === "staff" && renderUserTable({ rows: staff, showTeachingView: true })}
+              {activeTab === "students" && renderUserTable({ rows: students, showClass: true })}
             </>
           )}
         </div>

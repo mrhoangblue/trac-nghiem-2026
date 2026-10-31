@@ -19,6 +19,7 @@ import ExamPreview from "@/components/exam-editor/ExamPreview";
 import { importExamFile, type FileImportResponse } from "@/components/exam-editor/importExamFile";
 import { ExamInfoFields, ExamRulesFields, ExamStructurePicker, MOCK_EXAM_GRADE, type ClassOption, type ScoringConfig } from "@/components/exam-editor/ExamSettingsFields";
 import { assignsClasses, type ExamTargetType } from "@/utils/examAudience";
+import { DEFAULT_VERSIONING, normalizeVersioning, type ExamVersioning } from "@/utils/examVersions";
 import { resolveUserSettings } from "@/utils/userSettings";
 
 interface UploadQuizResponse {
@@ -69,6 +70,7 @@ export default function CreateExamPage() {
 
   // ── New fields ─────────────────────────────────────────────────────────────
   const [maxRetries, setMaxRetries] = useState(examDefaults.maxRetries);
+  const [versioning, setVersioning] = useState<ExamVersioning>(DEFAULT_VERSIONING);
   const [isShared, setIsShared] = useState(examDefaults.isShared);
   const [gradeLevel, setGradeLevel] = useState<string>(
     (GRADE_LEVELS as readonly string[]).includes(examDefaults.gradeLevel) ? examDefaults.gradeLevel : GRADE_LEVELS[0],
@@ -246,6 +248,7 @@ export default function CreateExamPage() {
           rawLatex: { part1, part2, part3, ...(structure === "p1234" ? { part4 } : {}) },
           authorEmail: user?.email ?? "",
           maxRetries: Number(maxRetries),
+          versioning: normalizeVersioning(versioning),
           isShared,
           gradeLevel,
           examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
@@ -374,6 +377,8 @@ export default function CreateExamPage() {
             <EditorCard id="exam-rules" step={3} icon={SlidersHorizontal} title="Thiết lập làm bài" description="Thời gian, điểm số và ai được làm bài.">
               <ExamRulesFields
                 idPrefix="create"
+                versioning={versioning}
+                onVersioning={setVersioning}
                 duration={duration}
                 onDuration={setDuration}
                 maxRetries={maxRetries}

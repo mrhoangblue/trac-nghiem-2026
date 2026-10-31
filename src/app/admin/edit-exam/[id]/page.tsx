@@ -28,6 +28,7 @@ import ExamPreview from "@/components/exam-editor/ExamPreview";
 import { importExamFile } from "@/components/exam-editor/importExamFile";
 import { ExamInfoFields, ExamRulesFields, ExamStructurePicker, MOCK_EXAM_GRADE, type ClassOption, type ScoringConfig } from "@/components/exam-editor/ExamSettingsFields";
 import { assignsClasses, normalizeTargetType, type ExamTargetType } from "@/utils/examAudience";
+import { DEFAULT_VERSIONING, normalizeVersioning, type ExamVersioning } from "@/utils/examVersions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ export default function EditExamPage() {
 
   // ── New fields ─────────────────────────────────────────────────────────────
   const [maxRetries, setMaxRetries] = useState(1);
+  const [versioning, setVersioning] = useState<ExamVersioning>(DEFAULT_VERSIONING);
   const [isShared, setIsShared] = useState(false);
   const [gradeLevel, setGradeLevel] = useState<string>(GRADE_LEVELS[0]);
   const [examType, setExamType] = useState<string>(EXAM_TYPES[0]);
@@ -128,6 +130,7 @@ export default function EditExamPage() {
         setEndTime(toDateTimeLocal(data.endTime));
         setHasPassword(Boolean(data.requiresPassword));
         setMaxRetries(data.maxRetries ?? 1);
+        setVersioning(normalizeVersioning(data.versioning));
         setIsShared(data.isShared ?? false);
         setGradeLevel(data.gradeLevel ?? GRADE_LEVELS[0]);
         setExamType(data.examType ?? EXAM_TYPES[0]);
@@ -298,6 +301,7 @@ export default function EditExamPage() {
           startTime: toStoredDateTime(startTime),
           endTime: toStoredDateTime(endTime),
           maxRetries: Number(maxRetries),
+          versioning: normalizeVersioning(versioning),
           gradeLevel,
           examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
           targetType,
@@ -406,6 +410,7 @@ export default function EditExamPage() {
         tikzProcessed: processed.tikzProcessed,
         tikzImageCount: processed.convertedCount,
         maxRetries: Number(maxRetries),
+        versioning: normalizeVersioning(versioning),
         gradeLevel,
         examType: gradeLevel === "Thi Thử TN THPT" ? null : examType,
         targetType,
@@ -560,6 +565,8 @@ export default function EditExamPage() {
             <EditorCard id="exam-rules" step={3} icon={SlidersHorizontal} title="Thiết lập làm bài" description="Thời gian, điểm số và ai được làm bài.">
               <ExamRulesFields
                 idPrefix="edit"
+                versioning={versioning}
+                onVersioning={setVersioning}
                 duration={duration}
                 onDuration={setDuration}
                 maxRetries={maxRetries}

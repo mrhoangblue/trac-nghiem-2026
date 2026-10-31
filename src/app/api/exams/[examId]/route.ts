@@ -12,6 +12,7 @@ import { verifyAuth } from "@/lib/verifyAuth";
 import { normalizeTargetType, sanitizeTargetClassIds } from "@/utils/examAudience";
 import { countQuestionsByPart, normalizeStructure, sanitizeScoringConfig, structureProblems } from "@/utils/examStructure";
 import { getMissingShortAnswerQuestionNumbers, type ParsedQuestion } from "@/utils/latexParser";
+import { normalizeVersioning } from "@/utils/examVersions";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -31,6 +32,7 @@ interface UpdateExamBody {
   tikzProcessed?: unknown;
   tikzImageCount?: unknown;
   maxRetries?: unknown;
+  versioning?: unknown;
   gradeLevel?: unknown;
   examType?: unknown;
   targetType?: unknown;
@@ -94,6 +96,8 @@ export async function GET(
       tikzImageCount: Number(exam.tikzImageCount ?? 0),
       tikzFailedCount: Number(exam.tikzFailedCount ?? 0),
       questions: Array.isArray(exam.questions) ? exam.questions : [],
+      structure: normalizeStructure(exam.structure),
+      versioning: normalizeVersioning(exam.versioning),
     }, {
       headers: { "Cache-Control": "private, no-store" },
     });
@@ -221,6 +225,7 @@ export async function PATCH(
         startTime,
         endTime,
         maxRetries: Math.max(0, Math.min(100, Number(body.maxRetries ?? 1))),
+        versioning: normalizeVersioning(body.versioning),
         gradeLevel: typeof body.gradeLevel === "string" ? body.gradeLevel.slice(0, 80) : "",
         examType: typeof body.examType === "string" ? body.examType.slice(0, 120) : null,
         targetType,

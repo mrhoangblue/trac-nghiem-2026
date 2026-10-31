@@ -35,6 +35,7 @@ const stixTwoText = STIX_Two_Text({
   variable: "--font-stix-two-text",
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
   display: "swap",
 });
 

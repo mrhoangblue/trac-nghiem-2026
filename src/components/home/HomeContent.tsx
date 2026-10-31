@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, ArrowUpRight, BookOpenCheck, Check, ChevronRight, Clock3, FileQuestion, Inbox, LockKeyhole, RotateCcw, Search, Sparkles, Target, TrendingUp, Trophy } from "lucide-react";
 import { GRADE_LEVELS } from "@/components/Sidebar";
 import { gradeHref } from "@/lib/seo";
 import { useAuth } from "@/lib/AuthContext";
+import ExamPartsBar from "@/components/ExamPartsBar";
+import { trackSpotlight } from "@/utils/spotlight";
+import type { PartCounts } from "@/utils/examStructure";
 
 interface Exam {
   id: string;
@@ -21,6 +24,7 @@ interface Exam {
   /** Xem examAudience.ts. Kho đề chỉ nhận đề công khai ("all" | "both"). */
   targetType?: "all" | "classes" | "both";
   targetClassIds?: string[];
+  partCounts?: PartCounts | null;
 }
 
 // ── Grade themes ──────────────────────────────────────────────────────────────
@@ -63,22 +67,16 @@ function useReveal(key: string) {
   return ref;
 }
 
-function trackSpotlight(e: PointerEvent<HTMLElement>) {
-  const rect = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
-  e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
-}
-
 const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 
 function Spinner() {
   return (
-    <div role="status" aria-label="Đang tải danh sách đề thi" className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-      {[0, 1, 2].map((item) => <div key={item} aria-hidden="true" className="min-h-[22rem] overflow-hidden rounded-3xl border border-edu-line bg-white motion-safe:animate-pulse">
-        <div className="h-32 bg-gradient-to-br from-indigo-100 to-violet-100" />
-        <div className="space-y-4 p-6"><div className="h-4 w-24 rounded-full bg-edu-surface" /><div className="h-6 w-4/5 rounded-full bg-edu-surface" /><div className="h-12 rounded-xl bg-edu-surface" /><div className="h-12 rounded-2xl bg-indigo-50" /></div>
+    <div role="status" aria-label="Đang tải danh sách đề thi" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      {[0, 1, 2].map((item) => <div key={item} aria-hidden="true" className="min-h-[13rem] overflow-hidden rounded-2xl border border-edu-line bg-white motion-safe:animate-pulse">
+        <div className="h-20 bg-gradient-to-br from-indigo-100 to-violet-100" />
+        <div className="space-y-3 p-4"><div className="h-4 w-20 rounded-full bg-edu-surface" /><div className="h-5 w-4/5 rounded-full bg-edu-surface" /><div className="h-2 rounded-full bg-edu-surface" /><div className="h-9 w-24 rounded-xl bg-indigo-50" /></div>
       </div>)}
       <span className="sr-only">Đang tải danh sách đề thi…</span>
     </div>
@@ -105,36 +103,53 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 
 // ── Exam Card ─────────────────────────────────────────────────────────────────
 
+/** Đường cong trang trí trên đầu thẻ, mỗi khối lớp một dáng đồ thị. */
+const CURVES: Record<string, string> = {
+  "10": "M0 96 C 60 96, 80 20, 150 20 S 260 96, 330 60 S 400 30, 420 30",
+  "11": "M0 60 C 35 10, 70 10, 105 60 S 175 110, 210 60 S 280 10, 315 60 S 385 110, 420 60",
+  "12": "M0 110 C 120 108, 200 90, 260 60 S 360 8, 420 4",
+  TN: "M0 100 L 70 70 L 140 84 L 210 40 L 280 56 L 350 18 L 420 26",
+};
+
 function ExamCard({ exam, index }: { exam: Exam; index: number }) {
   const theme = themeFor(exam.gradeLevel);
+  const curve = CURVES[theme.short] ?? CURVES["12"];
 
   return (
-    <article data-reveal style={delay((index % 3) * 90)} onPointerMove={trackSpotlight} className="edu-card group flex flex-col overflow-hidden rounded-3xl">
-      <div className={`relative h-36 shrink-0 overflow-hidden bg-gradient-to-br ${theme.gradient}`}>
+    <article data-reveal style={delay((index % 4) * 70)} onPointerMove={trackSpotlight} className="edu-card group flex flex-col overflow-hidden rounded-2xl">
+      <div className={`relative h-20 shrink-0 overflow-hidden bg-gradient-to-br ${theme.gradient}`}>
         {exam.coverImageUrl ? (
-          <Image src={exam.coverImageUrl} alt={`Ảnh minh họa ${exam.title}`} fill unoptimized sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-700 group-hover:scale-105" />
+          <Image src={exam.coverImageUrl} alt={`Ảnh minh họa ${exam.title}`} fill unoptimized sizes="(max-width: 768px) 100vw, 25vw" className="object-cover transition duration-700 group-hover:scale-105" />
         ) : (
           <>
-            <div aria-hidden="true" className="edu-dots absolute inset-0 opacity-60 mix-blend-overlay" />
-            <div aria-hidden="true" className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/20 blur-2xl transition-transform duration-700 group-hover:scale-125" />
-            <span aria-hidden="true" className="absolute -bottom-5 right-5 font-display text-[6rem] font-extrabold leading-none text-white/25 transition-transform duration-500 group-hover:-translate-y-1.5">{theme.short}</span>
+            <div aria-hidden="true" className="edu-dots absolute inset-0 opacity-50 mix-blend-overlay" />
+            <svg aria-hidden="true" viewBox="0 0 420 128" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+              <path d={`${curve} L 420 128 L 0 128 Z`} fill="white" fillOpacity=".1" />
+              <path d={curve} fill="none" stroke="white" strokeOpacity=".7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" pathLength={1} vectorEffect="non-scaling-stroke" className="edu-curve" />
+            </svg>
+            <span aria-hidden="true" className="absolute -bottom-3 right-3 font-display text-5xl font-extrabold leading-none text-white/30 transition-transform duration-500 group-hover:-translate-y-1">{theme.short}</span>
           </>
         )}
-        <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-edu-ink shadow-sm backdrop-blur">{exam.gradeLevel || "Môn Toán"}</span>
+        <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
+          <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold text-edu-ink shadow-sm backdrop-blur">{exam.gradeLevel || "Môn Toán"}</span>
+          {exam.requiresPassword && (
+            <span title="Cần mật khẩu" className="inline-flex items-center gap-1 rounded-full bg-black/25 px-2 py-0.5 text-[11px] font-semibold text-white ring-1 ring-white/30 backdrop-blur-md"><LockKeyhole size={11} aria-hidden="true" />Mật khẩu</span>
+          )}
+        </div>
       </div>
-      <div className="relative z-[3] flex flex-1 flex-col p-6">
-        <span className={`mb-3 w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${theme.tint}`}>{exam.examType || "Đề ôn tập"}</span>
-        <h3 className="line-clamp-2 min-h-[3.5rem] font-display text-lg font-bold leading-7 transition-colors group-hover:text-edu-indigo">{exam.title}</h3>
-        <p className="mt-2 line-clamp-2 text-sm leading-6 text-edu-muted">{exam.description || "Luyện tập có mục tiêu, xem kết quả và củng cố phần kiến thức còn yếu."}</p>
-        <div className="mt-auto pt-5">
-          <div className="mb-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-edu-muted">
-            <span className="inline-flex items-center gap-1.5"><FileQuestion size={16} aria-hidden="true" />{exam.questionCount ?? 0} câu</span>
-            <span className="inline-flex items-center gap-1.5"><Clock3 size={16} aria-hidden="true" />{exam.duration || 90} phút</span>
-            {exam.requiresPassword && <span className="inline-flex items-center gap-1.5"><LockKeyhole size={15} aria-hidden="true" />Có mật khẩu</span>}
-          </div>
-          <Link href={`/quiz/${exam.id}`} className="flex min-h-12 w-full items-center justify-between rounded-2xl bg-edu-surface px-5 text-sm font-semibold text-edu-ink transition-all duration-300 after:absolute after:inset-0 after:content-[''] group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-violet-600 group-hover:text-white group-hover:shadow-lg group-hover:shadow-indigo-500/30">
-            <span>Bắt đầu làm bài</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-edu-indigo shadow-sm transition-transform duration-300 group-hover:translate-x-1"><ArrowRight size={16} aria-hidden="true" /></span>
+
+      <div className="relative z-[3] flex flex-1 flex-col p-4">
+        <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${theme.tint}`}>{exam.examType || "Đề ôn tập"}</span>
+        <h3 className="mt-2 line-clamp-2 font-display text-[15px] font-bold leading-6 transition-colors group-hover:text-edu-indigo" title={exam.title}>{exam.title}</h3>
+        {exam.description && <p className="mt-1 line-clamp-1 text-xs leading-5 text-edu-muted">{exam.description}</p>}
+        {exam.partCounts && <ExamPartsBar counts={exam.partCounts} compact className="mt-3" />}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-3.5">
+          <p className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs font-medium text-edu-muted">
+            <span className="inline-flex items-center gap-1"><FileQuestion size={13} aria-hidden="true" className="text-edu-indigo" />{exam.questionCount ?? 0} câu</span>
+            <span className="inline-flex items-center gap-1"><Clock3 size={13} aria-hidden="true" className="text-edu-indigo" />{exam.duration || 90}′</span>
+          </p>
+          <Link href={`/quiz/${exam.id}`} aria-label={`Làm bài: ${exam.title}`} className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-edu-surface px-3.5 text-xs font-semibold text-edu-indigo ring-1 ring-indigo-100 transition-all duration-300 after:absolute after:inset-0 after:content-[''] group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-violet-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-indigo-500/30 group-hover:ring-transparent">
+            Làm bài<ArrowRight size={14} aria-hidden="true" className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </Link>
         </div>
       </div>
@@ -167,7 +182,7 @@ function HeroVisual() {
         </div>
       </div>
 
-      <div aria-hidden="true" className="edu-glass edu-float absolute -left-6 top-24 hidden w-56 rounded-2xl p-4 sm:block">
+      <div aria-hidden="true" className="edu-glass edu-float-slow absolute -left-12 top-[40%] hidden w-48 rounded-2xl p-3 sm:block lg:-left-16">
         <p className="text-xs font-semibold text-edu-indigo">Câu 3 · Lớp 12</p>
         <p className="mt-1 text-sm font-semibold">Đạo hàm của y = x³ là</p>
         <div className="mt-3 space-y-1.5 text-sm">
@@ -342,7 +357,7 @@ export default function HomeContent({ grade = null, type = null, heading, descri
             <button onClick={() => window.location.reload()} className="mx-auto mt-5 flex min-h-12 items-center gap-2 rounded-xl border border-danger-200 bg-white px-5 text-sm font-semibold text-danger-700"><RotateCcw size={16} aria-hidden="true" />Tải lại trang</button>
           </div>
         ) : filtered.length === 0 ? <EmptyState filtered={!!grade || !!search} /> : (
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">{filtered.map((exam, i) => <ExamCard key={exam.id} exam={exam} index={i} />)}</div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{filtered.map((exam, i) => <ExamCard key={exam.id} exam={exam} index={i} />)}</div>
         )}
       </section>
 

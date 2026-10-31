@@ -6,6 +6,7 @@ import { verifyAuth, type AuthContextData } from "@/lib/verifyAuth";
 import { parseExamDateTime } from "@/lib/examAccess";
 import { normalizeResourceLink } from "@/utils/classResourceLinks";
 import { flattenCourseResources, progressDocumentId } from "@/utils/courseProgress";
+import { partCountsFromDoc } from "@/utils/examStructure";
 import type {
   ClassCourseLesson,
   ClassCourseResource,
@@ -303,6 +304,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         endTime: typeof data.endTime === "string" ? data.endTime : null,
         createdAt: toIso(data.createdAt),
         status: examStatus(data.startTime, data.endTime),
+        partCounts: partCountsFromDoc(data),
         submitted: Boolean(submission),
         ...(submission && { submissionId: submission.id, totalScore: submission.totalScore }),
       };

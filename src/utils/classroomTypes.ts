@@ -4,6 +4,7 @@
  */
 
 import type { Timestamp } from "firebase/firestore";
+import type { PartCounts } from "@/utils/examStructure";
 
 // ── Classroom ─────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,8 @@ export interface ClassExamSummary {
   endTime: string | null;
   createdAt: string | null;
   status: ClassExamStatus;
+  /** Số câu từng phần; null với đề cũ. */
+  partCounts?: PartCounts | null;
   submitted: boolean;
   submissionId?: string;
   totalScore?: number;

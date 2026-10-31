@@ -32,10 +32,7 @@ export default function StudentClassDetailPage() {
 
   return (
     <main className="workspace-page mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
-      <Link href="/student/classes" className="mb-5 inline-flex text-sm font-bold text-brand-700 hover:underline">
-        ← Lớp học của tôi
-      </Link>
-      <ClassLearningContent classId={classId} showClassHeader />
+      <ClassLearningContent classId={classId} showClassHeader back={{ href: "/student/classes", label: "Lớp học của tôi" }} />
     </main>
   );
 }

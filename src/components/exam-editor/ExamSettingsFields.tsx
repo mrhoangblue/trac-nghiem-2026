@@ -3,9 +3,10 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, Check, Globe2, ImagePlus, Layers, Layers3, ListChecks, ListTodo, Loader2, PenTool, School } from "lucide-react";
+import { AlertTriangle, Check, Globe2, ImagePlus, Layers, Layers3, ListChecks, ListTodo, Loader2, PenTool, School, Shuffle } from "lucide-react";
 import { assignsClasses, type ExamTargetType } from "@/utils/examAudience";
 import { EXAM_STRUCTURES, structureParts, type ExamStructure } from "@/utils/examStructure";
+import { VERSION_COUNT_MAX, VERSION_COUNT_MIN, versionCodes, type ExamVersioning } from "@/utils/examVersions";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 import { ChoiceCards, Field, NumberField, SelectMenu, SubHeading, Toggle, inputClass } from "@/components/exam-editor/EditorKit";
 
@@ -32,6 +33,57 @@ export function ExamStructurePicker({ value, onChange }: { value: ExamStructure;
         icon: [ListChecks, ListTodo, Layers3, PenTool][index],
       }))}
     />
+  );
+}
+
+/** Trộn đề nhiều mã: mỗi học sinh được giao một mã khi bắt đầu làm bài. */
+export function ExamVersioningFields({
+  idPrefix,
+  value,
+  onChange,
+  parts,
+}: {
+  idPrefix: string;
+  value: ExamVersioning;
+  onChange: (value: ExamVersioning) => void;
+  parts: string[];
+}) {
+  const codes = versionCodes(value);
+  return (
+    <div className="grid gap-3">
+      <Toggle
+        checked={value.enabled}
+        onChange={(enabled) => onChange({ ...value, enabled })}
+        label="Trộn thành nhiều mã đề"
+        description={value.enabled ? "Học sinh được chia đều các mã khi bắt đầu; mỗi em chỉ thấy bản đề của mình." : "Mọi học sinh làm cùng một thứ tự câu và phương án."}
+      />
+      {value.enabled && (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-3.5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Số mã đề" htmlFor={`${idPrefix}-version-count`} hint={`Từ ${VERSION_COUNT_MIN} đến ${VERSION_COUNT_MAX} mã.`}>
+              <NumberField id={`${idPrefix}-version-count`} value={value.count} onChange={(count) => onChange({ ...value, count })} min={VERSION_COUNT_MIN} max={VERSION_COUNT_MAX} unit="mã" parse={(raw) => Number.parseInt(raw, 10)} fallback={4} />
+            </Field>
+            <Field label="Mã đề đầu tiên" htmlFor={`${idPrefix}-version-first`} hint="Các mã sau tăng dần.">
+              <NumberField id={`${idPrefix}-version-first`} value={value.firstCode} onChange={(firstCode) => onChange({ ...value, firstCode })} min={1} max={9999 - VERSION_COUNT_MAX} unit="" parse={(raw) => Number.parseInt(raw, 10)} fallback={101} />
+            </Field>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Các mã đề">
+            <Shuffle size={15} className="mr-0.5 text-brand-600" aria-hidden="true" />
+            {codes.map((code) => (
+              <span key={code} className="rounded-lg bg-white px-2 py-1 font-display text-xs font-bold tabular-nums text-brand-700 ring-1 ring-brand-100">{code}</span>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2">
+            <Toggle checked={value.shuffleQuestions} onChange={(shuffleQuestions) => onChange({ ...value, shuffleQuestions })} label="Đổi thứ tự câu trong từng phần" description={parts.includes("p4") ? "Câu không chuyển sang phần khác. Phần IV tự luận giữ nguyên thứ tự." : "Câu không chuyển sang phần khác."} />
+            <Toggle checked={value.shuffleOptions} onChange={(shuffleOptions) => onChange({ ...value, shuffleOptions })} label="Trộn phương án A, B, C, D (Phần I)" description="Câu có phương án kiểu “Cả A và B”, “Tất cả đều đúng” được giữ nguyên thứ tự." />
+            {parts.includes("p2") && (
+              <Toggle checked={value.shuffleStatements} onChange={(shuffleStatements) => onChange({ ...value, shuffleStatements })} label="Trộn ý a, b, c, d (Phần II)" description="Tắt nếu các ý của câu được sắp theo mạch từ dễ đến khó." />
+            )}
+          </div>
+          <p className="mt-3 text-xs leading-5 text-gray-500">Lời giải nhắc tới chữ cái phương án (ví dụ “Chọn B”) sẽ không khớp sau khi trộn; trang xem lại luôn ghi rõ đáp án đúng của từng mã.</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -133,6 +185,8 @@ export function ExamRulesFields({
   onTargetClassIds,
   classes,
   classesLoading,
+  versioning,
+  onVersioning,
 }: {
   idPrefix: string;
   duration: number;
@@ -156,6 +210,8 @@ export function ExamRulesFields({
   onTargetClassIds: (value: string[]) => void;
   classes: ClassOption[];
   classesLoading: boolean;
+  versioning?: ExamVersioning;
+  onVersioning?: (value: ExamVersioning) => void;
 }) {
   const parts = structureParts(structure);
   const maxScore = Math.round((
@@ -219,6 +275,13 @@ export function ExamRulesFields({
           </p>
         )}
       </div>
+
+      {versioning && onVersioning && (
+        <div>
+          <SubHeading>Trộn đề</SubHeading>
+          <ExamVersioningFields idPrefix={idPrefix} value={versioning} onChange={onVersioning} parts={parts} />
+        </div>
+      )}
 
       <div>
         <SubHeading>Ai được làm bài</SubHeading>

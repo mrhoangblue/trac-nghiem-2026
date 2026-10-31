@@ -17,6 +17,7 @@ import {
 } from "@/utils/tikzToImage";
 import { countQuestionsByPart, normalizeStructure, sanitizeScoringConfig, structureProblems } from "@/utils/examStructure";
 import { mapWithConcurrency } from "@/utils/asyncPool";
+import { normalizeVersioning } from "@/utils/examVersions";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -43,6 +44,7 @@ interface UploadQuizRequest {
   };
   authorEmail?: string;
   maxRetries?: number;
+  versioning?: unknown;
   isShared?: boolean;
   gradeLevel?: string;
   examType?: string | null;
@@ -294,6 +296,7 @@ export async function POST(request: NextRequest) {
       tikzFailedCount: failedCount,
       authorEmail: authUser.email,
       maxRetries: Number(body.maxRetries ?? 1),
+      versioning: normalizeVersioning(body.versioning),
       isShared: Boolean(body.isShared),
       gradeLevel: body.gradeLevel ?? "",
       examType: body.examType ?? null,

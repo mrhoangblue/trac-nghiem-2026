@@ -77,7 +77,8 @@ export function useAntiCheat({
   const activeSecondsRef = useRef(0);
   const tabSwitchRef = useRef(0);
   const lastVisibleRef = useRef<number | null>(null);
-  const startMsRef = useRef<number>(examStartTimeMs ?? Date.now());
+  // Gán lại thời điểm thật khi bắt đầu làm bài (effect bên dưới).
+  const startMsRef = useRef<number>(examStartTimeMs ?? 0);
 
   // State only for the UI counter — keep it minimal
   const [tabSwitchCount, setTabSwitchCount] = useState(0);

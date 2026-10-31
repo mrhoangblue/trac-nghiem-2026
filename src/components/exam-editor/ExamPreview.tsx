@@ -24,6 +24,7 @@ export default function ExamPreview({
   coverImageUrl,
   chips,
   part4TotalScore,
+  hideAnswers = false,
 }: {
   questions: ParsedQuestion[];
   title: string;
@@ -32,6 +33,8 @@ export default function ExamPreview({
   chips: string[];
   /** Có giá trị khi đề 4 phần: hiện điểm từng câu tự luận. */
   part4TotalScore?: number;
+  /** Bản in cho học sinh: không tô đáp án, không hiện lời giải. */
+  hideAnswers?: boolean;
 }) {
   const essayPoints = part4TotalScore === undefined ? null : essayQuestionPoints(questions, part4TotalScore);
   return (
@@ -72,7 +75,7 @@ export default function ExamPreview({
                         )}
                         {processLatexText(question.questionText)}
                       </div>
-                      <AnswerPreview question={question} />
+                      <AnswerPreview question={question} hideAnswers={hideAnswers} />
                     </div>
                     {question.tikzCode && (
                       <div className="flex min-h-40 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -87,7 +90,7 @@ export default function ExamPreview({
                       ))}
                     </div>
                   )}
-                  {question.explanation && (
+                  {question.explanation && !hideAnswers && (
                     <details className="group mt-3 rounded-xl bg-gray-50 text-sm text-gray-700">
                       <summary className="flex min-h-10 cursor-pointer list-none items-center px-3 font-semibold text-gray-600 marker:hidden">
                         <span className="mr-2 transition-transform group-open:rotate-90">›</span>{question.type === "essay" ? "Hướng dẫn chấm (học sinh không thấy)" : "Lời giải"}
@@ -105,12 +108,12 @@ export default function ExamPreview({
   );
 }
 
-function AnswerPreview({ question }: { question: ParsedQuestion }) {
+function AnswerPreview({ question, hideAnswers }: { question: ParsedQuestion; hideAnswers: boolean }) {
   if (question.type === "multiple_choice" && question.options) {
     return (
       <div className="grid gap-2 sm:grid-cols-2">
         {question.options.map((option, index) => {
-          const correct = question.correctAnswer === index;
+          const correct = !hideAnswers && question.correctAnswer === index;
           return (
             <div key={index} className={`flex items-start gap-2.5 rounded-xl border px-3 py-2 text-sm ${correct ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-gray-200 text-gray-700"}`}>
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-display text-xs font-bold ${correct ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-600"}`}>{String.fromCharCode(65 + index)}</span>
@@ -129,14 +132,15 @@ function AnswerPreview({ question }: { question: ParsedQuestion }) {
           <div key={index} className="flex items-start gap-3 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
             <span className="shrink-0 pt-0.5 font-display font-bold text-gray-500">{String.fromCharCode(97 + index)})</span>
             <span className="min-w-0 flex-1 pt-0.5">{processLatexText(option)}</span>
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-bold ${answers[index] ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+            {!hideAnswers && <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-bold ${answers[index] ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
               {answers[index] ? <Check size={12} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}{answers[index] ? "Đúng" : "Sai"}
-            </span>
+            </span>}
           </div>
         ))}
       </div>
     );
   }
+  if (hideAnswers) return null;
   if (question.type === "short_answer") {
     const missing = !String(question.correctAnswer ?? "").trim();
     return (

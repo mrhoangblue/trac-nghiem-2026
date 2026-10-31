@@ -159,16 +159,16 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
 
   return (
     <div className="space-y-8">
-      {section !== "assignments" && <section id="class-announcements" aria-labelledby="announcement-heading" className="overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-orange-50/70 to-white px-5 py-5 sm:px-7">
+      {section !== "assignments" && <section id="class-announcements" aria-labelledby="announcement-heading" className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[var(--shadow-soft)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-500 text-white shadow-sm"><Bell size={21} /></span>
-            <div><p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-amber-700">Ưu tiên đầu lớp</p><h2 id="announcement-heading" className="text-xl font-extrabold text-gray-950">Thông báo</h2></div>
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm"><Bell size={17} aria-hidden="true" /></span>
+            <div><h2 id="announcement-heading" className="font-display text-base font-extrabold text-gray-900">Thông báo của lớp</h2><p className="text-xs text-gray-500">Tin mới nhất từ giáo viên</p></div>
           </div>
-          {isTeacher && <button onClick={() => setAnnouncementOpen((value) => !value)} className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700">+ Tạo thông báo</button>}
+          {isTeacher && <button onClick={() => setAnnouncementOpen((value) => !value)} className="edu-btn inline-flex min-h-9 items-center rounded-xl px-3.5 text-xs font-semibold text-white">+ Đăng thông báo</button>}
         </div>
         {announcementOpen && isTeacher && (
-          <form className="grid gap-3 border-b border-amber-100 bg-amber-50/40 p-5 sm:p-7" onSubmit={async (event) => { event.preventDefault(); await mutate("POST", { action: "create_announcement", ...announcement }); setAnnouncement({ title: "", body: "" }); setAnnouncementOpen(false); }}>
+          <form className="grid gap-3 border-b border-gray-100 bg-gray-50/60 p-5" onSubmit={async (event) => { event.preventDefault(); await mutate("POST", { action: "create_announcement", ...announcement }); setAnnouncement({ title: "", body: "" }); setAnnouncementOpen(false); }}>
             <input required maxLength={160} value={announcement.title} onChange={(event) => setAnnouncement({ ...announcement, title: event.target.value })} placeholder="Tiêu đề thông báo" className="rounded-xl border-2 border-amber-100 bg-white px-4 py-3 font-bold outline-none focus:border-amber-400" />
             <textarea rows={3} maxLength={3000} value={announcement.body} onChange={(event) => setAnnouncement({ ...announcement, body: event.target.value })} placeholder="Nội dung cần nhắc học sinh…" className="resize-y rounded-xl border-2 border-amber-100 bg-white px-4 py-3 text-sm outline-none focus:border-amber-400" />
             <div className="flex justify-end gap-2"><button type="button" onClick={() => setAnnouncementOpen(false)} className="px-4 py-2 text-sm font-bold text-gray-500">Hủy</button><button disabled={saving} className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">Đăng thông báo</button></div>
@@ -176,19 +176,19 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
         )}
         <div className="divide-y divide-gray-100">
           {data.announcements.slice(0, 8).map((item) => (
-            <article key={item.id} className="flex gap-3 px-5 py-4 sm:px-7">
+            <article key={item.id} className="flex gap-3 px-5 py-4">
               <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.kind === "assignment" ? "bg-brand-600" : "bg-amber-500"}`} />
               <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-extrabold text-gray-900">{item.title}</h3>{item.kind === "assignment" && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-700">Bài tập</span>}</div>{item.body && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-600">{item.body}</p>}<p className="mt-1 text-[11px] text-gray-400">{formatDate(item.createdAt)}</p></div>
             </article>
           ))}
-          {data.announcements.length === 0 && <p className="px-7 py-8 text-center text-sm text-gray-400">Chưa có thông báo nào.</p>}
+          {data.announcements.length === 0 && <p className="px-5 py-8 text-center text-sm text-gray-400">Chưa có thông báo nào.</p>}
         </div>
       </section>}
 
       {section !== "announcements" && <section id="class-assignments" aria-labelledby="assignment-heading" className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-brand-700">Giao và nhận bài</p><h2 id="assignment-heading" className="mt-1 text-2xl font-extrabold text-gray-950">Bài tập rèn luyện</h2><p className="mt-1 text-sm text-gray-500">Xem đề ngay tại đây và nộp PDF hoặc ảnh bài làm cho giáo viên.</p></div>
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={loading} onClick={() => void load()} className="min-h-11 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 disabled:opacity-50">{loading ? "Đang tải…" : "Cập nhật danh sách"}</button>{isTeacher && <button onClick={() => setAssignmentOpen((value) => !value)} className="rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-800">+ Giao bài tập</button>}</div>
+          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-brand-700">Giao và nhận bài</p><h2 id="assignment-heading" className="mt-1 font-display text-2xl font-extrabold text-gray-900">Bài tập rèn luyện</h2><p className="mt-1 text-sm text-gray-500">Xem đề ngay tại đây và nộp PDF hoặc ảnh bài làm cho giáo viên.</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={loading} onClick={() => void load()} className="min-h-11 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 disabled:opacity-50">{loading ? "Đang tải…" : "Cập nhật danh sách"}</button>{isTeacher && <button onClick={() => setAssignmentOpen((value) => !value)} className="edu-btn inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-white">+ Giao bài tập</button>}</div>
         </div>
         {error && <p role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-700">{error}</p>}
         {assignmentOpen && isTeacher && (
@@ -205,7 +205,7 @@ export default function ClassActivityHub({ classId, teacherMode = false, section
           {data.assignments.map((item) => {
             const draft = submissionDrafts[item.id] ?? { files: [], note: "" };
             return (
-              <article key={item.id} className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+              <article key={item.id} className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[var(--shadow-soft)]">
                 <div className="p-5 sm:p-7">
                   <div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${item.status === "open" ? "bg-success-100 text-success-700" : "bg-gray-100 text-gray-600"}`}>{item.status === "open" ? "Đang nhận bài" : "Đã khóa"}</span>{item.mySubmission && <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">✓ Đã nộp</span>}</div><h3 className="mt-3 text-xl font-extrabold text-gray-950">{item.title}</h3>{item.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{item.description}</p>}</div><div className="rounded-2xl bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800"><CalendarClock className="mr-2 inline h-4 w-4" />{formatDate(item.dueAt)}</div></div>
                   {item.attachment && <div className="mt-4 space-y-3">

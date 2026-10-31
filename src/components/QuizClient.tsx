@@ -10,7 +10,9 @@ import TikzRenderer from "@/components/TikzRenderer";
 import ReviewMode from "@/components/ReviewMode";
 import EssayUploadPanel from "@/components/essay/EssayUploadPanel";
 import EssayUploadStage from "@/components/essay/EssayUploadStage";
+import { FitCard, FitStage } from "@/components/QuizFit";
 import type { ExamStructure } from "@/utils/examStructure";
+import { answersToDisplay, answersToOriginal, buildExamVersion } from "@/utils/examVersions";
 import { db } from "@/lib/firebase";
 import {
   doc,
@@ -52,6 +54,7 @@ interface StudentSubmissionState {
     questionTimings: QuestionTimingStat[];
     lastInteractionAtSeconds: number;
     currentQuestionIndex: number;
+    examCode: string | null;
   } | null;
 }
 
@@ -158,11 +161,11 @@ const CountdownTimer = memo(function CountdownTimer({
   const isDanger  = timeLeft <= 60  && timeLeft > 0;
 
   return (
-    <div className="pointer-events-none sticky top-20 z-40 flex justify-end lg:justify-stretch">
+    <div className="flex shrink-0 lg:block">
       <div
         role="timer"
         aria-live={isDanger ? "assertive" : "off"}
-        className={`pointer-events-auto flex items-center gap-3 rounded-2xl px-3 py-2.5 shadow-[var(--shadow-soft)] transition-all duration-500 lg:w-full lg:px-4 lg:py-4 ${
+        className={`flex items-center gap-2 rounded-2xl px-2.5 py-2 shadow-[var(--shadow-soft)] lg:gap-3 transition-all duration-500 lg:w-full lg:px-4 lg:py-4 ${
           isDanger
             ? "animate-pulse bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-rose-500/30"
             : isWarning
@@ -193,16 +196,19 @@ export interface QuizClientProps {
   structure?: ExamStructure;
   timing: TimingConfig;
   maxRetries?: number;
+  /** Cấu hình trộn đề nhiều mã (exam.versioning). */
+  versioning?: unknown;
 }
 
 export default function QuizClient({
   examId,
   title,
-  questions,
+  questions: baseQuestions,
   scoringConfig,
   structure = "p123",
   timing,
   maxRetries = 1,
+  versioning,
 }: QuizClientProps) {
   const { user, userProfile, login } = useAuth();
   const getIdToken = useCallback(async () => {
@@ -211,6 +217,16 @@ export default function QuizClient({
   }, [user]);
   const { isStudentMode } = useStudentMode();
   const router = useRouter();
+
+  // ── Mã đề ──────────────────────────────────────────────────────────────────
+  // Máy chủ giao mã khi bắt đầu. Mọi state đáp án trong component theo thứ tự
+  // của bản đề này; chỉ đổi về thứ tự gốc khi gửi lên máy chủ.
+  const [examCode, setExamCode] = useState<string | null>(null);
+  const version = useMemo(() => buildExamVersion(baseQuestions, versioning, examCode, examId), [baseQuestions, versioning, examCode, examId]);
+  const questions = version.questions;
+  const versionOrders = version.orders;
+  // Nháp trên máy tách theo mã để không lẫn thứ tự giữa hai lượt làm.
+  const draftId = version.code ? `${examId}~${version.code}` : examId;
 
   // ── Screen state ──────────────────────────────────────────────────────────
   const [manuallyStarted, setManuallyStarted] = useState(false);
@@ -288,19 +304,22 @@ export default function QuizClient({
         if (session) {
           inProgressDocIdRef.current = session.id;
           setSubmissionId(session.id);
+          setExamCode(session.examCode ?? null);
+          const sessionVersion = buildExamVersion(baseQuestions, versioning, session.examCode, examId);
 
           // Hydrate saved answers from localStorage draft
-          const draft = loadDraft(examId, user.uid);
+          const draft = loadDraft(sessionVersion.code ? `${examId}~${sessionVersion.code}` : examId, user.uid);
           if (draft) {
             if (Object.keys(draft.p1Ans).length) setP1Ans(draft.p1Ans);
             if (Object.keys(draft.p2Ans).length) setP2Ans(draft.p2Ans);
             if (Object.keys(draft.p3Ans).length) setP3Ans(draft.p3Ans);
           } else if (typeof session.answersJson === "string") {
             try {
-              const stored = JSON.parse(session.answersJson);
-              setP1Ans(stored.p1Ans ?? {});
-              setP2Ans(stored.p2Ans ?? {});
-              setP3Ans(stored.p3Ans ?? {});
+              const parsed = JSON.parse(session.answersJson);
+              const stored = answersToDisplay({ p1Ans: parsed.p1Ans ?? {}, p2Ans: parsed.p2Ans ?? {}, p3Ans: parsed.p3Ans ?? {} }, sessionVersion.orders);
+              setP1Ans(stored.p1Ans);
+              setP2Ans(stored.p2Ans);
+              setP3Ans(stored.p3Ans);
             } catch {
               // Bài cũ hoặc dữ liệu nháp lỗi: tiếp tục với đáp án rỗng.
             }
@@ -470,14 +489,14 @@ export default function QuizClient({
     void updateDoc(doc(db, "submissions", inProgressDocIdRef.current), {
       ...summary,
       currentQuestionIndex,
-      answersJson: JSON.stringify({
+      answersJson: JSON.stringify(answersToOriginal({
         p1Ans: p1AnsRef.current,
         p2Ans: p2AnsRef.current,
         p3Ans: p3AnsRef.current,
-      }),
+      }, versionOrders)),
       lastActivityAt: serverTimestamp(),
     }).catch((error) => console.warn("Không thể lưu nhật ký làm bài:", error));
-  }, [getActivitySummary]);
+  }, [getActivitySummary, versionOrders]);
 
   // saveDraftRef stays stable (empty-dep callbacks read it via ref).
   const saveDraftRef = useRef<(
@@ -489,8 +508,8 @@ export default function QuizClient({
     if (!user?.uid) return;
     const uid = user.uid;
     saveDraftRef.current = (p1, p2, p3) =>
-      saveDraft(examId, uid, { p1Ans: p1, p2Ans: p2, p3Ans: p3 });
-  }, [user?.uid, examId]);
+      saveDraft(draftId, uid, { p1Ans: p1, p2Ans: p2, p3Ans: p3 });
+  }, [user?.uid, draftId]);
 
   // ── handleStartExam: called when student clicks "Bắt đầu" ─────────────────
   // 1. Creates an IN_PROGRESS record in Firestore so a reload can find it.
@@ -525,10 +544,11 @@ export default function QuizClient({
           isTeacherPreview: isStudentMode,
         }),
       });
-      const payload = await response.json().catch(() => null) as { id?: string; error?: string } | null;
+      const payload = await response.json().catch(() => null) as { id?: string; error?: string; examCode?: string | null } | null;
       if (!response.ok || !payload?.id) throw new Error(payload?.error ?? "SESSION_START_FAILED");
       inProgressDocIdRef.current = payload.id;
       setSubmissionId(payload.id);
+      setExamCode(payload.examCode ?? null);
     } catch (err) {
       console.error("Failed to write IN_PROGRESS record:", err);
       window.alert("Chưa thể tạo phiên làm bài trên máy chủ. Vui lòng kiểm tra mạng và thử lại.");
@@ -766,7 +786,7 @@ export default function QuizClient({
           part2Results,
           part3Results,
           scores: result,
-          answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
+          answersJson: JSON.stringify(answersToOriginal({ p1Ans, p2Ans, p3Ans }, versionOrders)),
           cheatCount: cheatCountRef.current,
           ...activitySummary,
           ...(isStudentMode ? { isTeacherPreview: true } : {}),
@@ -802,7 +822,7 @@ export default function QuizClient({
         savedSubmissionId = saved.id;
         if (saved.essayUpload) {
           // Đề có tự luận: không gửi email, không hiện điểm; còn 5 phút nộp ảnh.
-          if (user?.uid) clearDraft(examId, user.uid);
+          if (user?.uid) clearDraft(draftId, user.uid);
           clearSession();
           setEssayStage({ submissionId: saved.id, deadlineMillis: saved.essayUpload.uploadDeadlineMillis });
           setIsSubmitted(true);
@@ -811,7 +831,7 @@ export default function QuizClient({
         }
 
         // Clear persistence artifacts — draft and sessionStorage backup
-        if (user?.uid) clearDraft(examId, user.uid);
+        if (user?.uid) clearDraft(draftId, user.uid);
         clearSession();
       } catch (err) {
         console.error("Lỗi lưu bài nộp:", err);
@@ -881,6 +901,7 @@ export default function QuizClient({
       setSubmitting(false);
     },
     [
+      draftId, versionOrders,
       isStudentMode, isSubmitted, submitting, totalAnswered, totalQuestions,
       calculateScore, p1Qs, p2Qs, p3Qs,
       p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
@@ -927,7 +948,7 @@ export default function QuizClient({
         part2Results,
         part3Results,
         scores: result,
-        answersJson: JSON.stringify({ p1Ans, p2Ans, p3Ans }),
+        answersJson: JSON.stringify(answersToOriginal({ p1Ans, p2Ans, p3Ans }, versionOrders)),
         cheatCount: cheatCountRef.current,
         ...activitySummary,
         exitedEarly: true, // flag: student left before finishing all questions
@@ -955,7 +976,7 @@ export default function QuizClient({
         }),
       });
       if (!response.ok) throw new Error("Không thể lưu bài nộp khi thoát.");
-      if (user?.uid) clearDraft(examId, user.uid);
+      if (user?.uid) clearDraft(draftId, user.uid);
       clearSession();
     } catch (err) {
       console.error("Lỗi lưu bài khi thoát:", err);
@@ -970,6 +991,7 @@ export default function QuizClient({
     // Navigate: back-button exits go to home, link clicks go to the target href
     router.push(href === "__back__" ? "/" : href);
   }, [
+    draftId, versionOrders,
     exitConfirmHref, isSavingExit, calculateScore,
     p1Qs, p2Qs, p3Qs, p1Ans, p2Ans, p3Ans,
     examId, title, user, userProfile,
@@ -1136,7 +1158,6 @@ export default function QuizClient({
   // Section banner: show when this is the first question of a new section
   const prevType = currentIdx > 0 ? questions[currentIdx - 1].type : null;
   const isFirstOfSection = currentIdx === 0 || prevType !== currentQ.type;
-  const sectionMeta = SECTION_META[currentQ.type];
 
   // Anti-cheat warning modal
   const CheatWarningModal = showCheatWarning ? (
@@ -1161,7 +1182,7 @@ export default function QuizClient({
   ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 py-4 sm:px-5 lg:py-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 py-3 sm:px-5 lg:py-4">
       {CheatWarningModal}
 
       {/* ── Exit-confirmation modal ───────────────────────────────────────────── */}
@@ -1207,55 +1228,42 @@ export default function QuizClient({
         </div>
       )}
 
-      {/* ── Student-preview mode banner ─────────────────────────────────────── */}
-      {isStudentMode && (
-        <div className="mb-4 flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
-          <GraduationCap size={18} className="shrink-0" aria-hidden="true" />
-          <span>
-            Đang ở <strong className="font-bold">Chế độ học sinh</strong>. Bài làm được lưu và chỉ hiển thị cho{" "}
-            <strong className="font-bold">giáo viên và admin</strong>.
-          </span>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-7">
-        <div className="min-w-0">
-          <div className="mb-4 rounded-3xl border border-gray-200 bg-white/90 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl sm:p-5">
-            <div className="flex items-center gap-4">
+        <FitStage className="flex min-w-0 flex-col">
+          <div className="mb-3 shrink-0 rounded-2xl border border-gray-200 bg-white/90 px-3.5 py-2.5 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+            <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" /></span>Đang làm bài</p>
-                <h1 className="truncate font-display text-lg font-bold leading-tight text-gray-900 sm:text-xl">{title}</h1>
-                <p className="mt-1 text-sm text-gray-500">Câu <span className="font-semibold text-gray-800">{currentIdx + 1}</span>/{totalQuestions} · Đã trả lời <span className="font-semibold text-brand-700">{totalAnswered}/{totalQuestions}</span></p>
+                <h1 className="truncate font-display text-base font-bold leading-tight text-gray-900 sm:text-lg" title={title}>{title}</h1>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 sm:text-[13px]">
+                  <span className="hidden items-center gap-1.5 font-semibold text-brand-600 sm:inline-flex"><span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500" /></span>Đang làm bài</span>
+                  <span aria-hidden="true" className="hidden text-gray-300 sm:inline">·</span>
+                  <span>Câu <span className="font-semibold text-gray-800">{currentIdx + 1}</span>/{totalQuestions}</span>
+                  <span aria-hidden="true" className="text-gray-300">·</span>
+                  <span>Đã trả lời <span className="font-semibold text-brand-700">{totalAnswered}/{totalQuestions}</span></span>
+                  {version.code && <span className="inline-flex items-center rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100">Mã đề {version.code}</span>}
+                  {isStudentMode && <span title="Bài làm được lưu và chỉ hiển thị cho giáo viên và admin." className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200"><GraduationCap size={12} aria-hidden="true" />Chế độ học sinh</span>}
+                </p>
               </div>
-              <div className="relative h-14 w-14 shrink-0" aria-label={`Hoàn thành ${Math.round(progress)}%`}>
+              <div className="relative hidden h-11 w-11 shrink-0 sm:block" aria-label={`Hoàn thành ${Math.round(progress)}%`}>
                 <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
                   <circle cx="18" cy="18" r="15.5" fill="none" stroke="#EEF2FF" strokeWidth="4" />
                   <circle cx="18" cy="18" r="15.5" fill="none" stroke="url(#quiz-progress-g)" strokeWidth="4" strokeLinecap="round" strokeDasharray="97.4" strokeDashoffset={97.4 * (1 - progress / 100)} className="transition-[stroke-dashoffset] duration-700" />
                   <defs><linearGradient id="quiz-progress-g" x1="0" x2="1"><stop offset="0" stopColor="#4F46E5" /><stop offset="1" stopColor="#A855F7" /></linearGradient></defs>
                 </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-800">{Math.round(progress)}%</span>
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-800">{Math.round(progress)}%</span>
               </div>
             </div>
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-gray-100">
               <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-700" style={{ width: `${((currentIdx + 1) / Math.max(1, totalQuestions)) * 100}%` }} />
             </div>
           </div>
 
-          {isFirstOfSection && sectionMeta && (
-            <div className="mb-4 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br font-display text-sm font-extrabold text-white shadow-md ${sectionMeta.colors}`}>{sectionMeta.roman}</span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900">Phần {sectionMeta.roman}: {sectionMeta.label}</p>
-                <p className="mt-0.5 text-xs text-gray-500">{sectionMeta.note}</p>
-              </div>
-            </div>
-          )}
-
-          <div key={currentQ.id} className="quiz-question-shell quiz-option-enter flex-1 rounded-[1.75rem] border border-gray-200 bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5 md:p-7">
+          <FitCard key={currentQ.id} className="quiz-question-shell quiz-option-enter min-h-0 flex-1 overflow-y-auto rounded-[1.75rem] border border-gray-200 bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5 md:px-7 md:py-6">
             <QuestionCard
               key={currentQ.id}
               question={currentQ}
               questionNumber={currentIdx + 1}
+              showPartNote={isFirstOfSection}
               p1Ans={p1Ans}
               p2Ans={p2Ans}
               p3Ans={p3Ans}
@@ -1268,13 +1276,13 @@ export default function QuizClient({
                 <EssayUploadPanel submissionId={submissionId} getToken={getIdToken} onFilesChange={setEssayFileCount} />
               </div>
             )}
-          </div>
+          </FitCard>
 
-          <div className="sticky bottom-3 z-30 mt-5 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/90 p-2 shadow-[var(--shadow-lift)] backdrop-blur-xl lg:static lg:shadow-[var(--shadow-soft)]">
+          <div className="sticky bottom-3 z-30 mt-3 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/90 p-1.5 shadow-[var(--shadow-lift)] backdrop-blur-xl lg:static lg:shadow-[var(--shadow-soft)]">
             <button
               onClick={() => onNavigate(Math.max(0, currentIdx - 1))}
               disabled={currentIdx === 0}
-              className="inline-flex min-h-12 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent sm:px-5"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent sm:px-5"
             >
               <ArrowLeft size={18} aria-hidden="true" /><span className="hidden sm:inline">Câu trước</span>
             </button>
@@ -1282,22 +1290,23 @@ export default function QuizClient({
             <span className="text-sm font-semibold text-gray-500 lg:hidden">{currentIdx + 1} / {totalQuestions}</span>
 
             {currentIdx < questions.length - 1 ? (
-              <button onClick={() => onNavigate(Math.min(questions.length - 1, currentIdx + 1))} className="edu-btn inline-flex min-h-12 items-center gap-2 rounded-xl px-5 text-sm font-semibold text-white">
+              <button onClick={() => onNavigate(Math.min(questions.length - 1, currentIdx + 1))} className="edu-btn inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-semibold text-white">
                 Câu tiếp <ArrowRight size={18} aria-hidden="true" />
               </button>
             ) : (
-              <button onClick={() => handleSubmit(false)} disabled={submitting} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 disabled:opacity-60">
+              <button onClick={() => handleSubmit(false)} disabled={submitting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 disabled:opacity-60">
                 {submitting ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Send size={17} aria-hidden="true" />}
                 Nộp bài
               </button>
             )}
           </div>
-        </div>
+        </FitStage>
 
-        <aside className="order-first min-w-0 space-y-4 lg:sticky lg:top-20 lg:order-last">
+        {/* Điện thoại: đồng hồ và dãy số câu chung một hàng để dành chỗ cho đề. */}
+        <aside className="order-first flex min-w-0 items-stretch gap-2 lg:sticky lg:top-20 lg:order-last lg:block lg:space-y-4">
           <CountdownTimer totalSeconds={remainingSecondsOverride ?? timing.duration * 60} onExpire={onExpire} />
-          <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-[var(--shadow-soft)]">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-[var(--shadow-soft)] lg:rounded-3xl lg:p-4">
+            <div className="mb-3 hidden items-center justify-between lg:flex">
               <p className="text-sm font-bold text-gray-900">Danh sách câu</p>
               <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">{totalAnswered}/{totalQuestions}</span>
             </div>
@@ -1492,10 +1501,30 @@ interface CardProps {
   onP1: (qId: number, optIdx: number) => void;
   onP2: (qId: number, stmtIdx: number, value: boolean) => void;
   onP3: (qId: number, val: string) => void;
+  /** Câu đầu của mỗi phần: hiện cách tính điểm của phần đó. */
+  showPartNote?: boolean;
+}
+
+/**
+ * Số cột cho 4 phương án theo độ dài chữ hiển thị (bỏ lệnh LaTeX), như đề in:
+ * đáp án ngắn xếp một hàng, vừa thì 2 cột, dài hoặc có hình/bảng thì mỗi dòng một phương án.
+ */
+function optionGridClass(options: string[]): string {
+  if (options.some((opt) => /\\begin|\[\[EXAM_INLINE_IMAGE|\$\$|\\\[/.test(opt))) return "grid-cols-1";
+  const visible = (opt: string) => opt
+    .replace(/\\(?:d?frac|tfrac)/g, "")
+    .replace(/\\[a-zA-Z]+/g, "")
+    .replace(/[{}$^_\\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim().length;
+  const longest = Math.max(0, ...options.map(visible));
+  if (longest <= 14) return "grid-cols-2 lg:grid-cols-4";
+  if (longest <= 34) return "grid-cols-1 sm:grid-cols-2";
+  return "grid-cols-1";
 }
 
 const QuestionCard = memo(
-  function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3 }: CardProps) {
+  function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3, showPartNote = false }: CardProps) {
     const { id, type, questionText, options, tikzCode, tikzImageUrl, imageUrls } = question;
 
     // ── Memoize ALL LaTeX rendering — only recompute when the question changes ──
@@ -1520,27 +1549,30 @@ const QuestionCard = memo(
         : type === "essay"
         ? { label: "Tự luận",      cls: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200" }
         : { label: "Trả lời ngắn", cls: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" };
+    const part = SECTION_META[type];
+    const optionGrid = type === "multiple_choice" && options ? optionGridClass(options) : "";
 
     return (
       <div className="exam-reading">
-        <div className="mb-5 flex items-center gap-2">
-          <span className="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1 font-sans text-xs font-bold text-white shadow-sm shadow-indigo-500/30">
+        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 font-sans">
+          <span className="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1 text-xs font-bold text-white shadow-sm shadow-indigo-500/30">
             Câu {questionNumber}
           </span>
-          <span className={`rounded-full px-3 py-1 font-sans text-xs font-semibold ${typeBadge.cls}`}>
-            {typeBadge.label}
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${typeBadge.cls}`} title={part ? `Phần ${part.roman}: ${part.label}. ${part.note}` : undefined}>
+            {part && <span className="font-bold">Phần {part.roman} ·</span>}{typeBadge.label}
           </span>
+          {showPartNote && part && <span className="hidden text-xs text-gray-500 md:inline">{part.note}</span>}
         </div>
 
         {tikzCode || tikzImageUrl ? (
-          <div className="exam-question-visual mb-4 grid grid-cols-1 items-center gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(15rem,.9fr)]">
-            <div className="text-gray-900 font-medium">
+          <div className="exam-question-visual mb-3 grid grid-cols-1 items-center gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(15rem,.9fr)]">
+            <div className="text-gray-900">
               {renderedQuestion}
             </div>
             {/* TikzRenderer is React.memo — never re-renders on answer clicks.    */}
             {/* key={currentQ.id} on QuestionCard (parent) ensures a fresh iframe  */}
             {/* is mounted when navigating, so TikZJax WebAssembly is fully freed. */}
-            <div className="exam-figure flex min-h-28 flex-col items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 sm:p-3">
+            <div className="exam-figure flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white p-2">
               {tikzImageUrl ? (
                 <Image
                   src={tikzImageUrl}
@@ -1556,7 +1588,7 @@ const QuestionCard = memo(
             </div>
           </div>
         ) : (
-          <div className="mb-4 text-gray-900 font-medium">
+          <div className="mb-3 text-gray-900">
             {renderedQuestion}
           </div>
         )}
@@ -1573,7 +1605,7 @@ const QuestionCard = memo(
 
         {/* P1 — Multiple choice */}
         {type === "multiple_choice" && options && (
-          <div className="grid gap-3" role="radiogroup" aria-label={`Phương án câu ${questionNumber}`}>
+          <div className={`grid gap-2.5 ${optionGrid}`} role="radiogroup" aria-label={`Phương án câu ${questionNumber}`}>
             {options.map((opt, i) => {
               const selected = p1Ans[id] === i;
               return (
@@ -1582,13 +1614,13 @@ const QuestionCard = memo(
                   role="radio"
                   aria-checked={selected}
                   onClick={() => onP1(id, i)}
-                  className={`group/opt relative flex w-full items-center gap-3 rounded-2xl border-2 px-3 py-3 text-left transition-all duration-200 active:scale-[.99] sm:px-4 ${
+                  className={`group/opt relative flex w-full items-center gap-3 rounded-2xl border-2 px-3 py-2.5 text-left transition-all duration-200 active:scale-[.99] sm:px-4 ${
                     selected
                       ? "border-indigo-500 bg-gradient-to-r from-indigo-50 to-violet-50 shadow-md shadow-indigo-500/10"
                       : "border-gray-200 bg-white hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
                   }`}
                 >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-sans text-sm font-bold transition-all duration-200 ${selected ? "scale-105 bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30" : "bg-gray-100 text-gray-500 group-hover/opt:bg-indigo-50 group-hover/opt:text-indigo-600"}`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl font-sans text-sm font-bold transition-all duration-200 ${selected ? "scale-105 bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30" : "bg-gray-100 text-gray-500 group-hover/opt:bg-indigo-50 group-hover/opt:text-indigo-600"}`}>
                     {String.fromCharCode(65 + i)}
                   </span>
                   <span className={`flex-1 leading-relaxed ${selected ? "font-medium text-indigo-950" : "text-gray-700"}`}>
@@ -1603,29 +1635,29 @@ const QuestionCard = memo(
 
         {/* P2 — True / False statements */}
         {type === "true_false" && options && (
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {options.map((stmt, i) => {
               const selected = (p2Ans[id] ?? [])[i];
               const isDung = selected === true;
               const isSai  = selected === false;
               return (
-                <div key={i} className={`flex flex-col gap-3 rounded-2xl border-2 p-3 transition-colors sm:flex-row sm:items-center sm:p-4 ${isDung ? "border-emerald-200 bg-emerald-50/40" : isSai ? "border-rose-200 bg-rose-50/40" : "border-gray-200 bg-white"}`}>
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 font-sans text-sm font-bold text-violet-600">{String.fromCharCode(97 + i)}</span>
-                    <div className="min-w-0 flex-1 pt-0.5 leading-relaxed text-gray-800">{renderedOptions[i]}</div>
+                <div key={i} className={`flex flex-row items-center gap-2 rounded-2xl border-2 px-2.5 py-2 transition-colors sm:gap-3 sm:px-4 ${isDung ? "border-emerald-200 bg-emerald-50/40" : isSai ? "border-rose-200 bg-rose-50/40" : "border-gray-200 bg-white"}`}>
+                  <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 font-sans text-sm font-bold text-violet-600">{String.fromCharCode(97 + i)}</span>
+                    <div className="min-w-0 flex-1 pt-px leading-relaxed text-gray-800">{renderedOptions[i]}</div>
                   </div>
-                  <div className="exam-true-false grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 font-sans sm:w-44" role="radiogroup" aria-label={`Ý ${String.fromCharCode(97 + i)}`}>
+                  <div className="exam-true-false grid w-[6.75rem] shrink-0 grid-cols-2 gap-0.5 rounded-xl bg-gray-100 p-0.5 font-sans sm:w-40 sm:gap-1" role="radiogroup" aria-label={`Ý ${String.fromCharCode(97 + i)}`}>
                     <button
                       role="radio"
                       aria-checked={isDung}
                       onClick={() => onP2(id, i, true)}
-                      className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-lg text-sm font-semibold transition-all duration-200 ${isDung ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/30" : "text-gray-500 hover:bg-white hover:text-emerald-700"}`}
+                      className={`inline-flex min-h-9 items-center justify-center gap-1 rounded-lg text-sm font-semibold transition-all duration-200 ${isDung ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/30" : "text-gray-500 hover:bg-white hover:text-emerald-700"}`}
                     >{isDung && <Check size={14} strokeWidth={3} aria-hidden="true" />}Đúng</button>
                     <button
                       role="radio"
                       aria-checked={isSai}
                       onClick={() => onP2(id, i, false)}
-                      className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-lg text-sm font-semibold transition-all duration-200 ${isSai ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md shadow-rose-500/30" : "text-gray-500 hover:bg-white hover:text-rose-700"}`}
+                      className={`inline-flex min-h-9 items-center justify-center gap-1 rounded-lg text-sm font-semibold transition-all duration-200 ${isSai ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md shadow-rose-500/30" : "text-gray-500 hover:bg-white hover:text-rose-700"}`}
                     >Sai</button>
                   </div>
                 </div>
@@ -1678,7 +1710,7 @@ interface PaletteProps {
 const QuestionPalette = memo(
   function QuestionPalette({ questions, currentIdx, p1Ans, p2Ans, p3Ans, essayDone, onNavigate }: PaletteProps) {
     return (
-      <div className="flex max-w-full gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-5 lg:overflow-visible">
+      <div className="no-scrollbar flex max-w-full gap-1.5 overflow-x-auto lg:grid lg:grid-cols-5 lg:gap-2 lg:overflow-visible lg:pb-1">
         {questions.map((q, i) => {
           const answered =
             q.type === "multiple_choice"

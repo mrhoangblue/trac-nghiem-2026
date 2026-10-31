@@ -91,7 +91,7 @@ export default function AdminUserTeachingSpacePage() {
     }
   }, [user, userId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { queueMicrotask(() => void load()); }, [load]);
 
   return (
     <AdminGuard adminOnly>

@@ -18,9 +18,14 @@ import type {
   ClassExamSummary,
   ClassResourceSource,
   ClassResourceType,
+  ClassAssignmentView,
 } from "@/utils/classroomTypes";
 import StateIcon from "@/components/StateIcon";
-import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, ListChecks, Loader2, Lock, MessagesSquare, PanelLeftClose, PanelLeftOpen, Pencil, PlayCircle, Plus, Presentation, Trash2, Trophy, type LucideIcon } from "lucide-react";
+import ClassExamCard from "@/components/classroom/ClassExamCard";
+import ClassOverview, { type OverviewCourse } from "@/components/classroom/ClassOverview";
+import ClassHero, { HeroChip } from "@/components/classroom/ClassHero";
+import { trackSpotlight } from "@/utils/spotlight";
+import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, FileQuestion, FileText, LayoutDashboard, ListChecks, Loader2, Lock, MessagesSquare, PanelLeftClose, PanelLeftOpen, Pencil, PlayCircle, Plus, Presentation, Trash2, Trophy, Users, type LucideIcon } from "lucide-react";
 const PdfViewer = dynamic(() => import("@/components/classroom/PdfViewer"), { ssr: false, loading: () => <p role="status" className="p-6 text-sm text-gray-500">Đang mở tài liệu…</p> });
 
 interface CourseView {
@@ -83,6 +88,10 @@ interface Props {
   showClassHeader?: boolean;
   courseId?: string;
   management?: ReactNode;
+  /** Số yêu cầu vào lớp chờ duyệt, hiện trên tab Học sinh. */
+  managementBadge?: number;
+  /** Nút quay lại trong đầu trang lớp (khi showClassHeader). */
+  back?: { href: string; label: string };
 }
 
 interface StoredUpload {
@@ -205,19 +214,6 @@ function ResourceViewer({ resource, fillViewport = false, contained = false }: {
   );
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "Chưa có thời gian";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Chưa có thời gian";
-  return date.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function resourceToDraft(
   courseId: string,
   lessonId: string,
@@ -245,6 +241,8 @@ export default function ClassLearningContent({
   showClassHeader = false,
   courseId,
   management,
+  managementBadge = 0,
+  back,
 }: Props) {
   const { user } = useAuth();
   const { isStudentMode } = useStudentMode();
@@ -322,6 +320,26 @@ export default function ClassLearningContent({
   useEffect(() => {
     queueMicrotask(() => void loadContent());
   }, [loadContent]);
+
+  // Bài tập cho tab Tổng quan và số đếm trên thanh tab; tab Bài tập tự tải bản đầy đủ.
+  const [assignments, setAssignments] = useState<ClassAssignmentView[] | null>(null);
+  useEffect(() => {
+    if (!user || courseId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/classes/${encodeURIComponent(classId)}/activity?section=assignments`, {
+          headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => null) as { assignments?: ClassAssignmentView[] } | null;
+        if (!cancelled) setAssignments(response.ok && Array.isArray(payload?.assignments) ? payload.assignments : []);
+      } catch {
+        if (!cancelled) setAssignments([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [classId, courseId, user]);
 
   const mutate = async (method: "POST" | "PATCH" | "DELETE", body?: object, query = "") => {
     if (!user) throw new Error("Phiên đăng nhập đã hết hạn.");
@@ -718,11 +736,28 @@ export default function ClassLearningContent({
   }
 
   if (!data) {
-    return <div className="rounded-2xl border border-danger-200 bg-danger-50 p-5 text-sm text-danger-700">{error}</div>;
+    return <>
+      {back && <Link href={back.href} className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"><ArrowLeft size={15} aria-hidden="true" />{back.label}</Link>}
+      <div className="rounded-2xl border border-danger-200 bg-danger-50 p-5 text-sm text-danger-700">{error}</div>
+    </>;
   }
 
   const canEdit = teacherMode && data.viewerRole === "teacher";
   const isStudentViewer = data.viewerRole === "student";
+  const pendingExams = data.exams.filter((exam) => exam.status === "open" && !exam.submitted).length;
+  const pendingAssignments = (assignments ?? []).filter((item) => item.status === "open" && !item.mySubmission).length;
+  const overviewCourses: OverviewCourse[] = data.courses.map((course) => {
+    const total = course.resourceCount ?? flattenCourseResources(course.lessons).length;
+    const done = course.completedResourceCount ?? (data.progress[course.id] ?? []).length;
+    return {
+      id: course.id,
+      title: course.title,
+      href: teacherMode ? `/teacher/classes/${classId}/courses/${course.id}` : `/student/classes/${classId}/courses/${course.id}`,
+      coverImageUrl: course.coverImageUrl,
+      lessonCount: course.lessonCount ?? course.lessons.length,
+      progressPercent: total ? Math.round((done / total) * 100) : 0,
+    };
+  });
 
   const coursePanel = (
 <section className="space-y-4" aria-labelledby="course-section-title">
@@ -833,32 +868,50 @@ export default function ClassLearningContent({
                   ? `/teacher/classes/${classId}/courses/${course.id}`
                   : `/student/classes/${classId}/courses/${course.id}`;
                 return (
-                  <article key={course.id} className={`group overflow-hidden rounded-3xl border bg-white shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[var(--shadow-lift)] ${selectedCourseId === course.id ? "border-brand-400 ring-2 ring-brand-100" : "border-gray-200"}`}>
-                    <div
-                      className="relative h-44 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 bg-cover bg-center"
-                      style={course.coverImageUrl ? { backgroundImage: `linear-gradient(180deg, transparent 30%, rgba(30,27,75,.62)), url(${JSON.stringify(course.coverImageUrl)})` } : undefined}
-                    >
-                      {!course.coverImageUrl && <><div aria-hidden="true" className="edu-dots absolute inset-0 opacity-50 mix-blend-overlay" /><BookOpen aria-hidden="true" size={96} strokeWidth={1.25} className="absolute -right-3 -top-3 text-white/15 transition-transform duration-500 group-hover:rotate-[-6deg] group-hover:scale-110" /></>}
-                      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white">
-                        <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold ring-1 ring-white/30 backdrop-blur-md">{course.lessonCount ?? course.lessons.length} bài học</span>
-                        {canEdit && <span className={`rounded-full px-3 py-1 text-xs font-bold backdrop-blur-sm ${course.published ? "bg-success-600/90" : "bg-gray-700/90"}`}>{course.published ? "Đã xuất bản" : "Bản nháp"}</span>}
-                      </div>
+                  <article key={course.id} onPointerMove={trackSpotlight} className={`edu-card group flex flex-col overflow-hidden rounded-3xl ${selectedCourseId === course.id ? "ring-2 ring-brand-300" : ""}`}>
+                    <div className="relative aspect-[16/9] shrink-0 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500">
+                      {course.coverImageUrl ? (
+                        <div aria-hidden="true" className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${JSON.stringify(course.coverImageUrl)})` }} />
+                      ) : (
+                        <>
+                          <div aria-hidden="true" className="edu-dots absolute inset-0 opacity-50 mix-blend-overlay" />
+                          <div aria-hidden="true" className="absolute -left-10 -top-12 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
+                          <BookOpen aria-hidden="true" size={110} strokeWidth={1.1} className="absolute -bottom-4 -right-3 text-white/20 transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-110" />
+                          <p aria-hidden="true" className="absolute bottom-4 left-5 right-24 line-clamp-2 font-display text-xl font-extrabold leading-tight text-white drop-shadow-sm">{course.title}</p>
+                        </>
+                      )}
+                      {canEdit && (
+                        <span className={`absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm ring-1 ring-white/30 backdrop-blur-md ${course.published ? "bg-emerald-600/85" : "bg-gray-900/60"}`}>
+                          {course.published ? <CheckCircle2 size={12} aria-hidden="true" /> : <Pencil size={11} aria-hidden="true" />}{course.published ? "Đã xuất bản" : "Bản nháp"}
+                        </span>
+                      )}
+                      {isStudentViewer && progressPercent === 100 && (
+                        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm ring-1 ring-white/30 backdrop-blur-md"><Trophy size={12} aria-hidden="true" />Đã hoàn thành</span>
+                      )}
                     </div>
-                    <div className="p-5">
-                      <h3 className="line-clamp-2 font-display text-xl font-bold leading-7 text-gray-900 transition-colors group-hover:text-brand-700">{course.title}</h3>
-                      <p className="mt-2 line-clamp-2 min-h-12 text-sm leading-6 text-gray-500">{course.description || "Lộ trình học tập được giáo viên thiết kế cho lớp."}</p>
+                    <div className="relative z-[3] flex flex-1 flex-col p-5">
+                      <h3 className="line-clamp-2 font-display text-lg font-bold leading-7 text-gray-900 transition-colors group-hover:text-brand-700">{course.title}</h3>
+                      {course.description && <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-gray-500">{course.description}</p>}
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-gray-600">
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50/70 px-2.5 py-1.5"><ListChecks size={14} aria-hidden="true" className="text-brand-600" />{course.lessonCount ?? course.lessons.length} bài học</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50/70 px-2.5 py-1.5"><FileText size={14} aria-hidden="true" className="text-brand-600" />{resourceCount} tài liệu</span>
+                      </div>
                       {isStudentViewer && (
                         <div className="mt-4">
-                          <div className="mb-1.5 flex justify-between text-xs font-semibold text-gray-500"><span>Tiến độ</span><span>{progressPercent}%</span></div>
+                          <div className="mb-1.5 flex justify-between text-xs font-semibold text-gray-500"><span>Đã học {completedCount}/{resourceCount}</span><span className="tabular-nums text-brand-700">{progressPercent}%</span></div>
                           <div className="h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-700" style={{ width: `${progressPercent}%` }} /></div>
                         </div>
                       )}
-                      <div className="mt-5 flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
-                        <span className="text-xs text-gray-400">{resourceCount} tài nguyên</span>
-                        <div className="flex gap-2">
-                          {canEdit && <button type="button" onClick={() => setCourseDraft({ id: course.id, title: course.title, description: course.description, coverImageUrl: course.coverImageUrl, coverImageKey: course.coverImageKey, published: course.published })} className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200">Sửa</button>}
-                          <Link href={courseHref} className="edu-btn inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-white">{canEdit ? "Quản lý" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu"}</Link>
-                        </div>
+                      <div className="mt-auto flex items-center gap-2 pt-5">
+                        <Link href={courseHref} className="edu-btn inline-flex min-h-11 flex-1 items-center justify-between gap-2 rounded-xl px-4 text-sm font-semibold text-white">
+                          {canEdit ? "Quản lý nội dung" : progressPercent === 100 ? "Ôn lại" : progressPercent > 0 ? "Học tiếp" : "Bắt đầu học"}
+                          <ChevronRight size={17} aria-hidden="true" className="transition-transform duration-300 group-hover:translate-x-0.5" />
+                        </Link>
+                        {canEdit && (
+                          <button type="button" aria-label={`Sửa thông tin khóa học ${course.title}`} title="Sửa thông tin" onClick={() => setCourseDraft({ id: course.id, title: course.title, description: course.description, coverImageUrl: course.coverImageUrl, coverImageKey: course.coverImageKey, published: course.published })} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 transition hover:border-brand-300 hover:text-brand-700">
+                            <Pencil size={16} aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -1271,40 +1324,15 @@ export default function ClassLearningContent({
         {visibleExams.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-gray-300 bg-white py-12 text-center text-sm text-gray-400">Không có bài kiểm tra trong bộ lọc này.</div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visibleExams.map((exam) => {
-              const status = STATUS_META[exam.status];
-              const studentCanStart = exam.status === "open";
               const href = canEdit
                 ? `/admin/exam/${exam.id}?classId=${encodeURIComponent(classId)}`
                 : exam.submitted && exam.submissionId
                   ? `/student/review/${exam.submissionId}`
                   : `/quiz/${exam.id}`;
               return (
-                <article key={exam.id} className="flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${status.classes}`}>{status.label}</span>
-                    {exam.submitted && <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">Đã nộp{typeof exam.totalScore === "number" ? ` · ${exam.totalScore} điểm` : ""}</span>}
-                  </div>
-                  <h3 className="mt-4 text-lg font-extrabold text-gray-900">{exam.title}</h3>
-                  {exam.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">{exam.description}</p>}
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-500">
-                    <div><dt className="font-bold text-gray-700">Số câu</dt><dd>{exam.questionCount}</dd></div>
-                    <div><dt className="font-bold text-gray-700">Thời lượng</dt><dd>{exam.duration ? `${exam.duration} phút` : "Không giới hạn"}</dd></div>
-                    <div><dt className="font-bold text-gray-700">Mở đề</dt><dd>{exam.startTime ? formatDate(exam.startTime) : "Ngay lập tức"}</dd></div>
-                    <div><dt className="font-bold text-gray-700">Đóng đề</dt><dd>{exam.endTime ? formatDate(exam.endTime) : "Không giới hạn"}</dd></div>
-                  </dl>
-                  <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-                    <span className="text-xs text-gray-400">Tạo {formatDate(exam.createdAt)}</span>
-                    {(canEdit || studentCanStart || exam.submitted) ? (
-                      <Link href={href} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700">
-                        {canEdit ? "Xem bài thi" : exam.submitted ? "Xem kết quả" : "Làm bài"}
-                      </Link>
-                    ) : (
-                      <span className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-400">{exam.status === "upcoming" ? "Chưa mở" : "Đã đóng"}</span>
-                    )}
-                  </div>
-                </article>
+                <ClassExamCard key={exam.id} exam={exam} href={href} canEdit={canEdit} />
               );
             })}
           </div>
@@ -1315,12 +1343,13 @@ export default function ClassLearningContent({
   return (
     <div className="space-y-8">
       {showClassHeader && (
-        <header className="rounded-3xl bg-gradient-to-r from-brand-700 to-brand-600 p-5 text-white sm:p-7">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-100">Không gian lớp học</p>
-          <h1 className="mt-2 text-3xl font-extrabold">{data.class.name}</h1>
-          <p className="mt-2 text-sm text-brand-100">Giáo viên: {data.class.teacherName || "—"}</p>
-          {data.class.description && <p className="mt-4 max-w-2xl text-sm leading-7 text-white/85">{data.class.description}</p>}
-        </header>
+        <ClassHero name={data.class.name} subtitle={`Giáo viên: ${data.class.teacherName || "—"}`} description={data.class.description} back={back}>
+          {isStudentViewer && pendingExams + pendingAssignments > 0
+            ? <HeroChip tone="warn">{pendingExams + pendingAssignments} việc cần làm</HeroChip>
+            : <HeroChip>Đã hoàn thành mọi bài được giao</HeroChip>}
+          <HeroChip>{data.courses.length} khóa học</HeroChip>
+          <HeroChip>{data.exams.length} bài thi</HeroChip>
+        </ClassHero>
       )}
 
       {error && (
@@ -1328,12 +1357,22 @@ export default function ClassLearningContent({
       )}
 
       {courseId ? coursePanel : <ClassTabs label="Nội dung lớp học" tabs={[
-        { id: "announcements", label: "Thông báo", content: <ClassActivityHub classId={classId} teacherMode={teacherMode} section="announcements" /> },
-        { id: "assignments", label: "Bài tập", content: <ClassActivityHub classId={classId} teacherMode={teacherMode} section="assignments" /> },
-        { id: "courses", label: "Khóa học", content: coursePanel },
-        { id: "exams", label: "Bài thi", content: examPanel },
-        { id: "rankings", label: "Xếp hạng", content: <ClassLeaderboard classId={classId} /> },
-        ...(management ? [{ id: "management", label: "Quản lý", content: management }] : []),
+        {
+          id: "overview", label: "Tổng quan", icon: LayoutDashboard,
+          content: <ClassOverview
+            exams={data.exams}
+            assignments={assignments}
+            courses={overviewCourses}
+            isStudent={isStudentViewer}
+            classId={classId}
+            announcements={<ClassActivityHub classId={classId} teacherMode={teacherMode} section="announcements" />}
+          />,
+        },
+        { id: "courses", label: "Khóa học", icon: BookOpen, content: coursePanel },
+        { id: "exams", label: "Bài thi", icon: FileQuestion, badge: isStudentViewer ? pendingExams : 0, content: examPanel },
+        { id: "assignments", label: "Bài tập", icon: ClipboardList, badge: isStudentViewer ? pendingAssignments : 0, content: <ClassActivityHub classId={classId} teacherMode={teacherMode} section="assignments" /> },
+        { id: "rankings", label: "Xếp hạng", icon: Trophy, content: <ClassLeaderboard classId={classId} /> },
+        ...(management ? [{ id: "students", label: "Học sinh", icon: Users, badge: managementBadge, content: management }] : []),
       ]} />}
 
     </div>

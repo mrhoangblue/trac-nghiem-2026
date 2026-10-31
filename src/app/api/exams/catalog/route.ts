@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { isClassOnly } from "@/utils/examAudience";
+import { partCountsFromDoc } from "@/utils/examStructure";
 
 // List cards never need question text, answer keys, LaTeX or R2 source files.
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyAuth(request);
     if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-    const snapshot = await adminDb.collection("exams").select("title", "description", "questionCount", "gradeLevel", "examType", "coverImageUrl", "duration", "requiresPassword", "targetType", "targetClassIds").get();
+    const snapshot = await adminDb.collection("exams").select("title", "description", "questionCount", "gradeLevel", "examType", "coverImageUrl", "duration", "requiresPassword", "targetType", "targetClassIds", "part1Count", "part2Count", "part3Count", "part4Count").get();
     // The public catalog only lists public exams. Class-only exams are reached
     // from the class page, for students and teachers alike.
     const visible = snapshot.docs.filter((item) => {
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
         gradeLevel: data.gradeLevel ?? null, examType: data.examType ?? null,
         coverImageUrl: data.coverImageUrl ?? null, duration: Number(data.duration ?? 90),
         requiresPassword: Boolean(data.requiresPassword),
+        partCounts: partCountsFromDoc(data),
       };
     }));
     return NextResponse.json({ exams }, { headers: { "Cache-Control": "private, no-store" } });

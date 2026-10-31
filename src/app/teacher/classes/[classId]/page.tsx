@@ -17,8 +17,9 @@ import {
 } from "firebase/firestore";
 import type { ClassDoc } from "@/utils/classroomTypes";
 import ClassLearningContent from "@/components/classroom/ClassLearningContent";
+import ClassHero, { HeroChip } from "@/components/classroom/ClassHero";
 import * as XLSX from "xlsx";
-import { AlertTriangle, BarChart3, Check } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, Check, Link2 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -464,6 +465,7 @@ export default function TeacherClassDetailPage() {
 
   // ── Add / Delete student state ───────────────────────────────────────────
   const [showAddModal, setShowAddModal] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [deletingStudent, setDeletingStudent] = useState<StudentRow | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -778,12 +780,11 @@ export default function TeacherClassDetailPage() {
   return (
     <AdminGuard>
       <div className="workspace-page max-w-5xl mx-auto px-4 py-8 sm:py-10 w-full">
-        {/* Back link */}
-        <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-          <Link href="/teacher/classes" className="text-brand-600 hover:text-brand-800 font-semibold">
-            ← Quản lý lớp học
+        {(loading || error || !classData) && (
+          <Link href="/teacher/classes" className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline">
+            <ArrowLeft size={15} aria-hidden="true" />Quản lý lớp học
           </Link>
-        </div>
+        )}
 
         {loading ? (
           <Spinner />
@@ -794,43 +795,27 @@ export default function TeacherClassDetailPage() {
         ) : classData ? (
           <>
             {/* ── Class header ──────────────────────────────────────────── */}
-            <header className="relative mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-6 text-white shadow-[var(--shadow-lift)] sm:p-8">
-              <div aria-hidden="true" className="edu-dots absolute inset-0 opacity-50 mix-blend-overlay" />
-              <div aria-hidden="true" className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
-              <span aria-hidden="true" className="edu-float-slow absolute bottom-2 right-8 font-display text-8xl font-extrabold text-white/10">∑</span>
-              <p className="relative mb-1 text-xs font-semibold uppercase tracking-widest text-indigo-100">Lớp học</p>
-              <h1 className="relative font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{classData.name}</h1>
-              <div className="relative mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-3">
-                <span className="text-sm text-brand-100 font-medium">
-                  Mã lớp:{" "}
-                  <strong className="text-white tracking-[0.35em] text-lg font-black font-mono">
-                    {classData.classCode}
-                  </strong>
-                </span>
-                <span className="text-sm text-brand-100 font-medium">
-                  Link tham gia:{" "}
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/join/${classId}`);
-                      alert("Đã sao chép link lớp học!");
-                    }}
-                    className="underline text-white hover:text-brand-200 transition-colors"
-                  >
-                    Sao chép link tham gia
-                  </button>
-                </span>
-                <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
-                  {students.length} học sinh đã vào lớp
-                </span>
-                {pendingStudents.length > 0 && (
-                  <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-bold text-amber-950">
-                    {pendingStudents.length} chờ duyệt
-                  </span>
-                )}
-              </div>
-            </header>
+            <div className="mb-5">
+              <ClassHero name={classData.name} subtitle={classData.description || undefined} back={{ href: "/teacher/classes", label: "Quản lý lớp học" }}>
+                <HeroChip>Mã lớp <strong className="font-mono text-sm tracking-[0.3em]">{classData.classCode}</strong></HeroChip>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(`${window.location.origin}/join/${classId}`).then(() => {
+                      setLinkCopied(true);
+                      window.setTimeout(() => setLinkCopied(false), 2000);
+                    });
+                  }}
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-white px-3 py-1 font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50"
+                >
+                  {linkCopied ? <><Check size={13} aria-hidden="true" />Đã sao chép</> : <><Link2 size={13} aria-hidden="true" />Sao chép link mời</>}
+                </button>
+                <HeroChip>{students.length} học sinh</HeroChip>
+                {pendingStudents.length > 0 && <HeroChip tone="warn">{pendingStudents.length} chờ duyệt</HeroChip>}
+              </ClassHero>
+            </div>
 
-            <ClassLearningContent classId={classId} teacherMode management={<>
+            <ClassLearningContent classId={classId} teacherMode managementBadge={pendingStudents.length} management={<>
             {pendingStudents.length > 0 && (
               <section className="mb-8 overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
                 <div className="border-b border-amber-100 bg-amber-50/70 px-6 py-4">

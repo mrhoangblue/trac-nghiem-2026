@@ -25,6 +25,7 @@ import {
 import ReviewMode from "@/components/ReviewMode";
 import StateIcon from "@/components/StateIcon";
 import { orderQuestionsByPart } from "@/utils/examStructure";
+import { answersToDisplay, buildExamVersion } from "@/utils/examVersions";
 import { AlertTriangle, PenTool } from "lucide-react";
 
 interface StoredAnswers {
@@ -197,9 +198,12 @@ export default function TeacherSubmissionReviewPage() {
         } else {
           qs = (exam.questions ?? []) as ParsedQuestion[];
         }
+        // Đề trộn nhiều mã: hiện đúng bản đề học sinh đã làm.
+        const version = buildExamVersion(qs, exam.versioning, sub.examCode, String(sub.examId));
+        qs = version.questions;
         setQuestions(qs);
 
-        const { p1Ans: a1, p2Ans: a2, p3Ans: a3 } = parseAnswers(sub.answersJson ?? "{}");
+        const { p1Ans: a1, p2Ans: a2, p3Ans: a3 } = answersToDisplay(parseAnswers(sub.answersJson ?? "{}"), version.orders);
         setP1Ans(a1);
         setP2Ans(a2);
         setP3Ans(a3);

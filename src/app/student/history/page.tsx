@@ -81,9 +81,9 @@ export default function StudentHistoryPage() {
   // Fetch submissions khi biết user
   useEffect(() => {
     if (!user?.email) return;
-    setLoading(true);
 
     const fetchSubmissions = async () => {
+      setLoading(true);
       try {
         const q = query(
           collection(db, "submissions"),
@@ -106,8 +106,8 @@ export default function StudentHistoryPage() {
           // Sort client-side: mới nhất trước (tránh cần composite index)
           .sort((a, b) => {
             const ts = (v: unknown) =>
-              v && typeof (v as any).toMillis === "function"
-                ? (v as any).toMillis()
+              typeof (v as { toMillis?: unknown } | null)?.toMillis === "function"
+                ? (v as { toMillis: () => number }).toMillis()
                 : 0;
             return ts(b.submittedAt) - ts(a.submittedAt);
           });
@@ -120,7 +120,7 @@ export default function StudentHistoryPage() {
       }
     };
 
-    fetchSubmissions();
+    queueMicrotask(() => void fetchSubmissions());
   }, [user]);
 
   // ── Chưa đăng nhập ────────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ export default function StudentHistoryPage() {
                 {preview.length > 0 && (
                   <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
                     <GraduationCap size={16} className="shrink-0" aria-hidden="true" />
-                    <span>Có {preview.length} bài làm từ <strong>Chế độ học sinh</strong> (được đánh dấu "Xem trước") — chỉ giáo viên/admin thấy.</span>
+                    <span>Có {preview.length} bài làm từ <strong>Chế độ học sinh</strong> (được đánh dấu &ldquo;Xem trước&rdquo;) — chỉ giáo viên/admin thấy.</span>
                   </div>
                 )}
               </>

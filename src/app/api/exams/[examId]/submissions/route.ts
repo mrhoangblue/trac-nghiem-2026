@@ -88,6 +88,7 @@ export async function GET(
           ? (submission.essay as { files: unknown[] }).files.length
           : 0,
         isTeacherPreview: submission.isTeacherPreview === true,
+        examCode: typeof submission.examCode === "string" ? submission.examCode : null,
       }));
     return NextResponse.json({ submissions }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

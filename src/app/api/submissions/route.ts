@@ -5,6 +5,7 @@ import { verifyAuth } from "@/lib/verifyAuth";
 import { normalizeAnswer } from "@/utils/examTypes";
 import { ESSAY_UPLOAD_GRACE_MINUTES, hasEssayPart } from "@/utils/examStructure";
 import { uploadWindow } from "@/lib/essaySubmission";
+import { pickVersionCode, versionCodes } from "@/utils/examVersions";
 
 export const runtime = "nodejs";
 
@@ -99,6 +100,7 @@ export async function GET(request: NextRequest) {
         questionTimings: safeEvents(inProgress.data.questionTimings),
         lastInteractionAtSeconds: clampInteger(inProgress.data.lastInteractionAtSeconds, 0, 7 * 24 * 60 * 60),
         currentQuestionIndex: clampInteger(inProgress.data.currentQuestionIndex, 0, 299),
+        examCode: typeof inProgress.data.examCode === "string" ? inProgress.data.examCode : null,
       } : null,
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
@@ -138,8 +140,14 @@ export async function POST(request: NextRequest) {
           && Boolean(data.isTeacherPreview) === isTeacherPreview;
       });
       if (existing) {
-        return NextResponse.json({ id: existing.id, resumed: true });
+        const examCode = existing.data().examCode;
+        return NextResponse.json({ id: existing.id, resumed: true, examCode: typeof examCode === "string" ? examCode : null });
       }
+      // Đề trộn nhiều mã: chia đều mã cho các lượt làm của đề này.
+      const examCode = pickVersionCode(
+        versionCodes(exam.versioning),
+        existingSnapshot.docs.map((document) => document.data().examCode as string | undefined),
+      );
 
       const sessionRef = adminDb.collection("submissions").doc();
       await sessionRef.set({
@@ -154,9 +162,10 @@ export async function POST(request: NextRequest) {
         questionTimings: [],
         lastInteractionAtSeconds: 0,
         currentQuestionIndex: 0,
+        ...(examCode ? { examCode } : {}),
         ...(isTeacherPreview ? { isTeacherPreview: true } : {}),
       });
-      return NextResponse.json({ id: sessionRef.id, resumed: false }, { status: 201 });
+      return NextResponse.json({ id: sessionRef.id, resumed: false, examCode }, { status: 201 });
     }
 
     let parsedAnswers: Record<string, AnswerMap> = {};

@@ -16,6 +16,7 @@ type ExamAccessData = {
   questions?: ParsedQuestion[];
   scoringConfig?: ScoringConfig;
   structure?: string;
+  versioning?: unknown;
   duration?: number;
   startTime?: string | null;
   endTime?: string | null;
@@ -137,6 +138,7 @@ export default function QuizPageClient({ examId }: { examId: string }) {
           questions,
           scoringConfig,
           structure: normalizeStructure(data.structure),
+          versioning: data.versioning,
           timing,
           maxRetries: data.maxRetries ?? 1,
         });

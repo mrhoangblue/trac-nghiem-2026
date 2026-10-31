@@ -17,8 +17,10 @@ export default function DevPanel() {
 
   // Load saved theme preference
   useEffect(() => {
-    const saved = localStorage.getItem("devpanel-theme") as PanelTheme | null;
-    if (saved === "dark" || saved === "light") setPanelTheme(saved);
+    queueMicrotask(() => {
+      const saved = localStorage.getItem("devpanel-theme") as PanelTheme | null;
+      if (saved === "dark" || saved === "light") setPanelTheme(saved);
+    });
   }, []);
 
   // Close panel on outside click

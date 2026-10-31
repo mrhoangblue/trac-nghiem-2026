@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { formatCountdown } from "@/utils/examTypes";
 import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
-import { AlertTriangle, BarChart3, Crosshair, PenTool, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Crosshair, PenTool, RotateCcw, Shuffle, X } from "lucide-react";
 import StateIcon from "@/components/StateIcon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -33,6 +33,8 @@ interface ExamData {
   endTime: string | null;
   /** Đề 4 phần có tự luận. */
   hasEssay: boolean;
+  /** Đề bật trộn nhiều mã. */
+  hasVersions: boolean;
 }
 
 interface Submission {
@@ -50,6 +52,7 @@ interface Submission {
   /** Điểm Phần IV đã chấm; null khi chưa chấm hoặc đề không có tự luận. */
   p4: number | null;
   gradingStatus: "pending" | "graded" | null;
+  examCode: string | null;
 }
 
 interface ScoreBreakdown {
@@ -303,6 +306,7 @@ export default function ExamDetailPage() {
           startTime: d.startTime ?? null,
           endTime: d.endTime ?? null,
           hasEssay: d.structure === "p1234",
+          hasVersions: d.versioning?.enabled === true,
         };
 
         // Privacy check: mods can only view results for their own exams
@@ -344,6 +348,7 @@ export default function ExamDetailPage() {
             idleBeforeSubmitSeconds: Number(s.idleBeforeSubmitSeconds ?? 0),
             p4: typeof (s.scores as { p4?: unknown } | undefined)?.p4 === "number" ? (s.scores as { p4: number }).p4 : null,
             gradingStatus: s.gradingStatus === "pending" || s.gradingStatus === "graded" ? s.gradingStatus : null,
+            examCode: typeof s.examCode === "string" ? s.examCode : null,
           };
         });
         setSubmissions(subs);
@@ -582,6 +587,14 @@ export default function ExamDetailPage() {
               {pendingEssays > 0 && <span className="rounded-full bg-white/25 px-2 py-0.5 text-xs">{pendingEssays} chờ chấm</span>}
             </Link>
           )}
+          {exam.hasVersions && (
+            <Link
+              href={`/admin/exam/${id}/ma-de`}
+              className="inline-flex w-fit items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:border-brand-400 hover:bg-brand-50"
+            >
+              <Shuffle size={16} aria-hidden="true" />Mã đề &amp; đáp án
+            </Link>
+          )}
           <Link
             href={`/admin/exam/${id}/review`}
             className="inline-flex w-fit items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:border-brand-400 hover:bg-brand-50"
@@ -814,6 +827,7 @@ export default function ExamDetailPage() {
                             </div>
                           )}
                           <span className="font-semibold text-gray-900">{row.studentName}</span>
+                          {row.bestSub.examCode && <span title="Mã đề của lượt điểm cao nhất" className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-700 ring-1 ring-brand-100">{row.bestSub.examCode}</span>}
                         </div>
                       </td>
 

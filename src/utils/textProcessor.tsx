@@ -177,7 +177,7 @@ function stripLayoutCommands(text: string): string {
 
 export function processLatexText(text: string): React.ReactNode {
   if (!text) return null;
-  text = stripLayoutCommands(text);
+  text = stripLayoutCommands(text).trim();
 
   // Step 0 — split out \begin{tabular}...\end{tabular} blocks.
   // Optionally consume a surrounding \begin{center}...\end{center} wrapper so
@@ -314,7 +314,9 @@ function renderMathAndText(text: string): React.ReactNode {
       {parts.map((part, idx) => {
         if (idx % 2 === 1) {
           return (
-            <span key={idx} className="inline-block max-w-full overflow-x-auto overflow-y-hidden align-middle">
+            // Inline thường (không overflow/inline-block) để công thức nằm đúng
+            // đường chân chữ; công thức hiển thị tự cuộn ngang qua .katex-display.
+            <span key={idx} className="exam-math">
               <Latex macros={KATEX_MACROS}>{part}</Latex>
             </span>
           );
@@ -330,7 +332,7 @@ function TextWithNewlines({ children }: { children: React.ReactNode }) {
   const raw = String(children ?? '');
   const pieces = raw.split(/(\[\[EXAM_INLINE_IMAGE:[^\]]+\]\]|\\\\|\n|\\textbf\{[^{}]*\}|\\(?:textit|emph)\{[^{}]*\})/g);
   return (
-    <span className="whitespace-pre-wrap">
+    <span className="whitespace-pre-line">
       {pieces.map((piece, index) => {
         if (!piece) return null;
         if (piece === "\\\\" || piece === "\n") return <br key={index} />;

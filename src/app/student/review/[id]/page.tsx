@@ -11,6 +11,7 @@ import ReviewMode, { type EssayReview } from "@/components/ReviewMode";
 import EssayGradedWork, { useEssayResult } from "@/components/essay/EssayGradedWork";
 import { useAuth } from "@/lib/AuthContext";
 import { essayQuestionPoints, hasEssayPart, orderQuestionsByPart } from "@/utils/examStructure";
+import { answersToDisplay, buildExamVersion } from "@/utils/examVersions";
 import StateIcon from "@/components/StateIcon";
 
 interface StoredAnswers {
@@ -185,10 +186,13 @@ export default function ReviewPage() {
         } else {
           qs = (exam.questions ?? []) as ParsedQuestion[];
         }
+        // Đề trộn nhiều mã: hiện đúng bản đề học sinh đã làm.
+        const version = buildExamVersion(qs, exam.versioning, sub.examCode, String(sub.examId));
+        qs = version.questions;
         setQuestions(qs);
 
         // 4. Parse đáp án từ answersJson
-        const { p1Ans: a1, p2Ans: a2, p3Ans: a3 } = parseAnswers(sub.answersJson ?? "{}");
+        const { p1Ans: a1, p2Ans: a2, p3Ans: a3 } = answersToDisplay(parseAnswers(sub.answersJson ?? "{}"), version.orders);
         setP1Ans(a1);
         setP2Ans(a2);
         setP3Ans(a3);

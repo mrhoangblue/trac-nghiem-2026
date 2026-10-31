@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * In-app browser patterns that break Firebase Google Auth popup.
  * Facebook (FBAN/FBAV/FB_IAB), Instagram, Zalo, Line.
  */
 const IN_APP_RE = /\b(FBAN|FBAV|FB_IAB|Instagram|ZaloApp|Zalo|Line)\b/i;
+
+// User agent không đổi trong phiên nên không cần lắng nghe gì.
+const subscribeNever = () => () => {};
 
 function isInAppBrowser(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -18,15 +21,10 @@ export default function BrowserWarning({
 }: {
   children: React.ReactNode;
 }) {
-  // Start false to match SSR — useEffect sets real value on client
-  const [detected, setDetected] = useState(false);
-
-  useEffect(() => {
-    setDetected(isInAppBrowser());
-  }, []);
+  // Máy chủ trả false để khớp SSR; trình duyệt đọc user agent thật.
+  const detected = useSyncExternalStore(subscribeNever, isInAppBrowser, () => false);
 
   if (!detected) {
-    // eslint-disable-next-line react/jsx-no-useless-fragment
     return <>{children}</>;
   }
 

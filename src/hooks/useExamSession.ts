@@ -61,25 +61,18 @@ export function useExamSession(
 
   // ── Read sessionStorage on mount (client-only, runs before first user interaction) ──
   useEffect(() => {
-    if (!uid) {
-      setSessionStatus("none");
-      return;
-    }
-
-    const session = readSession(examId, uid, durationMinutes);
-
-    if (!session) {
-      setSessionStatus("none");
-      return;
-    }
-
-    if (session.remaining <= 0) {
-      setRemainingSeconds(0);
-      setSessionStatus("expired");
-    } else {
-      setRemainingSeconds(session.remaining);
-      setSessionStatus("in_progress");
-    }
+    queueMicrotask(() => {
+      const session = uid ? readSession(examId, uid, durationMinutes) : null;
+      if (!session) {
+        setSessionStatus("none");
+      } else if (session.remaining <= 0) {
+        setRemainingSeconds(0);
+        setSessionStatus("expired");
+      } else {
+        setRemainingSeconds(session.remaining);
+        setSessionStatus("in_progress");
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // uid, examId, durationMinutes are stable for the lifetime of the component.
 

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Award, CheckCircle2, Clock3, RefreshCw, Trophy } from "lucide-react";
-import ClassTabs from "@/components/classroom/ClassTabs";
 import { useAuth } from "@/lib/AuthContext";
 import type { ClassLeaderboardStudent, ClassLeaderboardView } from "@/utils/classroomTypes";
 
@@ -147,11 +146,18 @@ function RankingBoard({ board, data }: { board: BoardKey; data: ClassLeaderboard
   );
 }
 
+const BOARDS = [
+  { id: "completion", label: "Hoàn thành" },
+  { id: "score", label: "Điểm cao" },
+  { id: "studyTime", label: "Thời gian" },
+] as const;
+
 export default function ClassLeaderboard({ classId }: { classId: string }) {
   const { user } = useAuth();
   const [data, setData] = useState<ClassLeaderboardView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [board, setBoard] = useState<typeof BOARDS[number]["id"]>("completion");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -198,11 +204,17 @@ export default function ClassLeaderboard({ classId }: { classId: string }) {
       {data && <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm leading-6 text-brand-900"><strong>{data.participatingStudentCount}/{data.studentCount}</strong> học sinh đã làm bài · {data.assignedExamCount} đề được giao · {participation}% tham gia</p>}
       {loading && !data ? <p role="status" className="py-12 text-center text-sm text-gray-500">Đang tổng hợp thành tích…</p>
         : error ? <p role="alert" className="rounded-xl bg-danger-50 p-4 text-sm text-danger-700">{error}</p>
-        : data ? <ClassTabs label="Tiêu chí xếp hạng" tabs={[
-          { id: "completion", label: "Hoàn thành", content: <RankingBoard board="completion" data={data} /> },
-          { id: "score", label: "Điểm cao", content: <RankingBoard board="score" data={data} /> },
-          { id: "time", label: "Thời gian", content: <RankingBoard board="studyTime" data={data} /> },
-        ]} /> : null}
+        : data ? <>
+          <div role="radiogroup" aria-label="Tiêu chí xếp hạng" className="grid grid-cols-3 gap-1 rounded-2xl bg-gray-100 p-1">
+            {BOARDS.map((item) => (
+              <button key={item.id} type="button" role="radio" aria-checked={board === item.id} onClick={() => setBoard(item.id)}
+                className={`min-h-10 rounded-xl px-2 text-sm font-semibold transition ${board === item.id ? "bg-white text-brand-700 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <RankingBoard key={board} board={board} data={data} />
+        </> : null}
       <details className="text-xs leading-6 text-gray-500">
         <summary className="min-h-11 cursor-pointer py-2 font-semibold text-gray-700">Cách tính xếp hạng</summary>
         <p>Mỗi đề chỉ tính một lần vào số bài hoàn thành. Điểm là trung bình kết quả cao nhất của từng đề. Thời gian cộng các lượt đã nộp, có thể bao gồm thời gian không tương tác. Chỉ tính bài thi được giao cho lớp.</p>
