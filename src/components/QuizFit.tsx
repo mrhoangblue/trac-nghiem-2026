@@ -10,6 +10,11 @@ const MIN_STAGE_HEIGHT = 420;
 const minFit = () => (window.innerWidth < 640 ? 0.88 : 0.8);
 // Hình vẽ co tối đa còn 45% chiều cao mặc định.
 const MIN_FIGURE = 0.45;
+// Chênh lệch nhỏ hơn mức này (thanh công cụ trình duyệt, làm tròn pixel) thì bỏ qua.
+const JITTER_PX = 3;
+// Lưới an toàn: quá số lần co lại này trong 1 giây là đang bị vòng lặp, ngừng
+// tự co cho tới khi cửa sổ thật sự đổi kích thước.
+const MAX_FITS_PER_SECOND = 6;
 
 /**
  * Cột câu hỏi cao đúng phần màn hình còn lại dưới đầu trang, để thanh tiêu đề,
@@ -21,11 +26,18 @@ export function FitStage({ className = "", children }: { className?: string; chi
   useEffect(() => {
     const stage = ref.current;
     if (!stage) return;
+    let current: number | null = null;
     const measure = () => {
       const top = stage.getBoundingClientRect().top + window.scrollY;
       const available = Math.floor(window.innerHeight - top - 12);
-      if (available >= MIN_STAGE_HEIGHT) stage.style.setProperty("--stage-h", `${available}px`);
-      else stage.style.removeProperty("--stage-h");
+      const next = available >= MIN_STAGE_HEIGHT ? available : null;
+      // Không đặt lại khi chỉ lệch vài pixel: tránh vòng lặp đo → đổi chiều cao
+      // → trang cuộn/thanh cuộn hiện → đo lại (gây giật trên một số máy Mac).
+      if (next !== null && current !== null && Math.abs(next - current) < JITTER_PX) return;
+      if (next === current) return;
+      current = next;
+      if (next === null) stage.style.removeProperty("--stage-h");
+      else stage.style.setProperty("--stage-h", `${next}px`);
     };
     measure();
     // Banner phía trên (chế độ học sinh, cảnh báo…) đổi chiều cao thì đo lại.
@@ -44,6 +56,11 @@ export function FitStage({ className = "", children }: { className?: string; chi
 /**
  * Thẻ câu hỏi tự co: khi nội dung cao hơn khung, giảm dần --fit (cỡ chữ) và
  * --fig (hình vẽ co nhanh hơn chữ) cho tới khi vừa, thay vì bắt học sinh cuộn.
+ *
+ * Chỉ tính lại khi khung đổi kích thước hoặc nội dung thật sự đổi (đổi chữ,
+ * ảnh/hình TikZ tải xong, phông chữ tải xong). Không theo dõi kích thước của
+ * chính nội dung, vì việc co chữ làm nội dung đổi kích thước và tự kích hoạt
+ * lại, gây vòng lặp nhấp nháy.
  */
 export function FitCard({ className = "", children }: { className?: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -53,9 +70,25 @@ export function FitCard({ className = "", children }: { className?: string; chil
     if (!box) return;
     const content = box.firstElementChild;
     let frame = 0;
+    let lastWidth = -1;
+    let lastHeight = -1;
+    let recent: number[] = [];
+    let frozen = false;
+
+    const markOverflow = () => {
+      box.toggleAttribute("data-more", box.scrollHeight - box.clientHeight - box.scrollTop > 4);
+    };
     const fit = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        const now = performance.now();
+        recent = recent.filter((time) => now - time < 1000);
+        recent.push(now);
+        if (frozen || recent.length > MAX_FITS_PER_SECOND) {
+          frozen = true;
+          markOverflow();
+          return;
+        }
         let scale = 1;
         let figure = 1;
         const apply = () => {
@@ -75,24 +108,38 @@ export function FitCard({ className = "", children }: { className?: string; chil
           figure = Math.max(MIN_FIGURE, Math.round((figure - 0.1) * 100) / 100);
           apply();
         }
+        lastWidth = box.clientWidth;
+        lastHeight = box.clientHeight;
         markOverflow();
       });
     };
-    const markOverflow = () => {
-      box.toggleAttribute("data-more", box.scrollHeight - box.clientHeight - box.scrollTop > 4);
+    const onBoxResize = () => {
+      if (Math.abs(box.clientWidth - lastWidth) < JITTER_PX && Math.abs(box.clientHeight - lastHeight) < JITTER_PX) return;
+      fit();
     };
+    const onWindowResize = () => {
+      frozen = false;
+      recent = [];
+      fit();
+    };
+
     fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(box);
-    if (content) observer.observe(content);
+    const resizeObserver = new ResizeObserver(onBoxResize);
+    resizeObserver.observe(box);
+    const mutationObserver = new MutationObserver(fit);
+    if (content) mutationObserver.observe(content, { childList: true, subtree: true, characterData: true });
     // Ảnh hình vẽ tải xong làm câu hỏi cao lên: sự kiện load không nổi bọt nên bắt ở pha capture.
     box.addEventListener("load", fit, true);
     box.addEventListener("scroll", markOverflow, { passive: true });
+    window.addEventListener("resize", onWindowResize);
+    void document.fonts?.ready.then(fit);
     return () => {
       cancelAnimationFrame(frame);
-      observer.disconnect();
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
       box.removeEventListener("load", fit, true);
       box.removeEventListener("scroll", markOverflow);
+      window.removeEventListener("resize", onWindowResize);
     };
   }, []);
 

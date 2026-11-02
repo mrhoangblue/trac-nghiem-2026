@@ -384,6 +384,8 @@ body {
 /* Màn làm bài: cột câu hỏi cao đúng phần màn hình còn lại (QuizClient đặt
    --stage-h), thẻ câu hỏi giãn giữa thanh tiêu đề và thanh điều hướng. */
 .quiz-stage { height: var(--stage-h, auto); }
+/* Chừa sẵn chỗ thanh cuộn: máy bật "luôn hiện thanh cuộn" không bị đổi bề rộng chữ khi thanh cuộn hiện/ẩn. */
+.quiz-question-shell { scrollbar-gutter: stable; }
 .quiz-question-shell[data-more] { mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent); }
 
 @media (orientation: portrait) {
