@@ -77,12 +77,12 @@ export async function POST(
     }
 
     if (!isTeacher && hasEssayPart(exam.structure)) {
-      // \loigiai của câu tự luận là hướng dẫn chấm: không gửi cho học sinh.
+      // \loigiai của câu tự luận là hướng dẫn chấm và \dapso{} là đáp số: không gửi cho học sinh.
       const { rawLatex: _rawLatex, ...rest } = exam;
       void _rawLatex;
       const questions = Array.isArray(exam.questions)
         ? exam.questions.map((question: Record<string, unknown>) => (
-          question?.type === "essay" ? { ...question, explanation: "", explanationTikzCode: undefined, explanationTikzImageUrl: undefined } : question
+          question?.type === "essay" ? { ...question, explanation: "", explanationTikzCode: undefined, explanationTikzImageUrl: undefined, correctAnswer: null, correctAnswerImageUrl: undefined } : question
         ))
         : [];
       return NextResponse.json({ exam: { id: examSnapshot.id, ...rest, questions } });

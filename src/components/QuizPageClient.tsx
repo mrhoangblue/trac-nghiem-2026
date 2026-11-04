@@ -127,7 +127,7 @@ export default function QuizPageClient({ examId }: { examId: string }) {
             ...parseLatexExam(part1),
             ...parseLatexExam(part2),
             ...parseLatexExam(part3),
-            ...parseLatexExam(part4),
+            ...parseLatexExam(part4, { essay: true }),
           ]);
         } else {
           questions = (data.questions ?? []) as ParsedQuestion[];

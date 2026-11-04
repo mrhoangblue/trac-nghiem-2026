@@ -1,3 +1,5 @@
+import { normalizeExTestLatex } from './latexNormalize';
+
 export interface ParsedQuestion {
   id: number;
   type: string;
@@ -217,7 +219,8 @@ function extractStandaloneTikz(text: string): { textContent: string; tikzCode: s
 // (render thành HTML table với ô text tiếng Việt đúng cách).
 // Không chuyển sang \begin{array} ở đây vì KaTeX không xử lý được text thuần bên trong.
 function preprocessQuestionText(text: string): string {
-  return text;
+  // Sau khi tách hình/điểm ra khỏi đề còn sót nhiều dòng trống liên tiếp.
+  return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -238,7 +241,12 @@ export function processItemchoice(text: string): string {
 // MAIN PARSER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function parseLatexExam(latex: string): ParsedQuestion[] {
+export interface ParseExamOptions {
+  /** Đang tách Phần IV: khối có \dapso{} là câu tự luận (đáp số lưu để giáo viên đối chiếu). */
+  essay?: boolean;
+}
+
+export function parseLatexExam(latex: string, parseOptions: ParseExamOptions = {}): ParsedQuestion[] {
   // Strip LaTeX comments: % to end-of-line, but not \% (escaped percent sign)
   let src = latex.replace(/(?<!\\)%[^\n]*/g, '');
 
@@ -252,7 +260,8 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
   let id = 1;
 
   while ((match = blockRe.exec(src)) !== null) {
-    let raw = match[2].trim();
+    // Chuẩn hóa cấu trúc ex_test (listEX, enumEX, \\indam...) trước khi tách.
+    let raw = normalizeExTestLatex(match[2]);
     let explanation = '';
     let tikzCode: string | undefined;
     let explanationTikzCode: string | undefined;
@@ -333,11 +342,12 @@ export function parseLatexExam(latex: string): ParsedQuestion[] {
       correctAnswer = parts.options.findIndex(o => o.includes('\\True'));
 
     } else if (questionText.includes('\\shortans') || questionText.includes('\\dapso')) {
-      type = 'short_answer';
       const cmd = questionText.includes('\\shortans') ? '\\shortans' : '\\dapso';
       const parts = extractShortAns(questionText, cmd);
       questionText = parts.questionText;
       correctAnswer = parts.answer;
+      // \dapso{} trong Phần IV: câu tự luận, giáo viên chấm tay; đáp số chỉ để đối chiếu.
+      type = cmd === '\\dapso' && parseOptions.essay ? 'essay' : 'short_answer';
     }
 
     // ── 5. Post-process question text ────────────────────────────────────────

@@ -67,6 +67,49 @@ export function essayQuestionPoints(
   ]));
 }
 
+/** Gán (hoặc xóa khi null) điểm tối đa của một câu tự luận; câu khác giữ nguyên. */
+export function withEssayPoints<T extends { id: number; type: string; points?: number }>(
+  questions: T[],
+  questionId: number,
+  points: number | null,
+): T[] {
+  const valid = points !== null && Number.isFinite(points) && points > 0 ? Math.round(Math.min(points, 100) * 100) / 100 : null;
+  return questions.map((question) => {
+    if (question.id !== questionId || question.type !== "essay") return question;
+    const { points: _old, ...rest } = question;
+    void _old;
+    return (valid === null ? rest : { ...rest, points: valid }) as T;
+  });
+}
+
+/** Tổng điểm Phần IV khi giáo viên đã đặt điểm cho MỌI câu tự luận; ngược lại null. */
+export function explicitEssayTotal(questions: Array<{ type: string; points?: number }>): number | null {
+  const essays = questions.filter((question) => question.type === "essay");
+  if (essays.length === 0 || !essays.every((question) => typeof question.points === "number" && question.points > 0)) return null;
+  return Math.round(essays.reduce((sum, question) => sum + (question.points ?? 0), 0) * 100) / 100;
+}
+
+/** Cảnh báo khi điểm \diem{} của các câu tự luận không khớp tổng điểm Phần IV. */
+export function essayPointProblems(
+  questions: Array<{ id: number; type: string; points?: number }>,
+  part4TotalScore: number,
+): string[] {
+  const essays = questions.filter((question) => question.type === "essay");
+  if (essays.length === 0) return [];
+  const explicit = essays.filter((question) => typeof question.points === "number" && question.points > 0);
+  const explicitSum = explicit.reduce((sum, question) => sum + (question.points ?? 0), 0);
+  const fmt = (value: number) => String(Math.round(value * 100) / 100).replace(".", ",");
+  const problems: string[] = [];
+  if (explicitSum > part4TotalScore + 1e-9) {
+    problems.push(`Điểm \\diem của các câu tự luận cộng lại là ${fmt(explicitSum)}, vượt tổng Phần IV (${fmt(part4TotalScore)} điểm).`);
+  } else if (explicit.length === essays.length && Math.abs(explicitSum - part4TotalScore) > 1e-9) {
+    problems.push(`Điểm \\diem của các câu tự luận cộng lại là ${fmt(explicitSum)}, khác tổng Phần IV (${fmt(part4TotalScore)} điểm).`);
+  } else if (explicit.length < essays.length && part4TotalScore - explicitSum <= 1e-9) {
+    problems.push("Có câu tự luận không ghi \\diem nhưng Phần IV đã hết điểm để chia.");
+  }
+  return problems;
+}
+
 const PART_ORDER: Record<ExamPart, number> = { p1: 0, p2: 1, p3: 2, p4: 3 };
 
 /** Xếp câu theo thứ tự Phần I → IV (giữ thứ tự gốc trong từng phần) và đánh lại id. */

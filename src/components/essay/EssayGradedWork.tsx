@@ -37,11 +37,11 @@ export function useEssayResult(submissionId: string | null, getToken: (() => Pro
 }
 
 /** Bài làm tự luận kèm nét chấm của giáo viên, chỉ xem. */
-export default function EssayGradedWork({ data }: { data: EssayResultData }) {
+export default function EssayGradedWork({ data, pending = false }: { data: EssayResultData; pending?: boolean }) {
   const { pages, loading } = useEssayPages(data.files);
   return (
-    <section aria-label="Bài làm tự luận đã chấm" className="mt-8 rounded-3xl border border-violet-200 bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
-      <h2 className="font-display text-lg font-extrabold text-gray-900">Bài làm tự luận đã chấm</h2>
+    <section aria-label={pending ? "Bài làm tự luận chưa chấm" : "Bài làm tự luận đã chấm"} className="mt-8 rounded-3xl border border-violet-200 bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
+      <h2 className="font-display text-lg font-extrabold text-gray-900">{pending ? "Bài làm tự luận (chưa chấm xong)" : "Bài làm tự luận đã chấm"}</h2>
       {data.grading?.generalComment && (
         <p className="mt-3 flex items-start gap-2 rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900">
           <MessageSquareText size={17} className="mt-0.5 shrink-0" aria-hidden="true" />

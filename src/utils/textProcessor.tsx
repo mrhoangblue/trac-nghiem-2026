@@ -15,9 +15,16 @@
 
 import React from "react";
 import Latex from "react-latex-next";
+import { normalizeExTestLatex } from "@/utils/latexNormalize";
 
 const MATH_BLOCK_REGEX = /(\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*\$)/g;
 const INLINE_IMAGE_RE = /^\[\[EXAM_INLINE_IMAGE:([^\]]+)\]\]$/;
+/** Hình TikZ đã dựng sẵn, hiện thành khối riêng (kể cả thẻ <img> của đề lưu bản cũ). */
+const TIKZ_IMAGE_RE = /^\[\[EXAM_TIKZ_IMAGE:([^\]]+)\]\]$/;
+const LEGACY_IMG_TAG_RE = /^<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>$/i;
+const SAFE_IMAGE_SRC_RE = /^(?:https?:\/\/|\/local-imports\/|data:image\/(?:svg\+xml|png);base64,[A-Za-z0-9+/=]+$)/i;
+/** TikZ chưa chuyển thành ảnh: không in mã thô ra màn hình. */
+const RAW_TIKZ_RE = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
 
 // ── KaTeX custom macros ───────────────────────────────────────────────────────
 // \begin{aligned} is display-mode only in KaTeX — it throws a parse error when
@@ -177,7 +184,9 @@ function stripLayoutCommands(text: string): string {
 
 export function processLatexText(text: string): React.ReactNode {
   if (!text) return null;
-  text = stripLayoutCommands(text).trim();
+  // Đề cũ lưu nguyên mã ex_test (listEX, enumerate...) cũng được chuyển ở đây.
+  text = normalizeExTestLatex(stripLayoutCommands(text))
+    .replace(RAW_TIKZ_RE, "\n[Hình vẽ chưa được chuyển thành ảnh]\n");
 
   // Step 0 — split out \begin{tabular}...\end{tabular} blocks.
   // Optionally consume a surrounding \begin{center}...\end{center} wrapper so
@@ -330,12 +339,21 @@ function renderMathAndText(text: string): React.ReactNode {
 
 function TextWithNewlines({ children }: { children: React.ReactNode }) {
   const raw = String(children ?? '');
-  const pieces = raw.split(/(\[\[EXAM_INLINE_IMAGE:[^\]]+\]\]|\\\\|\n|\\textbf\{[^{}]*\}|\\(?:textit|emph)\{[^{}]*\})/g);
+  const pieces = raw.split(/(\[\[EXAM_INLINE_IMAGE:[^\]]+\]\]|\[\[EXAM_TIKZ_IMAGE:[^\]]+\]\]|<img\b[^>]*>|\\\\|\n|\\textbf\{[^{}]*\}|\\(?:textit|emph)\{[^{}]*\})/g);
   return (
     <span className="whitespace-pre-line">
       {pieces.map((piece, index) => {
         if (!piece) return null;
         if (piece === "\\\\" || piece === "\n") return <br key={index} />;
+        const tikz = TIKZ_IMAGE_RE.exec(piece) ?? LEGACY_IMG_TAG_RE.exec(piece);
+        if (tikz) {
+          if (!SAFE_IMAGE_SRC_RE.test(tikz[1])) return <React.Fragment key={index}>[ảnh không hợp lệ]</React.Fragment>;
+          return (
+            // Hình TikZ do hệ thống dựng khi lưu đề.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={index} src={tikz[1]} alt="Hình vẽ Toán học" className="mx-auto my-2 block h-auto max-w-full" loading="lazy" />
+          );
+        }
         const image = INLINE_IMAGE_RE.exec(piece);
         if (image) {
           const safeUrl = /^https?:\/\//i.test(image[1]) || image[1].startsWith("/local-imports/");

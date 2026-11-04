@@ -12,6 +12,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { formatCountdown } from "@/utils/examTypes";
+import { essayQuestionPoints } from "@/utils/examStructure";
 import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
 import { AlertTriangle, BarChart3, Crosshair, PenTool, RotateCcw, Shuffle, X } from "lucide-react";
 import StateIcon from "@/components/StateIcon";
@@ -35,6 +36,9 @@ interface ExamData {
   hasEssay: boolean;
   /** Đề bật trộn nhiều mã. */
   hasVersions: boolean;
+  /** Tổng điểm Phần IV và điểm tối đa từng câu tự luận (số thứ tự câu trong đề). */
+  part4TotalScore: number;
+  essayPoints: Array<{ number: number; points: number }>;
 }
 
 interface Submission {
@@ -301,11 +305,21 @@ export default function ExamDetailPage() {
           part1Count: d.part1Count ?? 0,
           part2Count: d.part2Count ?? 0,
           part3Count: d.part3Count ?? 0,
-          scoringConfig: d.scoringConfig ?? { part1TotalScore: 3, part3TotalScore: 1 },
+          scoringConfig: d.scoringConfig ?? { part1TotalScore: 3, part3TotalScore: 3 },
           authorEmail: d.authorEmail ?? "",
           startTime: d.startTime ?? null,
           endTime: d.endTime ?? null,
           hasEssay: d.structure === "p1234",
+          part4TotalScore: Number(d.scoringConfig?.part4TotalScore ?? 0),
+          essayPoints: d.structure === "p1234" && Array.isArray(d.questions)
+            ? (() => {
+                const questions = d.questions as Array<{ id: number; type: string; points?: number }>;
+                const points = essayQuestionPoints(questions, Number(d.scoringConfig?.part4TotalScore ?? 0));
+                return questions.flatMap((question, index) => (
+                  question.type === "essay" ? [{ number: index + 1, points: points.get(question.id) ?? 0 }] : []
+                ));
+              })()
+            : [],
           hasVersions: d.versioning?.enabled === true,
         };
 
@@ -760,6 +774,15 @@ export default function ExamDetailPage() {
             <span className="font-bold text-success-700">P3 tổng điểm: </span>
             <span className="text-gray-700">{scoringConfig.part3TotalScore} đ</span>
           </div>
+          {exam.hasEssay && (
+            <div>
+              <span className="font-bold text-violet-700">P4 tự luận (giáo viên chấm): </span>
+              <span className="text-gray-700">
+                {exam.part4TotalScore} đ
+                {exam.essayPoints.length > 0 && ` — ${exam.essayPoints.map((item) => `Câu ${item.number}: ${item.points} đ`).join(" · ")}`}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Results table — one row per unique student ─────────────────────── */}

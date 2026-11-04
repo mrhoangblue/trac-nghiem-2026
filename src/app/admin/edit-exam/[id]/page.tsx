@@ -15,7 +15,7 @@ import {
 import AdminGuard from "@/components/AdminGuard";
 import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { joinLatexParts, smartParseLatex, type SmartParseCounts } from "@/utils/smartParseLatex";
-import { countQuestionsByPart, normalizeStructure, orderQuestionsByPart, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
+import { countQuestionsByPart, essayPointProblems, explicitEssayTotal, normalizeStructure, orderQuestionsByPart, withEssayPoints, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 import type { ClassDoc } from "@/utils/classroomTypes";
@@ -87,7 +87,7 @@ export default function EditExamPage() {
   // Scoring / timing
   const [scoringConfig, setScoringConfig] = useState<ScoringConfig>({
     part1TotalScore: 3,
-    part3TotalScore: 1,
+    part3TotalScore: 3,
   });
   const [duration, setDuration] = useState(90);
   const [startTime, setStartTime] = useState("");
@@ -123,7 +123,7 @@ export default function EditExamPage() {
 
         setExamTitle(data.title ?? "");
         setDescription(data.description ?? "");
-        setScoringConfig({ part1TotalScore: 3, part3TotalScore: 1, part4TotalScore: 3, ...(data.scoringConfig ?? {}) });
+        setScoringConfig({ part1TotalScore: 3, part3TotalScore: 3, part4TotalScore: 3, ...(data.scoringConfig ?? {}) });
         setStructure(normalizeStructure(data.structure));
         setDuration(data.duration ?? 90);
         setStartTime(toDateTimeLocal(data.startTime));
@@ -170,7 +170,7 @@ export default function EditExamPage() {
             ...parseLatexExam(source.part1),
             ...parseLatexExam(source.part2),
             ...parseLatexExam(source.part3),
-            ...parseLatexExam(source.part4),
+            ...parseLatexExam(source.part4, { essay: true }),
           ]),
         });
       } catch (err) {
@@ -217,7 +217,7 @@ export default function EditExamPage() {
         ...parseLatexExam(classified.part1),
         ...parseLatexExam(classified.part2),
         ...parseLatexExam(classified.part3),
-        ...parseLatexExam(classified.part4),
+        ...parseLatexExam(classified.part4, { essay: true }),
       ]);
       setPreviewData({ title: examTitle, questions: all });
       const missingAnswers = getMissingShortAnswerQuestionNumbers(all);
@@ -400,7 +400,7 @@ export default function EditExamPage() {
         scoringConfig: {
           part1TotalScore: Number(scoringConfig.part1TotalScore),
           part3TotalScore: Number(scoringConfig.part3TotalScore),
-          ...(structure === "p1234" ? { part4TotalScore: Number(scoringConfig.part4TotalScore ?? 0) } : {}),
+          ...(structure === "p1234" ? { part4TotalScore: explicitEssayTotal(previewData.questions) ?? Number(scoringConfig.part4TotalScore ?? 0) } : {}),
         },
         structure,
         duration: Number(duration),
@@ -470,6 +470,14 @@ export default function EditExamPage() {
   };
 
   // ── Loading / error states ────────────────────────────────────────────────
+  // Giáo viên đặt điểm từng câu tự luận ở bản xem trước; tổng Phần IV tự cộng khi đủ mọi câu.
+  const handleEssayPoints = (questionId: number, points: number | null) => {
+    setPreviewData((prev) => (prev ? { ...prev, questions: withEssayPoints(prev.questions, questionId, points) } : prev));
+  };
+  // Khi đã đặt điểm cho mọi câu, tổng Phần IV là tổng các câu (không cần ô nhập riêng).
+  const explicitPart4Total = structure === "p1234" ? explicitEssayTotal(previewData?.questions ?? []) : null;
+  const scoringView: ScoringConfig = explicitPart4Total === null ? scoringConfig : { ...scoringConfig, part4TotalScore: explicitPart4Total };
+
   if (pageLoading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-12">
@@ -532,7 +540,10 @@ export default function EditExamPage() {
                 {structureParts(structure).includes("p4") && (
                   <p className="mt-2 text-xs leading-5 text-gray-500">Khối <code className="rounded bg-gray-100 px-1">ex</code> không có lệnh đáp án là câu tự luận; <code className="rounded bg-gray-100 px-1">{"\\loigiai"}</code> là hướng dẫn chấm. Đổi cấu trúc được lưu khi bấm <b>Lưu nội dung đề</b>.</p>
                 )}
-                {questions.length > 0 && structureProblems(structure, countQuestionsByPart(questions)).map((problem) => (
+                {questions.length > 0 && [
+                  ...structureProblems(structure, countQuestionsByPart(questions)),
+                  ...(structure === "p1234" ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)) : []),
+                ].map((problem) => (
                   <p key={problem} role="alert" className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-amber-700"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />{problem}</p>
                 ))}
               </div>
@@ -575,7 +586,7 @@ export default function EditExamPage() {
                 onStartTime={setStartTime}
                 endTime={endTime}
                 onEndTime={setEndTime}
-                scoring={scoringConfig}
+                scoring={scoringView}
                 onScoring={setScoringConfig}
                 structure={structure}
                 trueFalseCount={trueFalseCount}
@@ -636,7 +647,8 @@ export default function EditExamPage() {
                     title={examTitle.trim() || previewData.title}
                     description={description.trim()}
                     chips={[gradeLevel, ...(gradeLevel !== MOCK_EXAM_GRADE ? [examType] : []), `${duration} phút`]}
-                    part4TotalScore={structure === "p1234" ? scoringConfig.part4TotalScore ?? 0 : undefined}
+                    part4TotalScore={structure === "p1234" ? scoringView.part4TotalScore ?? 0 : undefined}
+                    onEssayPointsChange={structure === "p1234" ? handleEssayPoints : undefined}
                   />
                 ) : (
                   <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">

@@ -181,7 +181,7 @@ export default function ReviewPage() {
             ...parseLatexExam(part1),
             ...parseLatexExam(part2),
             ...parseLatexExam(part3),
-            ...parseLatexExam(part4),
+            ...parseLatexExam(part4, { essay: true }),
           ]);
         } else {
           qs = (exam.questions ?? []) as ParsedQuestion[];

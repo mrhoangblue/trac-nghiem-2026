@@ -5,7 +5,7 @@
  * Logic chấm điểm dùng cùng hàm recalc như /student/review/[id].
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import AdminGuard from "@/components/AdminGuard";
@@ -22,9 +22,10 @@ import {
   type ExamActivitySummary,
   type QuestionTimingStat,
 } from "@/utils/examTypes";
-import ReviewMode from "@/components/ReviewMode";
+import ReviewMode, { type EssayReview } from "@/components/ReviewMode";
+import EssayGradedWork, { useEssayResult } from "@/components/essay/EssayGradedWork";
 import StateIcon from "@/components/StateIcon";
-import { orderQuestionsByPart } from "@/utils/examStructure";
+import { essayQuestionPoints, hasEssayPart, orderQuestionsByPart } from "@/utils/examStructure";
 import { answersToDisplay, buildExamVersion } from "@/utils/examVersions";
 import { AlertTriangle, PenTool } from "lucide-react";
 
@@ -143,6 +144,22 @@ export default function TeacherSubmissionReviewPage() {
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [activitySummary, setActivitySummary] = useState<ExamActivitySummary | null>(null);
   const [essayGrade, setEssayGrade] = useState<{ examId: string; status: "pending" | "graded" } | null>(null);
+  const [part4TotalScore, setPart4TotalScore] = useState<number | null>(null);
+  const getToken = useCallback(() => user!.getIdToken(), [user]);
+  // Giáo viên luôn nhận đủ phiếu chấm và ảnh bài làm, kể cả khi còn chấm nháp.
+  const essayResult = useEssayResult(essayGrade ? submissionId : null, user ? getToken : null);
+  const essayReview = useMemo<EssayReview | undefined>(() => {
+    if (!essayGrade || part4TotalScore === null) return undefined;
+    const graded = essayGrade.status === "graded";
+    return {
+      scores: graded ? essayResult.data?.grading?.essayScores ?? {} : {},
+      comments: essayResult.data?.grading?.essayComments ?? {},
+      maxPoints: essayQuestionPoints(questions, part4TotalScore),
+      total: part4TotalScore,
+      graded,
+      slot: essayResult.data ? <EssayGradedWork data={essayResult.data} pending={!graded} /> : undefined,
+    };
+  }, [essayGrade, essayResult.data, part4TotalScore, questions]);
 
   const backHref =
     returnToRaw &&
@@ -193,7 +210,7 @@ export default function TeacherSubmissionReviewPage() {
             ...parseLatexExam(part1),
             ...parseLatexExam(part2),
             ...parseLatexExam(part3),
-            ...parseLatexExam(part4),
+            ...parseLatexExam(part4, { essay: true }),
           ]);
         } else {
           qs = (exam.questions ?? []) as ParsedQuestion[];
@@ -212,6 +229,7 @@ export default function TeacherSubmissionReviewPage() {
         setScoreResult(score);
         if (sub.gradingStatus === "pending" || sub.gradingStatus === "graded") {
           setEssayGrade({ examId: String(sub.examId), status: sub.gradingStatus });
+          if (hasEssayPart(exam.structure)) setPart4TotalScore(Number(exam.scoringConfig?.part4TotalScore ?? 0));
         }
         if (Array.isArray(sub.activityLog) || Array.isArray(sub.questionTimings)) {
           setActivitySummary({
@@ -382,6 +400,7 @@ export default function TeacherSubmissionReviewPage() {
             p3Ans={p3Ans}
             scoreResult={scoreResult}
             standalone
+            essay={essayReview}
           />
 
           <div className="max-w-3xl mx-auto px-4 pb-10 flex gap-4 justify-center">

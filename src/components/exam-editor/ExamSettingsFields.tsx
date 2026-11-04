@@ -255,7 +255,7 @@ export function ExamRulesFields({
             </Field>
           )}
           {parts.includes("p4") && (
-            <Field label="Phần IV · Tự luận" htmlFor={`${idPrefix}-p4`} hint={<>Chia đều cho các câu; câu nào khác điểm thì ghi <code className="rounded bg-gray-100 px-1">{"\\diem{1,5}"}</code> trong khối ex.</>}>
+            <Field label="Phần IV · Tự luận" htmlFor={`${idPrefix}-p4`} hint={<>Đặt điểm từng câu ở bản xem trước, tổng này tự cộng. Chưa đặt thì chia đều; có thể ghi sẵn <code className="rounded bg-gray-100 px-1">{"\\diem{1,5}"}</code> trong khối ex.</>}>
               <NumberField id={`${idPrefix}-p4`} value={scoring.part4TotalScore ?? 0} onChange={(value) => onScoring({ ...scoring, part4TotalScore: value })} step={0.25} unit="điểm" />
             </Field>
           )}

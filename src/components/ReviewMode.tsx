@@ -30,11 +30,24 @@ export interface EssayReview {
   maxPoints: Map<number, number>;
   comments: Record<string, string>;
   total: number;
+  /** false: giáo viên chưa chấm xong, câu tự luận hiện "chờ chấm" thay vì tính sai. */
+  graded?: boolean;
   /** Bài làm của học sinh kèm nét chấm, hiện sau danh sách câu. */
   slot?: React.ReactNode;
 }
 
 type Filter = "all" | "wrong" | "right";
+/** right: đúng hết; partial: chấm được một phần (tự luận); wrong: chưa đúng; pending: tự luận chờ chấm. */
+type QuestionStatus = "right" | "partial" | "wrong" | "pending";
+
+const formatPoints = (value: number) => String(Math.round(value * 100) / 100).replace(".", ",");
+
+const STATUS_STYLE: Record<QuestionStatus, { border: string; bar: string; chip: string; map: string; label: string }> = {
+  right: { border: "border-emerald-200", bar: "bg-gradient-to-b from-emerald-400 to-teal-500", chip: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", map: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100", label: "đúng" },
+  partial: { border: "border-amber-200", bar: "bg-gradient-to-b from-amber-400 to-orange-500", chip: "bg-amber-50 text-amber-800 ring-1 ring-amber-200", map: "bg-amber-50 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100", label: "đúng một phần" },
+  wrong: { border: "border-rose-200", bar: "bg-gradient-to-b from-rose-400 to-pink-500", chip: "bg-rose-50 text-rose-700 ring-1 ring-rose-200", map: "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100", label: "sai" },
+  pending: { border: "border-gray-200", bar: "bg-gradient-to-b from-gray-300 to-gray-400", chip: "bg-gray-100 text-gray-600 ring-1 ring-gray-200", map: "bg-gray-100 text-gray-600 ring-1 ring-gray-200 hover:bg-gray-200", label: "chờ chấm" },
+};
 
 // ── Score tiers ───────────────────────────────────────────────────────────────
 
@@ -103,11 +116,18 @@ function Confetti() {
 
 // ── Correctness per question ──────────────────────────────────────────────────
 
-function isQuestionCorrect(q: ParsedQuestion, p1Ans: ReviewModeProps["p1Ans"], p2Ans: ReviewModeProps["p2Ans"], p3Ans: ReviewModeProps["p3Ans"], essay?: EssayReview) {
+function questionStatus(q: ParsedQuestion, p1Ans: ReviewModeProps["p1Ans"], p2Ans: ReviewModeProps["p2Ans"], p3Ans: ReviewModeProps["p3Ans"], essay?: EssayReview): QuestionStatus {
   if (q.type === "essay") {
-    const max = essay?.maxPoints.get(q.id) ?? 0;
-    return max > 0 && (essay?.scores[q.id] ?? 0) >= max;
+    if (!essay || essay.graded === false) return "pending";
+    const max = essay.maxPoints.get(q.id) ?? 0;
+    const got = essay.scores[q.id] ?? 0;
+    if (max > 0 && got >= max - 1e-9) return "right";
+    return got > 0 ? "partial" : "wrong";
   }
+  return isAutoCorrect(q, p1Ans, p2Ans, p3Ans) ? "right" : "wrong";
+}
+
+function isAutoCorrect(q: ParsedQuestion, p1Ans: ReviewModeProps["p1Ans"], p2Ans: ReviewModeProps["p2Ans"], p3Ans: ReviewModeProps["p3Ans"]) {
   if (q.type === "multiple_choice") return p1Ans[q.id] === (q.correctAnswer as number);
   if (q.type === "true_false") {
     const correct = q.correctAnswer as boolean[];
@@ -131,16 +151,22 @@ export default function ReviewMode({
 }: ReviewModeProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const tier = tierFor(scoreResult.total);
-  const results = questions.map((q) => isQuestionCorrect(q, p1Ans, p2Ans, p3Ans, essay));
-  const rightCount = results.filter(Boolean).length;
-  const wrongCount = results.length - rightCount;
+  const statuses = questions.map((q) => questionStatus(q, p1Ans, p2Ans, p3Ans, essay));
+  const rightCount = statuses.filter((status) => status === "right").length;
+  const pendingCount = statuses.filter((status) => status === "pending").length;
+  // "Cần xem lại" gồm câu sai và câu tự luận mới đúng một phần; câu chờ chấm không tính.
+  const wrongCount = statuses.length - rightCount - pendingCount;
+  const results = statuses.map((status) => status === "right");
+  const essayRows = essay
+    ? questions.flatMap((q, idx) => (q.type === "essay" ? [{ number: idx + 1, id: q.id, max: essay.maxPoints.get(q.id) ?? 0, got: essay.scores[q.id] }] : []))
+    : [];
 
   const p2Max = scoreResult.part2?.details?.length ?? 0;
   const sections = [
     { key: "multiple_choice", label: "Phần I · Trắc nghiệm", score: scoreResult.p1, ratio: scoreResult.part1?.total ? scoreResult.part1.correct / scoreResult.part1.total : null, detail: scoreResult.part1 ? `${scoreResult.part1.correct}/${scoreResult.part1.total} câu đúng` : "", bar: "from-sky-400 to-indigo-500" },
     { key: "true_false", label: "Phần II · Đúng/Sai", score: scoreResult.p2, ratio: p2Max ? scoreResult.part2.details.reduce((sum, d) => sum + (d.maxMatch ? d.match / d.maxMatch : 0), 0) / p2Max : null, detail: scoreResult.part2?.details?.map((d) => formatP2Answers(d.match, d.maxMatch)).join(" · ") ?? "", bar: "from-violet-500 to-fuchsia-500" },
     { key: "short_answer", label: "Phần III · Trả lời ngắn", score: scoreResult.p3, ratio: scoreResult.part3?.total ? scoreResult.part3.correct / scoreResult.part3.total : null, detail: scoreResult.part3 ? `${scoreResult.part3.correct}/${scoreResult.part3.total} câu đúng` : "", bar: "from-emerald-400 to-teal-500" },
-    ...(essay ? [{ key: "essay", label: "Phần IV · Tự luận", score: scoreResult.p4 ?? 0, ratio: essay.total > 0 ? (scoreResult.p4 ?? 0) / essay.total : null, detail: "Giáo viên chấm", bar: "from-fuchsia-400 to-violet-500" }] : []),
+    ...(essay ? [{ key: "essay", label: "Phần IV · Tự luận", score: essay.graded === false ? 0 : scoreResult.p4 ?? 0, ratio: essay.graded !== false && essay.total > 0 ? (scoreResult.p4 ?? 0) / essay.total : null, detail: essay.graded === false ? "Giáo viên chưa chấm xong" : "Giáo viên chấm", bar: "from-fuchsia-400 to-violet-500" }] : []),
   ].filter((s) => questions.some((q) => q.type === s.key));
 
   return (
@@ -162,6 +188,7 @@ export default function ReviewMode({
             <div className="mt-5 flex flex-wrap justify-center gap-2.5 sm:justify-start">
               <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-sm font-semibold ring-1 ring-white/20"><Check size={16} aria-hidden="true" />{rightCount} câu đúng hoàn toàn</span>
               <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-sm font-semibold ring-1 ring-white/20"><X size={16} aria-hidden="true" />{wrongCount} câu cần xem lại</span>
+              {pendingCount > 0 && <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-sm font-semibold ring-1 ring-white/20"><Minus size={16} aria-hidden="true" />{pendingCount} câu tự luận chờ chấm</span>}
             </div>
           </div>
         </div>
@@ -172,13 +199,23 @@ export default function ReviewMode({
         {sections.map((s, i) => (
           <div key={s.key} className="result-rise rounded-3xl border border-gray-200 bg-white p-5 shadow-[var(--shadow-soft)]" style={{ animationDelay: `${150 + i * 90}ms` }}>
             <p className="text-sm font-semibold text-gray-500">{s.label}</p>
-            <p className="mt-1 font-display text-3xl font-extrabold text-gray-900">{s.score}<span className="ml-1 text-base font-semibold text-gray-400">điểm</span></p>
+            <p className="mt-1 font-display text-3xl font-extrabold text-gray-900">{formatPoints(s.score)}<span className="ml-1 text-base font-semibold text-gray-400">{s.key === "essay" && essay ? `/ ${formatPoints(essay.total)} điểm` : "điểm"}</span></p>
             {s.ratio !== null && (
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
                 <div className={`h-full rounded-full bg-gradient-to-r ${s.bar}`} style={{ width: `${Math.round(Math.min(1, s.ratio) * 100)}%` }} />
               </div>
             )}
             {s.detail && <p className="mt-2 text-xs leading-5 text-gray-500">{s.detail}</p>}
+            {s.key === "essay" && essayRows.length > 0 && (
+              <ul className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-xs text-gray-600" aria-label="Điểm từng câu tự luận">
+                {essayRows.map((row) => (
+                  <li key={row.id} className="flex items-center justify-between gap-3">
+                    <a href={`#review-q-${row.number}`} className="font-semibold text-violet-700 hover:underline">Câu {row.number}</a>
+                    <span className="tabular-nums">{essay?.graded === false || row.got === undefined ? "chưa chấm" : formatPoints(row.got)} / {formatPoints(row.max)} điểm</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         ))}
       </section>
@@ -195,7 +232,7 @@ export default function ReviewMode({
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {questions.map((q, idx) => (
-            <a key={q.id} href={`#review-q-${idx + 1}`} title={`Câu ${idx + 1}: ${results[idx] ? "đúng" : "sai"}`} className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold transition hover:-translate-y-0.5 ${results[idx] ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100" : "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"}`}>
+            <a key={q.id} href={`#review-q-${idx + 1}`} title={`Câu ${idx + 1}: ${STATUS_STYLE[statuses[idx]].label}`} className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold transition hover:-translate-y-0.5 ${STATUS_STYLE[statuses[idx]].map}`}>
               {idx + 1}
             </a>
           ))}
@@ -205,8 +242,9 @@ export default function ReviewMode({
       {/* ── Per-question review ───────────────────────────────────────────── */}
       <div className="mt-6 space-y-5">
         {questions.map((q, idx) => {
-          const isCorrect = results[idx];
-          if ((filter === "wrong" && isCorrect) || (filter === "right" && !isCorrect)) return null;
+          const status = statuses[idx];
+          const isCorrect = status === "right";
+          if ((filter === "wrong" && (status === "right" || status === "pending")) || (filter === "right" && !isCorrect)) return null;
           const prevType = idx > 0 ? questions[idx - 1].type : null;
           const isFirstOfSection = filter === "all" && (idx === 0 || prevType !== q.type);
           const sectionMeta = SECTION_META[q.type];
@@ -223,13 +261,15 @@ export default function ReviewMode({
                   </div>
                 </div>
               )}
-              <article className={`relative overflow-hidden rounded-3xl border bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6 ${isCorrect ? "border-emerald-200" : "border-rose-200"}`}>
-                <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${isCorrect ? "bg-gradient-to-b from-emerald-400 to-teal-500" : "bg-gradient-to-b from-rose-400 to-pink-500"}`} />
+              <article className={`relative overflow-hidden rounded-3xl border bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6 ${STATUS_STYLE[status].border}`}>
+                <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${STATUS_STYLE[status].bar}`} />
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-gray-900 px-3 py-1 text-xs font-bold text-white">Câu {idx + 1}</span>
                   {q.type === "essay" ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">
-                      {String(essay?.scores[q.id] ?? 0).replace(".", ",")} / {String(essay?.maxPoints.get(q.id) ?? 0).replace(".", ",")} điểm
+                    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLE[status].chip}`}>
+                      {status === "pending"
+                        ? `Chờ chấm · tối đa ${formatPoints(essay?.maxPoints.get(q.id) ?? 0)} điểm`
+                        : `${formatPoints(essay?.scores[q.id] ?? 0)} / ${formatPoints(essay?.maxPoints.get(q.id) ?? 0)} điểm${status === "partial" ? " · đúng một phần" : status === "wrong" ? " · chưa đạt" : ""}`}
                     </span>
                   ) : (
                     <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${isCorrect ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-1 ring-rose-200"}`}>
@@ -308,6 +348,10 @@ export default function ReviewMode({
                       </tbody>
                     </table>
                   </div>
+                )}
+
+                {q.type === "essay" && String(q.correctAnswer ?? "").trim() && (
+                  <p className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"><b>Đáp số:</b> <Latex>{String(q.correctAnswer)}</Latex></p>
                 )}
 
                 {q.type === "essay" && essay?.comments[q.id] && (

@@ -8,9 +8,10 @@ export interface SmartParseCounts {
 }
 
 /**
- * Chia các khối \begin{ex}/\begin{bt} theo \choice, \choiceTF và \shortans.
- * Khối không có lệnh đáp án là câu tự luận nếu `essay` bật, nếu không thì bị
- * xếp vào Phần I và đếm là "chưa xác định" như trước.
+ * Chia các khối \begin{ex}/\begin{bt} theo \choice, \choiceTF, \shortans và \dapso.
+ * Khối có \dapso{} là câu tự luận (Phần IV) khi `essay` bật. Khối không có lệnh
+ * đáp án nào cũng vào Phần IV (đề cũ); nếu `essay` tắt thì xếp vào Phần I và
+ * đếm là "chưa xác định" như trước.
  */
 export function smartParseLatex(allLatex: string, options: { essay?: boolean } = {}): {
   part1: string;
@@ -35,8 +36,12 @@ export function smartParseLatex(allLatex: string, options: { essay?: boolean } =
       p2.push(fullBlock);
     } else if (/\\choice\b/.test(content)) {
       p1.push(fullBlock);
-    } else if (/\\shortans\b|\\dapso\b/.test(content)) {
+    } else if (/\\shortans\b/.test(content)) {
       p3.push(fullBlock);
+    } else if (/\\dapso\b/.test(content)) {
+      // \dapso{} đánh dấu câu tự luận (đáp số/hướng dẫn chấm). Đề không có
+      // Phần IV vẫn hiểu \dapso như \shortans để đề cũ không bị đổi dạng.
+      (options.essay ? p4 : p3).push(fullBlock);
     } else if (options.essay) {
       p4.push(fullBlock);
     } else {

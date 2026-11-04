@@ -38,6 +38,10 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
   - security-review: không có lỗ hổng độ tin cậy ≥8. Ghi nhận mức thấp: (1) trả `scores` khi gửi lại bài tự luận đã nộp (nên ẩn khi có `gradingStatus`, làm ở Bước 2); (2) hai lượt `start` song song có thể tạo 2 phiên IN_PROGRESS (cân nhắc transaction).
   - Còn dở: staff vẫn đọc được mọi `submissions` (mục "staff không đọc bài nộp của GV khác" chuyển sang Bước 2, vì cần chuyển các trang admin sang API). Cần thử rules bằng tài khoản thật (HS làm bài, admin duyệt GV) ngoài giờ thi rồi mới deploy; thứ tự: đưa code lên Vercel trước, deploy rules sau.
 
+- 2026-11-04 Đợt sửa tự luận + bộ chuyển LaTeX (chưa commit): thêm `src/utils/latexNormalize.ts`; sửa `latexParser`, `textProcessor`, `tikzToImage`, `ReviewMode`, trang xem lại của giáo viên, trang kết quả, create/edit-exam. `tsc` sạch, `npm run build` thành công. Rà soát bảo mật thủ công: ảnh TikZ chỉ nhận `https://`, `/local-imports/` hoặc `data:image/(svg+xml|png);base64`; không dùng `dangerouslySetInnerHTML`; API essay vẫn do máy chủ kiểm quyền.
+
+- 2026-11-04 Nhận dạng tự luận bằng `\dapso{}` + giáo viên đặt điểm từng câu (chưa commit): `smartParseLatex`/`parseLatexExam` coi khối có `\dapso` là tự luận khi bật Phần IV (đề 3 phần vẫn coi như `\shortans`); đáp số tự luận bị bỏ khỏi dữ liệu gửi học sinh ở `/api/exams/[id]/access` (còn đọc được qua Firestore trực tiếp cho tới Bước 2). `tsc`, eslint, `npm run build` đều sạch.
+
 ## Ghi chú vận hành
 - Commit chỉ khi người dùng bảo; Gia Sư: dump DB trước migration, push main sau mỗi track (Vercel tự deploy).
 - Làm từng bước, báo kết quả + bằng chứng trước khi sang bước sau.

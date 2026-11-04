@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Check, Eye, FileCode2, Loader2, PenLine, Save, SlidersHorizontal } from "lucide-react";
 import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { smartParseLatex, type SmartParseCounts } from "@/utils/smartParseLatex";
-import { countQuestionsByPart, orderQuestionsByPart, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
+import { countQuestionsByPart, essayPointProblems, explicitEssayTotal, orderQuestionsByPart, withEssayPoints, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
 import AdminGuard from "@/components/AdminGuard";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
@@ -125,7 +125,7 @@ export default function CreateExamPage() {
       ...parseLatexExam(result.part1),
       ...parseLatexExam(result.part2),
       ...parseLatexExam(result.part3),
-      ...parseLatexExam(result.part4),
+      ...parseLatexExam(result.part4, { essay: true }),
     ]);
     setPreviewData({ title: examTitle.trim() || "Đề thi chưa đặt tên", questions });
     const missingAnswers = getMissingShortAnswerQuestionNumbers(questions);
@@ -238,7 +238,7 @@ export default function CreateExamPage() {
           scoringConfig: {
             part1TotalScore: Number(scoringConfig.part1TotalScore),
             part3TotalScore: Number(scoringConfig.part3TotalScore),
-            ...(structure === "p1234" ? { part4TotalScore: Number(scoringConfig.part4TotalScore ?? 0) } : {}),
+            ...(structure === "p1234" ? { part4TotalScore: explicitEssayTotal(previewData.questions) ?? Number(scoringConfig.part4TotalScore ?? 0) } : {}),
           },
           structure,
           duration: Number(duration),
@@ -286,12 +286,21 @@ export default function CreateExamPage() {
   };
 
   const questions = previewData?.questions ?? [];
+  // Giáo viên đặt điểm từng câu tự luận ở bản xem trước; tổng Phần IV tự cộng khi đủ mọi câu.
+  const handleEssayPoints = (questionId: number, points: number | null) => {
+    setPreviewData((prev) => (prev ? { ...prev, questions: withEssayPoints(prev.questions, questionId, points) } : prev));
+  };
+  // Khi đã đặt điểm cho mọi câu, tổng Phần IV là tổng các câu (không cần ô nhập riêng).
+  const explicitPart4Total = structure === "p1234" ? explicitEssayTotal(previewData?.questions ?? []) : null;
+  const scoringView: ScoringConfig = explicitPart4Total === null ? scoringConfig : { ...scoringConfig, part4TotalScore: explicitPart4Total };
+
   const missingAnswers = getMissingShortAnswerQuestionNumbers(questions);
   const timeError = validateTimeRange(startTime, endTime);
   const checklist: ChecklistItem[] = [
     { label: questions.length ? `Đã nhận ${questions.length} câu hỏi` : "Nhập nội dung đề", ok: questions.length > 0, hint: "Dán LaTeX rồi bấm Phân tích, hoặc tải file đề." },
     { label: "Đặt tên bài thi", ok: Boolean(examTitle.trim()) },
     ...(questions.length ? structureProblems(structure, countQuestionsByPart(questions)).map((problem) => ({ label: "Câu hỏi khớp cấu trúc đề", ok: false, hint: problem })) : []),
+    ...(structure === "p1234" ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)).map((problem) => ({ label: "Điểm tự luận khớp tổng Phần IV", ok: false, hint: problem })) : []),
     ...(questions.length ? [{ label: "Đủ đáp án trả lời ngắn", ok: missingAnswers.length === 0, hint: `Thiếu đáp án câu ${missingAnswers.join(", ")}.` }] : []),
     ...(assignsClasses(targetType) ? [{ label: "Chọn lớp được giao", ok: targetClassIds.length > 0 }] : []),
     ...(timeError ? [{ label: "Khung thời gian hợp lệ", ok: false, hint: timeError }] : []),
@@ -387,7 +396,7 @@ export default function CreateExamPage() {
                 onStartTime={setStartTime}
                 endTime={endTime}
                 onEndTime={setEndTime}
-                scoring={scoringConfig}
+                scoring={scoringView}
                 onScoring={setScoringConfig}
                 structure={structure}
                 trueFalseCount={trueFalseCount}
@@ -432,7 +441,8 @@ export default function CreateExamPage() {
                     description={description.trim()}
                     coverImageUrl={coverImageUrl}
                     chips={[gradeLevel, ...(gradeLevel !== MOCK_EXAM_GRADE ? [examType] : []), `${duration} phút`]}
-                    part4TotalScore={structure === "p1234" ? scoringConfig.part4TotalScore ?? 0 : undefined}
+                    part4TotalScore={structure === "p1234" ? scoringView.part4TotalScore ?? 0 : undefined}
+                    onEssayPointsChange={structure === "p1234" ? handleEssayPoints : undefined}
                   />
                 ) : (
                   <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">

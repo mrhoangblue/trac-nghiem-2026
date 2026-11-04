@@ -25,6 +25,7 @@ export default function ExamPreview({
   chips,
   part4TotalScore,
   hideAnswers = false,
+  onEssayPointsChange,
 }: {
   questions: ParsedQuestion[];
   title: string;
@@ -35,6 +36,8 @@ export default function ExamPreview({
   part4TotalScore?: number;
   /** Bản in cho học sinh: không tô đáp án, không hiện lời giải. */
   hideAnswers?: boolean;
+  /** Khi có: hiện bảng nhận dạng câu hỏi và cho giáo viên đặt điểm từng câu tự luận. */
+  onEssayPointsChange?: (questionId: number, points: number | null) => void;
 }) {
   const essayPoints = part4TotalScore === undefined ? null : essayQuestionPoints(questions, part4TotalScore);
   return (
@@ -52,6 +55,10 @@ export default function ExamPreview({
         </div>
       </header>
 
+      {onEssayPointsChange && (
+        <ClassificationPanel questions={questions} essayPoints={essayPoints} onEssayPointsChange={onEssayPointsChange} />
+      )}
+
       {SECTIONS.map((section) => {
         const sectionQuestions = questions.filter((question) => question.type === section.type);
         if (sectionQuestions.length === 0) return null;
@@ -65,7 +72,7 @@ export default function ExamPreview({
             {sectionQuestions.map((question) => {
               const number = questions.indexOf(question) + 1;
               return (
-                <div key={question.id} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+                <div key={question.id} id={`preview-q-${question.id}`} className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                   <div className={question.tikzCode ? "grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,.8fr)]" : ""}>
                     <div className="min-w-0 space-y-3">
                       <div className="leading-7 text-gray-900">
@@ -105,6 +112,90 @@ export default function ExamPreview({
         );
       })}
     </article>
+  );
+}
+
+/** "Câu 1–12, 15" từ danh sách số câu. */
+function formatRanges(numbers: number[]): string {
+  const parts: string[] = [];
+  for (let i = 0; i < numbers.length; i++) {
+    let j = i;
+    while (j + 1 < numbers.length && numbers[j + 1] === numbers[j] + 1) j++;
+    parts.push(j > i ? `${numbers[i]}–${numbers[j]}` : String(numbers[i]));
+    i = j;
+  }
+  return parts.join(", ");
+}
+
+const formatPoints = (value: number) => String(Math.round(value * 100) / 100).replace(".", ",");
+
+function ClassificationPanel({
+  questions,
+  essayPoints,
+  onEssayPointsChange,
+}: {
+  questions: ParsedQuestion[];
+  essayPoints: Map<number, number> | null;
+  onEssayPointsChange: (questionId: number, points: number | null) => void;
+}) {
+  const essays = questions.map((question, index) => ({ question, number: index + 1 })).filter((item) => item.question.type === "essay");
+  const total = essays.reduce((sum, item) => sum + (essayPoints?.get(item.question.id) ?? item.question.points ?? 0), 0);
+  return (
+    <section aria-label="Bảng nhận dạng câu hỏi" className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4">
+      <p className="font-display text-sm font-bold text-gray-900">Hệ thống đã nhận dạng</p>
+      <ul className="mt-2 grid gap-1.5 text-sm text-gray-700 sm:grid-cols-2">
+        {SECTIONS.map((section) => {
+          const numbers = questions.map((question, index) => (question.type === section.type ? index + 1 : 0)).filter(Boolean);
+          return (
+            <li key={section.type} className="flex items-baseline gap-2">
+              <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gradient-to-br text-[10px] font-bold text-white ${section.tone}`}>{section.roman}</span>
+              <span className="font-semibold">{section.label}:</span>
+              <span className={numbers.length ? "text-gray-700" : "text-gray-400"}>{numbers.length ? `${numbers.length} câu (câu ${formatRanges(numbers)})` : "không có"}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {essays.length > 0 && (
+        <div className="mt-4 border-t border-brand-100 pt-3">
+          <p className="text-sm font-semibold text-gray-900">Phần IV · đặt điểm từng câu tự luận</p>
+          <p className="mt-0.5 text-xs text-gray-500">Câu tự luận là khối có lệnh <code className="rounded bg-white px-1">{"\\dapso{}"}</code>. Nhập điểm tối đa cho từng câu, tổng Phần IV tự cộng.</p>
+          <ul className="mt-2 space-y-1.5">
+            {essays.map(({ question, number }) => {
+              const effective = essayPoints?.get(question.id) ?? question.points ?? 0;
+              const hasMarker = String(question.correctAnswer ?? "").trim() !== "";
+              return (
+                <li key={question.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-white px-3 py-2 text-sm">
+                  <a href={`#preview-q-${question.id}`} className="font-bold text-violet-700 hover:underline">Câu {number}</a>
+                  <span className={`text-xs font-medium ${hasMarker ? "text-emerald-700" : "text-amber-700"}`}>
+                    {hasMarker ? "có đáp số \\dapso" : "\\dapso{} để trống hoặc không có"}
+                  </span>
+                  <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-gray-600">
+                    Điểm tối đa
+                    <input
+                      key={`${question.id}-${effective}`}
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={100}
+                      step={0.25}
+                      defaultValue={effective}
+                      aria-label={`Điểm tối đa câu ${number}`}
+                      className="h-9 w-20 rounded-lg border border-gray-300 px-2 text-right text-sm font-bold text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                      onBlur={(event) => {
+                        const value = event.currentTarget.valueAsNumber;
+                        onEssayPointsChange(question.id, Number.isFinite(value) && value > 0 ? value : null);
+                      }}
+                      onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                    />
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-right text-sm font-bold text-gray-900">Tổng Phần IV: {formatPoints(total)} điểm</p>
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -276,7 +276,8 @@ export async function storeTikzDataUri(imageDataUri: string): Promise<StoredTikz
 }
 
 function buildTikzImageTag(imageSrc: string): string {
-  return `<img src="${imageSrc}" alt="Math Diagram" class="math-rendered-svg mx-auto my-2 max-w-full" />`;
+  // Dùng token thay cho thẻ <img>: bộ hiển thị đề chỉ đọc token này (và vẫn đọc được thẻ cũ).
+  return `[[EXAM_TIKZ_IMAGE:${imageSrc}]]`;
 }
 
 // ── Core fetch ────────────────────────────────────────────────────────────────
@@ -423,10 +424,13 @@ async function convertBlocksToImages(
 
 async function migrateInlineRenderedImages(content: string): Promise<ProcessMathContentResult> {
   const tags = content.match(/<img\b[^>]*>/gi) ?? [];
-  const dataUris = [...new Set(tags
-    .filter((tag) => tag.includes("math-rendered-svg"))
-    .map((tag) => tag.match(/\bsrc=["'](data:image\/(?:svg\+xml|png);base64,[^"']+)["']/i)?.[1])
-    .filter((value): value is string => Boolean(value)))];
+  const tokens = content.match(/\[\[EXAM_TIKZ_IMAGE:data:image\/(?:svg\+xml|png);base64,[^\]]+\]\]/g) ?? [];
+  const dataUris = [...new Set([
+    ...tags
+      .filter((tag) => tag.includes("math-rendered-svg"))
+      .map((tag) => tag.match(/\bsrc=["'](data:image\/(?:svg\+xml|png);base64,[^"']+)["']/i)?.[1]),
+    ...tokens.map((token) => token.slice("[[EXAM_TIKZ_IMAGE:".length, -2)),
+  ].filter((value): value is string => Boolean(value)))];
   if (dataUris.length === 0) return { content, convertedCount: 0, failedCount: 0 };
 
   let migrated = content;
