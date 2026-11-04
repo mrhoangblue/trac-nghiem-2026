@@ -11,10 +11,10 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
 - [ ] Triển khai rules bằng `firebase deploy --only firestore:rules` SAU khi thử trên dữ liệu giả; không chạm dữ liệu thi thật.
 
 ## Bước 2 — Trắc nghiệm: không gửi đáp án cho học sinh
-- [ ] `/api/exams/[id]/access`: bỏ `correctAnswer`, lời giải, `rawLatex` khỏi payload học sinh (giáo viên/admin giữ nguyên).
-- [ ] `QuizClient.tsx`: bỏ tính điểm ở client (dòng ~705–770, 860–935), dùng điểm/chi tiết do `/api/submissions` trả về; đổi nguồn gửi email kết quả (`send-result`) sang dữ liệu máy chủ.
-- [ ] Chế độ xem lại (review) chỉ lấy đáp án sau khi nộp (hoặc sau khi GV công bố).
-- [ ] Đóng đường đọc trực tiếp `exams` cho học sinh trong rules (chỉ staff đọc client; học sinh qua API).
+- [x] `/api/exams/[id]/access`: bỏ `correctAnswer`, lời giải, `rawLatex` khỏi payload học sinh (giáo viên/admin giữ nguyên).
+- [x] `QuizClient.tsx`: bỏ tính điểm ở client (dòng ~705–770, 860–935), dùng điểm/chi tiết do `/api/submissions` trả về; đổi nguồn gửi email kết quả (`send-result`) sang dữ liệu máy chủ.
+- [x] Chế độ xem lại (review) chỉ lấy đáp án sau khi nộp (hoặc sau khi GV công bố).
+- [x] Đóng đường đọc trực tiếp `exams` cho học sinh trong rules (trong file, CHƯA deploy) (chỉ staff đọc client; học sinh qua API).
 - [ ] Thử bằng trang preview dữ liệu giả hoặc Playwright mock; không start/submit đề thật.
 
 ## Bước 3 — Thư viện + vệ sinh
@@ -41,6 +41,13 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
 - 2026-11-04 Đợt sửa tự luận + bộ chuyển LaTeX (chưa commit): thêm `src/utils/latexNormalize.ts`; sửa `latexParser`, `textProcessor`, `tikzToImage`, `ReviewMode`, trang xem lại của giáo viên, trang kết quả, create/edit-exam. `tsc` sạch, `npm run build` thành công. Rà soát bảo mật thủ công: ảnh TikZ chỉ nhận `https://`, `/local-imports/` hoặc `data:image/(svg+xml|png);base64`; không dùng `dangerouslySetInnerHTML`; API essay vẫn do máy chủ kiểm quyền.
 
 - 2026-11-04 Nhận dạng tự luận bằng `\dapso{}` + giáo viên đặt điểm từng câu (chưa commit): `smartParseLatex`/`parseLatexExam` coi khối có `\dapso` là tự luận khi bật Phần IV (đề 3 phần vẫn coi như `\shortans`); đáp số tự luận bị bỏ khỏi dữ liệu gửi học sinh ở `/api/exams/[id]/access` (còn đọc được qua Firestore trực tiếp cho tới Bước 2). `tsc`, eslint, `npm run build` đều sạch.
+
+- 2026-11-04 Bước 2 (code xong, CHƯA commit, CHƯA deploy rules):
+  - Mới: `src/lib/examAnswerKey.ts` (dựng câu hỏi, gỡ đáp án, bảng chi tiết email), `src/app/api/submissions/review/route.ts` (đáp án sau khi nộp). Sửa: `/access`, `/api/submissions`, `/api/send-result`, `QuizClient`, trang xem lại của học sinh, `examVersions`, `firestore.rules` (`exams` chỉ staff đọc).
+  - `/access` cho học sinh: không còn đáp án, lời giải, `rawLatex`, `rawLatexSource`, `authorEmail`. `/api/submissions` chấm trên đúng bộ câu hỏi học sinh nhận. Client không chấm nữa, dùng `scores` của máy chủ. `send-result` chỉ nhận `submissionId`, tự dựng nội dung, mỗi bài gửi một lần (`resultEmailSentAt`).
+  - security-review: 1 phát hiện mức vừa (nộp trắng rồi lấy đáp án khi đề còn mở). Đã xử lý: đề có `endTime` thì giữ đáp án đến khi đề đóng (423 `ANSWERS_NOT_RELEASED`); đề không có giờ đóng vẫn hiện sau khi nộp. Còn lại, đề không giờ đóng + nhiều lượt vẫn lộ đáp án cho lượt sau (chấp nhận, cần cờ "công bố đáp án" nếu muốn chặt hơn).
+  - Kiểm tra: `tsc` sạch, eslint sạch trên file đã sửa, `npm run build` thành công (trước bản vá giữ đáp án). Chưa thử bằng tài khoản thật.
+  - Chưa làm trong Bước 2: các trang admin/giáo viên vẫn đọc `submissions` trực tiếp qua Firestore nên staff vẫn đọc được bài nộp của giáo viên khác.
 
 ## Ghi chú vận hành
 - Commit chỉ khi người dùng bảo; Gia Sư: dump DB trước migration, push main sau mỗi track (Vercel tự deploy).

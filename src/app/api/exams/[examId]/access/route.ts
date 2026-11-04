@@ -9,7 +9,7 @@ import {
   type PasswordSecret,
 } from "@/lib/examAccess";
 import { verifyAuth } from "@/lib/verifyAuth";
-import { hasEssayPart } from "@/utils/examStructure";
+import { studentExamView } from "@/lib/examAnswerKey";
 import { isClassOnly } from "@/utils/examAudience";
 
 export const runtime = "nodejs";
@@ -76,16 +76,10 @@ export async function POST(
       }
     }
 
-    if (!isTeacher && hasEssayPart(exam.structure)) {
-      // \loigiai của câu tự luận là hướng dẫn chấm và \dapso{} là đáp số: không gửi cho học sinh.
-      const { rawLatex: _rawLatex, ...rest } = exam;
-      void _rawLatex;
-      const questions = Array.isArray(exam.questions)
-        ? exam.questions.map((question: Record<string, unknown>) => (
-          question?.type === "essay" ? { ...question, explanation: "", explanationTikzCode: undefined, explanationTikzImageUrl: undefined, correctAnswer: null, correctAnswerImageUrl: undefined } : question
-        ))
-        : [];
-      return NextResponse.json({ exam: { id: examSnapshot.id, ...rest, questions } });
+    if (!isTeacher) {
+      // Học sinh chỉ nhận đề, không nhận đáp án/lời giải/mã nguồn LaTeX.
+      // Điểm do /api/submissions chấm; đáp án trả lại sau khi nộp qua /api/submissions/review.
+      return NextResponse.json({ exam: studentExamView(examSnapshot.id, exam) });
     }
     return NextResponse.json({ exam: { id: examSnapshot.id, ...exam } });
   } catch (error) {

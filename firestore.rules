@@ -70,8 +70,10 @@ service cloud.firestore {
 
     // ── Đề thi ─────────────────────────────────────────────────────────────────
     match /exams/{examId} {
-      // Học sinh đã đăng nhập được đọc đề
-      allow read: if isSignedIn();
+      // Tài liệu đề chứa đáp án và lời giải nên chỉ giáo viên/admin đọc trực tiếp.
+      // Học sinh nhận đề (đã gỡ đáp án) qua /api/exams/[id]/access và xem lại qua
+      // /api/submissions/review sau khi nộp.
+      allow read: if isSignedIn() && isStaff();
 
       // Giáo viên/mod/admin tạo đề — API dùng Admin SDK nên rule này chỉ
       // áp dụng nếu client ghi trực tiếp (không qua API)

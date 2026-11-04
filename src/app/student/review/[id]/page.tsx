@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
-import { ScoreResult, P2_TABLE, normalizeAnswer } from "@/utils/examTypes";
+import type { ParsedQuestion } from "@/utils/latexParser";
+import { ScoreResult, P2_TABLE, normalizeAnswer, formatDateTime } from "@/utils/examTypes";
 import ReviewMode, { type EssayReview } from "@/components/ReviewMode";
 import EssayGradedWork, { useEssayResult } from "@/components/essay/EssayGradedWork";
 import { useAuth } from "@/lib/AuthContext";
-import { essayQuestionPoints, hasEssayPart, orderQuestionsByPart } from "@/utils/examStructure";
+import { essayQuestionPoints, hasEssayPart } from "@/utils/examStructure";
 import { answersToDisplay, buildExamVersion } from "@/utils/examVersions";
 import StateIcon from "@/components/StateIcon";
 
@@ -124,6 +124,7 @@ export default function ReviewPage() {
   const [p3Ans, setP3Ans] = useState<Record<number, string>>({});
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [gradingStatus, setGradingStatus] = useState<"pending" | "graded" | null>(null);
+  const [releaseAtMillis, setReleaseAtMillis] = useState<number | null>(null);
   const [part4TotalScore, setPart4TotalScore] = useState<number | null>(null);
   const { user } = useAuth();
   const getToken = useCallback(() => user!.getIdToken(), [user]);
@@ -140,7 +141,7 @@ export default function ReviewPage() {
   }, [essayResult.data, part4TotalScore, questions]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
 
     const load = async () => {
       try {
@@ -152,43 +153,46 @@ export default function ReviewPage() {
         }
         const sub = subSnap.data();
 
-        // 2. Lấy đề thi
-        const examSnap = await getDoc(doc(db, "exams", sub.examId));
-        if (!examSnap.exists()) {
-          setError("Không tìm thấy đề thi tương ứng.");
-          return;
-        }
-        const exam = examSnap.data();
-
-        setExamTitle(sub.examTitle ?? exam.title ?? "Bài thi");
+        setExamTitle(sub.examTitle ?? "Bài thi");
         if (sub.gradingStatus === "pending") {
           // Đề tự luận chưa chấm: chưa công bố điểm và đáp án.
           setGradingStatus("pending");
           return;
         }
-        if (sub.gradingStatus === "graded" && hasEssayPart(exam.structure)) {
+
+        // 2. Đề kèm đáp án lấy từ máy chủ (học sinh không đọc trực tiếp collection exams).
+        const response = await fetch(`/api/submissions/review?submissionId=${encodeURIComponent(id)}`, {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        });
+        const reviewPayload = await response.json().catch(() => null) as {
+          error?: string;
+          releaseAtMillis?: number;
+          examTitle?: string;
+          structure?: unknown;
+          versioning?: unknown;
+          scoringConfig?: { part4TotalScore?: unknown } | null;
+          examCode?: string | null;
+          questions?: ParsedQuestion[];
+        } | null;
+        if (response.status === 423) {
+          if (reviewPayload?.error === "ANSWERS_NOT_RELEASED") setReleaseAtMillis(reviewPayload.releaseAtMillis ?? 0);
+          else setGradingStatus("pending");
+          return;
+        }
+        if (!response.ok || !Array.isArray(reviewPayload?.questions)) {
+          setError(response.status === 404 ? "Không tìm thấy bài làm này." : "Không tải được đáp án. Vui lòng thử lại.");
+          return;
+        }
+        setExamTitle(reviewPayload.examTitle ?? sub.examTitle ?? "Bài thi");
+        if (sub.gradingStatus === "graded" && hasEssayPart(reviewPayload.structure)) {
           setGradingStatus("graded");
-          setPart4TotalScore(Number(exam.scoringConfig?.part4TotalScore ?? 0));
+          setPart4TotalScore(Number(reviewPayload.scoringConfig?.part4TotalScore ?? 0));
         }
 
-        // 3. Lấy câu hỏi. Đề đã xử lý TikZ phải dùng questions đã lưu ảnh.
-        let qs: ParsedQuestion[];
-        if (exam.tikzProcessed && Array.isArray(exam.questions)) {
-          qs = exam.questions as ParsedQuestion[];
-        } else if (exam.rawLatex) {
-          const { part1 = "", part2 = "", part3 = "", part4 = "" } = exam.rawLatex;
-          qs = orderQuestionsByPart([
-            ...parseLatexExam(part1),
-            ...parseLatexExam(part2),
-            ...parseLatexExam(part3),
-            ...parseLatexExam(part4, { essay: true }),
-          ]);
-        } else {
-          qs = (exam.questions ?? []) as ParsedQuestion[];
-        }
-        // Đề trộn nhiều mã: hiện đúng bản đề học sinh đã làm.
-        const version = buildExamVersion(qs, exam.versioning, sub.examCode, String(sub.examId));
-        qs = version.questions;
+        // 3. Đề trộn nhiều mã: hiện đúng bản đề học sinh đã làm.
+        const version = buildExamVersion(reviewPayload.questions, reviewPayload.versioning, reviewPayload.examCode ?? sub.examCode, String(sub.examId));
+        const qs = version.questions;
         setQuestions(qs);
 
         // 4. Parse đáp án từ answersJson
@@ -209,7 +213,7 @@ export default function ReviewPage() {
     };
 
     load();
-  }, [id]);
+  }, [id, user]);
 
   if (loading) return <Spinner />;
 
@@ -228,6 +232,18 @@ export default function ReviewPage() {
     );
   }
 
+  if (releaseAtMillis !== null) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+        <StateIcon icon="lock" tone="brand" className="mx-auto mb-4" />
+        <h1 className="font-display text-xl font-extrabold text-gray-900">{examTitle}</h1>
+        <p className="mt-2 text-sm leading-6 text-gray-500">
+          Đáp án và lời giải sẽ hiện sau khi đề đóng{releaseAtMillis ? ` lúc ${formatDateTime(new Date(releaseAtMillis).toISOString())}` : ""}.
+        </p>
+        <Link href="/student/history" className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-gray-100 px-5 text-sm font-bold text-gray-800 hover:bg-gray-200">← Quay lại lịch sử</Link>
+      </div>
+    );
+  }
   if (gradingStatus === "pending") {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">

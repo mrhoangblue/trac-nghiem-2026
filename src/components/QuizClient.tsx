@@ -29,8 +29,6 @@ import {
   ExamActivityEvent,
   ExamActivitySummary,
   QuestionTimingStat,
-  P2_TABLE,
-  normalizeAnswer,
   formatCountdown,
   formatDateTime,
 } from "@/utils/examTypes";
@@ -75,6 +73,59 @@ async function fetchStudentSubmissionState(
   if (!response.ok || !payload) throw new Error(payload?.error ?? "SUBMISSION_STATE_LOAD_FAILED");
   return payload;
 }
+class ReviewUnavailableError extends Error {
+  constructor(code: string, readonly releaseAtMillis: number | null) {
+    super(code);
+  }
+}
+
+/** Đề kèm đáp án để xem lại, lấy từ máy chủ sau khi nộp. Trả về câu hỏi đúng bản đề học sinh đã làm. */
+async function fetchReviewQuestions(
+  user: { getIdToken: (forceRefresh?: boolean) => Promise<string> },
+  submissionId: string,
+  examId: string,
+): Promise<ParsedQuestion[]> {
+  const response = await fetch(`/api/submissions/review?submissionId=${encodeURIComponent(submissionId)}`, {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+  });
+  const payload = await response.json().catch(() => null) as { error?: string; releaseAtMillis?: number; questions?: ParsedQuestion[]; versioning?: unknown; examCode?: string | null } | null;
+  if (!response.ok || !Array.isArray(payload?.questions)) {
+    throw new ReviewUnavailableError(payload?.error ?? "REVIEW_LOAD_FAILED", payload?.releaseAtMillis ?? null);
+  }
+  return buildExamVersion(payload.questions, payload.versioning, payload.examCode, examId).questions;
+}
+
+function SubmittedSummary({ title, loading, releaseAtMillis, scoreResult, reviewHref }: {
+  title: string;
+  loading: boolean;
+  releaseAtMillis: number | null;
+  scoreResult: ScoreResult | null;
+  reviewHref: string;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center p-4">
+      <div role="status" className="w-full max-w-md rounded-[2rem] border border-gray-200 bg-white px-8 py-10 text-center shadow-[var(--shadow-lift)]">
+        <h2 className="font-display text-xl font-extrabold text-gray-900">{title}</h2>
+        <p className="mt-2 text-sm text-gray-500">Bài làm đã được nộp.</p>
+        {scoreResult && (
+          <p className="mt-5 font-display text-4xl font-extrabold text-brand-700">{scoreResult.total}<span className="text-lg font-semibold text-gray-400"> điểm</span></p>
+        )}
+        <p className="mt-4 text-sm text-gray-500">
+          {loading
+            ? "Đang tải đáp án và lời giải…"
+            : releaseAtMillis
+              ? `Đáp án và lời giải sẽ hiện sau khi đề đóng lúc ${formatDateTime(new Date(releaseAtMillis).toISOString())}. Bạn xem lại được trong lịch sử làm bài.`
+              : "Chưa tải được đáp án lúc này. Bạn có thể xem lại trong lịch sử làm bài."}
+        </p>
+        {!loading && (
+          <a href={reviewHref} className="edu-btn mt-6 inline-flex min-h-11 items-center justify-center rounded-2xl px-6 font-semibold text-white">Xem lại bài làm</a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type WakeLockNav = Navigator & {
   wakeLock?: { request(type: "screen"): Promise<WakeLockSentinel> };
 };
@@ -215,7 +266,6 @@ export default function QuizClient({
   examId,
   title,
   questions: baseQuestions,
-  scoringConfig,
   structure = "p123",
   timing,
   maxRetries = 1,
@@ -572,9 +622,13 @@ export default function QuizClient({
     }
     startSession(); // sessionStorage fallback for timer reference
     setManuallyStarted(true);
-  }, [isStudentMode, examId, user, userProfile, startSession, enterQuestion, timing]);
+  }, [isStudentMode, examId, user, userProfile, startSession, enterQuestion, timing, accessPassword]);
 
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [reviewState, setReviewState] = useState<
+    { status: "idle" } | { status: "loading" } | { status: "error"; releaseAtMillis?: number | null } | { status: "ready"; questions: ParsedQuestion[] }
+  >({ status: "idle" });
 
   // ── TASK 1: Wake Lock ─────────────────────────────────────────────────────
   //
@@ -693,9 +747,6 @@ export default function QuizClient({
   }, [started, isSubmitted]);
 
   // ── Question partitioning — memoized to avoid array churn ─────────────────
-  const p1Qs = useMemo(() => questions.filter((q) => q.type === "multiple_choice"), [questions]);
-  const p2Qs = useMemo(() => questions.filter((q) => q.type === "true_false"), [questions]);
-  const p3Qs = useMemo(() => questions.filter((q) => q.type === "short_answer"), [questions]);
   const hasEssay = structure === "p1234" && questions.some((q) => q.type === "essay");
   const essayCount = hasEssay ? questions.filter((q) => q.type === "essay").length : 0;
 
@@ -710,50 +761,6 @@ export default function QuizClient({
     (essayFileCount > 0 ? essayCount : 0);
   const totalQuestions = questions.length;
   const progress = totalQuestions > 0 ? (totalAnswered / totalQuestions) * 100 : 0;
-
-  // ── Score calculation ─────────────────────────────────────────────────────
-  const calculateScore = useCallback((): ScoreResult => {
-    let p1 = 0;
-    let p1Correct = 0;
-    if (p1Qs.length > 0) {
-      const perQ = scoringConfig.part1TotalScore / p1Qs.length;
-      p1Qs.forEach((q) => {
-        if (p1Ans[q.id] === (q.correctAnswer as number)) { p1 += perQ; p1Correct++; }
-      });
-    }
-
-    let p2 = 0;
-    const p2Details: ScoreResult["part2"]["details"] = [];
-    p2Qs.forEach((q) => {
-      const correct = q.correctAnswer as boolean[];
-      const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
-      const hits = correct.filter((c, i) => c === student[i]).length;
-      const qScore = P2_TABLE[hits] ?? 0;
-      p2 += qScore;
-      p2Details.push({ match: hits, maxMatch: correct.length, score: qScore });
-    });
-
-    let p3 = 0;
-    let p3Correct = 0;
-    const totalP3 = scoringConfig.part3TotalScore ?? 1;
-    if (p3Qs.length > 0) {
-      const perQ = totalP3 / p3Qs.length;
-      p3Qs.forEach((q) => {
-        const ns = normalizeAnswer(p3Ans[q.id] ?? "");
-        const nc = normalizeAnswer(String(q.correctAnswer ?? ""));
-        if (ns !== "" && ns === nc) { p3 += perQ; p3Correct++; }
-      });
-    }
-
-    const r = (n: number) => Math.round(n * 100) / 100;
-    return {
-      p1: r(p1), p2: r(p2), p3: r(p3),
-      total: r(p1 + p2 + p3),
-      part1: { correct: p1Correct, total: p1Qs.length, score: r(p1) },
-      part2: { details: p2Details, totalScore: r(p2) },
-      part3: { correct: p3Correct, total: p3Qs.length, score: r(p3) },
-    };
-  }, [p1Ans, p2Ans, p3Ans, p1Qs, p2Qs, p3Qs, scoringConfig]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(
@@ -770,42 +777,19 @@ export default function QuizClient({
       setSubmitting(true);
       finalizeCurrentQuestion("submit");
       const activitySummary = getActivitySummary();
-      const result = calculateScore();
-
-      const part1Results = p1Qs.map((q) => p1Ans[q.id] === (q.correctAnswer as number));
-      const part2Results = p2Qs.map((q) => {
-        const correct = q.correctAnswer as boolean[];
-        const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
-        return correct.filter((c, i) => c === student[i]).length;
-      });
-      const part3Results = p3Qs.map((q) => {
-        const s = normalizeAnswer(p3Ans[q.id] ?? "");
-        const c = normalizeAnswer(String(q.correctAnswer ?? ""));
-        return !!s && s === c;
-      });
 
       let savedSubmissionId: string | undefined;
+      let serverScores: ScoreResult | null = null;
 
       // ── Always write to Firestore ─────────────────────────────────────────────
       // In student-preview mode (teacher testing), tag the doc with isTeacherPreview: true.
       // This lets gradebook queries filter it out while still recording the teacher's work.
       try {
         const submissionPayload = {
-          examId,
-          examTitle: title,
           studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
-          studentEmail: user?.email ?? "—",
           studentAvatar: user?.photoURL ?? "",
-          status: "COMPLETED",
-          submittedAt: serverTimestamp(),
-          part1Results,
-          part2Results,
-          part3Results,
-          scores: result,
           answersJson: JSON.stringify(answersToOriginal({ p1Ans, p2Ans, p3Ans }, versionOrders)),
           cheatCount: cheatCountRef.current,
-          ...activitySummary,
-          ...(isStudentMode ? { isTeacherPreview: true } : {}),
         };
 
         const token = await user?.getIdToken();
@@ -831,11 +815,12 @@ export default function QuizClient({
             isTeacherPreview: isStudentMode,
           }),
         });
-        const saved = await response.json().catch(() => null) as { id?: string; error?: string; essayUpload?: { uploadDeadlineMillis: number | null } } | null;
+        const saved = await response.json().catch(() => null) as { id?: string; error?: string; scores?: ScoreResult | null; essayUpload?: { uploadDeadlineMillis: number | null } } | null;
         if (!response.ok || !saved?.id) {
           throw new Error(saved?.error ?? "Không thể lưu bài nộp.");
         }
         savedSubmissionId = saved.id;
+        serverScores = saved.scores ?? null;
         if (saved.essayUpload) {
           // Đề có tự luận: không gửi email, không hiện điểm; còn 5 phút nộp ảnh.
           if (user?.uid) clearDraft(draftId, user.uid);
@@ -856,44 +841,10 @@ export default function QuizClient({
         return;
       }
 
-      // Send result email — skip for teacher preview mode
-      // Học sinh có thể tắt email kết quả ở trang Tài khoản.
+      // Email kết quả: bỏ qua khi giáo viên xem thử; học sinh có thể tắt ở trang Tài khoản.
+      // Máy chủ tự dựng nội dung từ bài đã chấm, máy khách chỉ gửi mã bài nộp.
       const wantsResultEmail = resolveUserSettings(userProfile?.settings).resultEmail;
-      if (!isStudentMode && wantsResultEmail && user?.email && user.email !== "—") {
-        const toP2EmailAnswer = (answers: (boolean | null)[]) => ({
-          a: answers[0],
-          b: answers[1],
-          c: answers[2],
-          d: answers[3],
-        });
-
-        const detailedResults = [
-          ...p1Qs.map((q, i) => ({
-            number: i + 1,
-            part: "P1" as const,
-            isCorrect: part1Results[i] ?? false,
-            studentAnswer: p1Ans[q.id] !== undefined ? String.fromCharCode(65 + p1Ans[q.id]) : "—",
-            correctAnswer: String.fromCharCode(65 + (q.correctAnswer as number)),
-          })),
-          ...p2Qs.map((q, i) => ({
-            number: p1Qs.length + i + 1,
-            part: "P2" as const,
-            isCorrect: part2Results[i] === (q.correctAnswer as boolean[]).length,
-            partialHits: part2Results[i],
-            studentAnswer: toP2EmailAnswer(
-              p2Ans[q.id] ?? new Array((q.correctAnswer as boolean[]).length).fill(null),
-            ),
-            correctAnswer: toP2EmailAnswer(q.correctAnswer as boolean[]),
-          })),
-          ...p3Qs.map((q, i) => ({
-            number: p1Qs.length + p2Qs.length + i + 1,
-            part: "P3" as const,
-            isCorrect: part3Results[i] ?? false,
-            studentAnswer: p3Ans[q.id] || "—",
-            correctAnswer: String(q.correctAnswer ?? ""),
-          })),
-        ];
-
+      if (!isStudentMode && wantsResultEmail && user?.email && user.email !== "—" && savedSubmissionId) {
         const token = await user.getIdToken();
         fetch("/api/send-result", {
           method: "POST",
@@ -901,26 +852,31 @@ export default function QuizClient({
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
-          body: JSON.stringify({
-            studentEmail: user.email,
-            studentName: userProfile?.fullName ?? user.displayName ?? "Học sinh",
-            examName: title,
-            submissionId: savedSubmissionId,
-            scores: { p1: result.p1, p2: result.p2, p3: result.p3, total: result.total },
-            detailedResults,
-          }),
+          body: JSON.stringify({ submissionId: savedSubmissionId }),
         }).catch((err) => console.warn("Gửi email thất bại (non-critical):", err));
       }
 
-      setScoreResult(result);
+      // Điểm do máy chủ chấm; đáp án chỉ tải về sau khi bài đã được lưu.
+      setScoreResult(serverScores);
       setIsSubmitted(true);
       setSubmitting(false);
+      if (serverScores && savedSubmissionId) {
+        setReviewState({ status: "loading" });
+        fetchReviewQuestions(user!, savedSubmissionId, examId)
+          .then((reviewed) => setReviewState({ status: "ready", questions: reviewed }))
+          .catch((err) => {
+            console.error("Không tải được đáp án xem lại:", err);
+            setReviewState({ status: "error", releaseAtMillis: err instanceof ReviewUnavailableError ? err.releaseAtMillis : null });
+          });
+      } else {
+        setReviewState({ status: "error" });
+      }
+      setSubmittedId(savedSubmissionId ?? null);
     },
     [
       draftId, versionOrders,
       isStudentMode, isSubmitted, submitting, totalAnswered, totalQuestions,
-      calculateScore, p1Qs, p2Qs, p3Qs,
-      p1Ans, p2Ans, p3Ans, examId, title, user, userProfile,
+      p1Ans, p2Ans, p3Ans, examId, user, userProfile,
       clearSession, finalizeCurrentQuestion, getActivitySummary,
       // cheatCount intentionally OMITTED — read via cheatCountRef.current inside
     ]
@@ -938,37 +894,12 @@ export default function QuizClient({
     finalizeCurrentQuestion("submit");
     const activitySummary = getActivitySummary();
 
-    const result = calculateScore();
-    const part1Results = p1Qs.map((q) => p1Ans[q.id] === (q.correctAnswer as number));
-    const part2Results = p2Qs.map((q) => {
-      const correct = q.correctAnswer as boolean[];
-      const student = p2Ans[q.id] ?? new Array(correct.length).fill(null);
-      return correct.filter((c, i) => c === student[i]).length;
-    });
-    const part3Results = p3Qs.map((q) => {
-      const s = normalizeAnswer(p3Ans[q.id] ?? "");
-      const c = normalizeAnswer(String(q.correctAnswer ?? ""));
-      return !!s && s === c;
-    });
-
     try {
       const submissionPayload = {
-        examId,
-        examTitle: title,
         studentName: userProfile?.fullName ?? user?.displayName ?? "Khách",
-        studentEmail: user?.email ?? "—",
         studentAvatar: user?.photoURL ?? "",
-        status: "COMPLETED",
-        submittedAt: serverTimestamp(),
-        part1Results,
-        part2Results,
-        part3Results,
-        scores: result,
         answersJson: JSON.stringify(answersToOriginal({ p1Ans, p2Ans, p3Ans }, versionOrders)),
         cheatCount: cheatCountRef.current,
-        ...activitySummary,
-        exitedEarly: true, // flag: student left before finishing all questions
-        ...(isStudentMode ? { isTeacherPreview: true } : {}),
       };
       const token = await user?.getIdToken();
       if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
@@ -1008,9 +939,9 @@ export default function QuizClient({
     router.push(href === "__back__" ? "/" : href);
   }, [
     draftId, versionOrders,
-    exitConfirmHref, isSavingExit, calculateScore,
-    p1Qs, p2Qs, p3Qs, p1Ans, p2Ans, p3Ans,
-    examId, title, user, userProfile,
+    exitConfirmHref, isSavingExit,
+    p1Ans, p2Ans, p3Ans,
+    examId, user, userProfile,
     clearSession, isStudentMode, router, finalizeCurrentQuestion, getActivitySummary,
   ]);
 
@@ -1113,15 +1044,27 @@ export default function QuizClient({
   }
 
   // ── Review mode ───────────────────────────────────────────────────────────
-  if (isSubmitted && scoreResult) {
+  // Đáp án chỉ có sau khi nộp: tải từ máy chủ rồi mới ghép vào màn xem lại.
+  if (isSubmitted) {
+    if (reviewState.status === "ready" && scoreResult) {
+      return (
+        <ReviewMode
+          title={title}
+          questions={reviewState.questions}
+          p1Ans={p1Ans}
+          p2Ans={p2Ans}
+          p3Ans={p3Ans}
+          scoreResult={scoreResult}
+        />
+      );
+    }
     return (
-      <ReviewMode
+      <SubmittedSummary
         title={title}
-        questions={questions}
-        p1Ans={p1Ans}
-        p2Ans={p2Ans}
-        p3Ans={p3Ans}
+        loading={reviewState.status === "loading"}
+        releaseAtMillis={reviewState.status === "error" ? reviewState.releaseAtMillis ?? null : null}
         scoreResult={scoreResult}
+        reviewHref={submittedId ? `/student/review/${submittedId}` : "/student/history"}
       />
     );
   }

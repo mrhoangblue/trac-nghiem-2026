@@ -8,6 +8,7 @@ import { uploadWindow } from "@/lib/essaySubmission";
 import { pickVersionCode, versionCodes } from "@/utils/examVersions";
 import { isClassOnly } from "@/utils/examAudience";
 import { parseExamDateTime, verifyExamPassword, type PasswordSecret } from "@/lib/examAccess";
+import { resolveExamQuestions } from "@/lib/examAnswerKey";
 
 export const runtime = "nodejs";
 
@@ -174,7 +175,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "EXAM_NOT_FOUND" }, { status: 404 });
     }
     const exam = examSnapshot.data() ?? {};
-    const questions = Array.isArray(exam.questions) ? exam.questions : [];
+    // Chấm trên đúng bộ câu hỏi mà học sinh được nhận (xem examAnswerKey).
+    const questions = resolveExamQuestions(exam);
 
     if (body.action === "start") {
       const isStaff = ["admin", "mod"].includes(authUser.role);
@@ -249,7 +251,8 @@ export async function POST(request: NextRequest) {
         if (savedUpload.open) {
           return NextResponse.json({ id: candidate.id, essayUpload: { uploadDeadlineMillis: savedUpload.deadline } });
         }
-        return NextResponse.json({ id: candidate.id, scores: candidateData.scores ?? null });
+        // Đề tự luận chưa chấm xong thì chưa công bố điểm tạm tính.
+        return NextResponse.json({ id: candidate.id, scores: candidateData.gradingStatus === "pending" ? null : candidateData.scores ?? null });
       }
       if (ownedByCaller && candidateData?.status === "IN_PROGRESS") sessionRef = candidate;
     }

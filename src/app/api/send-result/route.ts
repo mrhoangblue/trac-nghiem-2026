@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/verifyAuth";
 import nodemailer from "nodemailer";
+import { FieldValue } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";
+import { buildEmailResultRows, resolveExamQuestions } from "@/lib/examAnswerKey";
+
+export const runtime = "nodejs";
 
 const DEFAULT_SITE_URL = "https://toanthayhoang.bluemath.app";
 
@@ -306,19 +311,34 @@ function buildHtml(payload: SendResultPayload, siteUrl: string): string {
 export async function POST(req: NextRequest) {
   try {
     const authUser = await verifyAuth(req);
-    if (!authUser) {
+    if (!authUser?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body: SendResultPayload = await req.json();
-    const { studentEmail, examName, scores } = body;
-
-    if (!studentEmail || !examName) {
+    // Máy khách chỉ gửi mã bài nộp. Điểm và đáp án lấy từ dữ liệu máy chủ đã chấm,
+    // người dùng không thể tự soạn nội dung email.
+    const body = await req.json().catch(() => ({})) as { submissionId?: unknown };
+    const submissionId = typeof body.submissionId === "string" ? body.submissionId.trim() : "";
+    if (!submissionId) {
       return NextResponse.json({ error: "Thiếu trường bắt buộc." }, { status: 400 });
     }
 
-    if (studentEmail !== authUser.email) {
+    const submissionRef = adminDb.collection("submissions").doc(submissionId);
+    const submissionSnapshot = await submissionRef.get();
+    const submission = submissionSnapshot.data();
+    if (!submission || String(submission.studentEmail ?? "").toLowerCase() !== authUser.email.toLowerCase()) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    // Chỉ gửi cho bài đã nộp, đã có điểm chính thức (đề tự luận phải chờ chấm), không phải bài thử của giáo viên.
+    if (submission.status !== "COMPLETED" || submission.gradingStatus === "pending" || submission.isTeacherPreview === true) {
+      return NextResponse.json({ error: "Bài này chưa có kết quả để gửi." }, { status: 409 });
+    }
+    if (submission.resultEmailSentAt) {
+      return NextResponse.json({ success: true, alreadySent: true });
+    }
+    const scores = submission.scores as SendResultPayload["scores"] | undefined;
+    if (!scores) {
+      return NextResponse.json({ error: "Bài này chưa có điểm." }, { status: 409 });
     }
 
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -329,20 +349,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const siteUrl = DEFAULT_SITE_URL;
+    const examSnapshot = await adminDb.collection("exams").doc(String(submission.examId ?? "")).get();
+    let answers: { p1Ans?: Record<string, unknown>; p2Ans?: Record<string, unknown>; p3Ans?: Record<string, unknown> } = {};
+    try {
+      answers = JSON.parse(String(submission.answersJson ?? "{}")) as typeof answers;
+    } catch {
+      answers = {};
+    }
+    const detailedResults = examSnapshot.exists
+      ? buildEmailResultRows(resolveExamQuestions(examSnapshot.data() ?? {}), answers, submission)
+      : [];
+    const examName = String(submission.examTitle ?? "Bài thi");
+    const payload: SendResultPayload = {
+      studentEmail: authUser.email,
+      studentName: String(submission.studentName ?? "Học sinh"),
+      examName,
+      submissionId,
+      scores: {
+        p1: Number(scores.p1 ?? 0),
+        p2: Number(scores.p2 ?? 0),
+        p3: Number(scores.p3 ?? 0),
+        total: Number(scores.total ?? 0),
+      },
+      detailedResults,
+    };
 
-    const transporter = createTransporter();
-    const html = buildHtml(body, siteUrl);
+    // Đánh dấu trước khi gửi để bấm liên tiếp không gửi trùng; lỗi gửi thì gỡ dấu cho lần thử lại.
+    await submissionRef.update({ resultEmailSentAt: FieldValue.serverTimestamp() });
+    try {
+      await createTransporter().sendMail({
+        from: `"${process.env.EMAIL_FROM_NAME ?? "Hệ thống Ôn tập Toán"}" <${process.env.EMAIL_USER}>`,
+        to: authUser.email,
+        subject: `Kết quả bài thi: ${examName.replace(/[\r\n]+/g, " ")}`,
+        html: buildHtml(payload, DEFAULT_SITE_URL),
+      });
+    } catch (sendError) {
+      await submissionRef.update({ resultEmailSentAt: FieldValue.delete() }).catch(() => undefined);
+      throw sendError;
+    }
 
-    await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME ?? "Hệ thống Ôn tập Toán"}" <${process.env.EMAIL_USER}>`,
-      to: studentEmail,
-      subject: `Kết quả bài thi: ${examName.replace(/[\r\n]+/g, " ")}`,
-      html,
-    });
-
-    console.log(`[send-result] Email sent to ${studentEmail} | exam=${examName} | total=${scores.total}`);
-
+    console.log(`[send-result] Email sent | submission=${submissionId} | total=${payload.scores.total}`);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[send-result] Error:", err);

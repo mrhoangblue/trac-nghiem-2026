@@ -157,10 +157,12 @@ export function buildExamVersion(
 
     orders.options[question.id] = order;
     if (isChoice) {
-      const correct = Number(question.correctAnswer);
-      return { ...question, options: order.map((index) => options[index]), correctAnswer: order.indexOf(correct) };
+      // Đề gửi cho học sinh khi làm bài không có đáp án (null): chỉ đổi thứ tự phương án.
+      const correct = question.correctAnswer === null ? null : order.indexOf(Number(question.correctAnswer));
+      return { ...question, options: order.map((index) => options[index]), correctAnswer: correct };
     }
-    const correct = Array.isArray(question.correctAnswer) ? question.correctAnswer : [];
+    if (!Array.isArray(question.correctAnswer)) return { ...question, options: order.map((index) => options[index]) };
+    const correct = question.correctAnswer;
     return { ...question, options: order.map((index) => options[index]), correctAnswer: order.map((index) => correct[index] ?? false) };
   });
 
