@@ -6,6 +6,8 @@ import { normalizeAnswer } from "@/utils/examTypes";
 import { ESSAY_UPLOAD_GRACE_MINUTES, hasEssayPart } from "@/utils/examStructure";
 import { uploadWindow } from "@/lib/essaySubmission";
 import { pickVersionCode, versionCodes } from "@/utils/examVersions";
+import { isClassOnly } from "@/utils/examAudience";
+import { parseExamDateTime, verifyExamPassword, type PasswordSecret } from "@/lib/examAccess";
 
 export const runtime = "nodejs";
 
@@ -26,6 +28,7 @@ interface SubmitExamBody {
   lastInteractionAtSeconds?: number;
   isTeacherPreview?: boolean;
   exitedEarly?: boolean;
+  password?: string;
 }
 
 function timestampMillis(value: unknown): number | null {
@@ -49,6 +52,50 @@ function clampInteger(value: unknown, min: number, max: number): number {
 
 function safeEvents(value: unknown): unknown[] {
   return Array.isArray(value) ? value.slice(0, 500) : [];
+}
+
+
+type StartDenial = { error: string; status: number };
+
+/**
+ * Kiểm tra quyền bắt đầu làm đề ở máy chủ (không tin việc client đã qua /access):
+ * lớp được giao, giờ mở/đóng, mật khẩu, số lượt làm tối đa.
+ */
+async function checkStartAllowed(params: {
+  examId: string;
+  exam: FirebaseFirestore.DocumentData;
+  uid: string;
+  password: unknown;
+  completedCount: number;
+}): Promise<StartDenial | null> {
+  const { examId, exam, uid, password, completedCount } = params;
+
+  if (isClassOnly(exam.targetType, exam.targetClassIds)) {
+    const targets = new Set<string>(exam.targetClassIds);
+    const memberships = await adminDb.collection("classes").where("studentIds", "array-contains", uid).select().get();
+    if (!memberships.docs.some((item) => targets.has(item.id))) {
+      return { error: "NOT_IN_CLASS", status: 403 };
+    }
+  }
+
+  const now = new Date();
+  const opensAt = parseExamDateTime(exam.startTime);
+  const closesAt = parseExamDateTime(exam.endTime);
+  if (opensAt && now < opensAt) return { error: "NOT_OPEN", status: 403 };
+  if (closesAt && now >= closesAt) return { error: "CLOSED", status: 403 };
+
+  if (exam.requiresPassword) {
+    if (typeof password !== "string" || !password) return { error: "PASSWORD_REQUIRED", status: 423 };
+    const secretSnapshot = await adminDb.collection("exam_secrets").doc(examId).get();
+    const secret = secretSnapshot.data() as PasswordSecret | undefined;
+    if (!secret || !verifyExamPassword(password, secret)) return { error: "INVALID_PASSWORD", status: 403 };
+  }
+
+  const maxRetries = finiteNumber(exam.maxRetries, 1);
+  if (maxRetries > 0 && completedCount >= maxRetries) {
+    return { error: "MAX_RETRIES_REACHED", status: 403 };
+  }
+  return null;
 }
 
 export async function GET(request: NextRequest) {
@@ -143,6 +190,22 @@ export async function POST(request: NextRequest) {
         const examCode = existing.data().examCode;
         return NextResponse.json({ id: existing.id, resumed: true, examCode: typeof examCode === "string" ? examCode : null });
       }
+      if (!isStaff) {
+        const completedCount = existingSnapshot.docs.filter((document) => {
+          const data = document.data();
+          return data.status === "COMPLETED"
+            && data.isTeacherPreview !== true
+            && String(data.studentEmail ?? "").toLowerCase() === authUser.email.toLowerCase();
+        }).length;
+        const denial = await checkStartAllowed({
+          examId,
+          exam,
+          uid: authUser.uid,
+          password: body.password,
+          completedCount,
+        });
+        if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
+      }
       // Đề trộn nhiều mã: chia đều mã cho các lượt làm của đề này.
       const examCode = pickVersionCode(
         versionCodes(exam.versioning),
@@ -166,6 +229,32 @@ export async function POST(request: NextRequest) {
         ...(isTeacherPreview ? { isTeacherPreview: true } : {}),
       });
       return NextResponse.json({ id: sessionRef.id, resumed: false, examCode }, { status: 201 });
+    }
+
+    const callerIsStaff = ["admin", "mod"].includes(authUser.role);
+    // Bài nộp phải gắn với một phiên đã bắt đầu qua action "start" (đã qua kiểm tra
+    // giờ/lớp/mật khẩu/lượt làm). Giáo viên xem thử thì được tạo mới như trước.
+    let sessionRef: FirebaseFirestore.DocumentReference | null = null;
+    const requestedId = body.submissionId?.trim();
+    if (requestedId) {
+      const candidate = adminDb.collection("submissions").doc(requestedId);
+      const candidateSnapshot = await candidate.get();
+      const candidateData = candidateSnapshot.data();
+      const ownedByCaller = candidateSnapshot.exists
+        && String(candidateData?.studentEmail ?? "").toLowerCase() === authUser.email.toLowerCase()
+        && candidateData?.examId === examId;
+      if (ownedByCaller && candidateData?.status === "COMPLETED") {
+        // Gửi lại do mạng chập chờn: trả kết quả đã chấm, không chấm/ghi đè lần hai.
+        const savedUpload = uploadWindow(candidateData);
+        if (savedUpload.open) {
+          return NextResponse.json({ id: candidate.id, essayUpload: { uploadDeadlineMillis: savedUpload.deadline } });
+        }
+        return NextResponse.json({ id: candidate.id, scores: candidateData.scores ?? null });
+      }
+      if (ownedByCaller && candidateData?.status === "IN_PROGRESS") sessionRef = candidate;
+    }
+    if (!sessionRef && !callerIsStaff) {
+      return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 409 });
     }
 
     let parsedAnswers: Record<string, AnswerMap> = {};
@@ -254,18 +343,7 @@ export async function POST(request: NextRequest) {
       ...(uploadDeadline ? { gradingStatus: "pending", essay: { uploadDeadline } } : {}),
     };
 
-    let submissionRef = adminDb.collection("submissions").doc();
-    if (body.submissionId?.trim()) {
-      const candidate = adminDb.collection("submissions").doc(body.submissionId.trim());
-      const existing = await candidate.get();
-      if (
-        existing.exists
-        && String(existing.data()?.studentEmail ?? "").toLowerCase() === authUser.email.toLowerCase()
-        && existing.data()?.status === "IN_PROGRESS"
-      ) {
-        submissionRef = candidate;
-      }
-    }
+    const submissionRef = sessionRef ?? adminDb.collection("submissions").doc();
     // merge giữ nguyên essay.files đã tải trong lúc làm bài.
     await submissionRef.set(payload, { merge: true });
 

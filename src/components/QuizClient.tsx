@@ -187,6 +187,15 @@ const CountdownTimer = memo(function CountdownTimer({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const START_ERROR_MESSAGES: Record<string, string> = {
+  NOT_OPEN: "Đề thi chưa đến giờ mở.",
+  CLOSED: "Đề thi đã đóng.",
+  NOT_IN_CLASS: "Đề này chỉ dành cho học sinh trong lớp được giao.",
+  PASSWORD_REQUIRED: "Đề cần mật khẩu. Vui lòng tải lại trang và nhập mật khẩu.",
+  INVALID_PASSWORD: "Mật khẩu đề chưa đúng. Vui lòng tải lại trang và nhập lại.",
+  MAX_RETRIES_REACHED: "Bạn đã hết số lượt làm bài cho phép.",
+};
+
 export interface QuizClientProps {
   examId: string;
   title: string;
@@ -198,6 +207,8 @@ export interface QuizClientProps {
   maxRetries?: number;
   /** Cấu hình trộn đề nhiều mã (exam.versioning). */
   versioning?: unknown;
+  /** Mật khẩu đề học sinh đã nhập; máy chủ kiểm tra lại khi bắt đầu làm bài. */
+  accessPassword?: string;
 }
 
 export default function QuizClient({
@@ -209,6 +220,7 @@ export default function QuizClient({
   timing,
   maxRetries = 1,
   versioning,
+  accessPassword,
 }: QuizClientProps) {
   const { user, userProfile, login } = useAuth();
   const getIdToken = useCallback(async () => {
@@ -542,6 +554,7 @@ export default function QuizClient({
           studentName: userProfile?.fullName ?? user.displayName ?? "Khách",
           studentAvatar: user.photoURL ?? "",
           isTeacherPreview: isStudentMode,
+          ...(accessPassword ? { password: accessPassword } : {}),
         }),
       });
       const payload = await response.json().catch(() => null) as { id?: string; error?: string; examCode?: string | null } | null;
@@ -551,7 +564,10 @@ export default function QuizClient({
       setExamCode(payload.examCode ?? null);
     } catch (err) {
       console.error("Failed to write IN_PROGRESS record:", err);
-      window.alert("Chưa thể tạo phiên làm bài trên máy chủ. Vui lòng kiểm tra mạng và thử lại.");
+      const code = err instanceof Error ? err.message : "";
+      const message = START_ERROR_MESSAGES[code]
+        ?? "Chưa thể tạo phiên làm bài trên máy chủ. Vui lòng kiểm tra mạng và thử lại.";
+      window.alert(message);
       return;
     }
     startSession(); // sessionStorage fallback for timer reference

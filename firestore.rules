@@ -63,8 +63,9 @@ service cloud.firestore {
         || (isBootstrapAdmin() && request.resource.data.role == 'admin')
       );
 
-      // Admin/mod quản lý tài khoản: cấp role, khóa tài khoản, v.v.
-      allow create, update, delete: if isSignedIn() && isAdminOrMod();
+      // Chỉ admin quản lý tài khoản (cấp role, khóa, xóa). Mod KHÔNG được đổi role
+      // hay sửa tài khoản người khác, tránh tự nâng quyền lên admin.
+      allow create, update, delete: if isSignedIn() && isAdmin();
     }
 
     // ── Đề thi ─────────────────────────────────────────────────────────────────
@@ -74,12 +75,13 @@ service cloud.firestore {
 
       // Giáo viên/mod/admin tạo đề — API dùng Admin SDK nên rule này chỉ
       // áp dụng nếu client ghi trực tiếp (không qua API)
-      allow create: if isSignedIn() && isStaff();
+      allow create: if isSignedIn() && isStaff()
+        && request.resource.data.authorEmail == request.auth.token.email;
 
-      // Chỉnh sửa/xóa: tác giả của đề HOẶC admin/mod
+      // Chỉnh sửa/xóa: tác giả của đề HOẶC admin (mod không sửa đề của người khác)
       allow update, delete: if isSignedIn() && (
         resource.data.authorEmail == request.auth.token.email
-        || isAdminOrMod()
+        || isAdmin()
       );
     }
 
@@ -91,30 +93,26 @@ service cloud.firestore {
     // ── Bài nộp của học sinh ────────────────────────────────────────────────────
     match /submissions/{submissionId} {
       // Học sinh xem bài của mình, admin/mod xem tất cả
+      // (TODO Bước 2: chuyển phần staff sang API để mod chỉ thấy bài của đề mình).
       allow read: if isSignedIn() && (
         resource.data.studentEmail == request.auth.token.email
         || isAdminOrMod()
       );
-      // Học sinh tự nộp bài (tạo mới — điểm hiện do client tính, xem ghi chú dưới)
-      allow create: if isSignedIn()
-        && request.resource.data.studentEmail == request.auth.token.email;
-      // Cập nhật: CHỈ khi bài còn đang làm dở (IN_PROGRESS) và vẫn của chính chủ,
-      // không được đổi studentEmail. Sau khi đã nộp (COMPLETED) thì client KHÔNG
-      // sửa được nữa → chặn mở lại bài cũ để ghi đè điểm. Admin/mod vẫn sửa được.
-      allow update: if isSignedIn() && (
-        isAdminOrMod()
-        || (
-          resource.data.studentEmail == request.auth.token.email
-          && request.resource.data.studentEmail == resource.data.studentEmail
-          && resource.data.status == "IN_PROGRESS"
-        )
-      );
-      // Không ai được xóa bài nộp từ client
-      allow delete: if false;
 
-      // ⚠️ GHI CHÚ BẢO MẬT: điểm (scores) hiện được tính ở client rồi ghi lên đây,
-      // nên một HS rành kỹ thuật vẫn có thể tự đặt điểm khi nộp. Để chặn triệt để
-      // cần chấm điểm phía server (API dùng Admin SDK) rồi khoá field scores ở client.
+      // Bài nộp chỉ do máy chủ (Admin SDK) tạo, chấm và chốt điểm qua /api/submissions.
+      // Client không được tạo, sửa điểm/trạng thái hay xóa.
+      allow create, delete: if false;
+
+      // Client chỉ được ghi TIẾN ĐỘ khi bài còn IN_PROGRESS và là của chính chủ.
+      // Không có status, scores, part*Results, studentEmail, examId... trong danh sách.
+      allow update: if isSignedIn()
+        && resource.data.studentEmail == request.auth.token.email
+        && resource.data.status == "IN_PROGRESS"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'answersJson', 'activityLog', 'questionTimings', 'totalElapsedSeconds',
+          'lastInteractionAtSeconds', 'idleBeforeSubmitSeconds',
+          'currentQuestionIndex', 'lastActivityAt'
+        ]);
     }
 
     // ── Lớp học ────────────────────────────────────────────────────────────────
@@ -125,12 +123,12 @@ service cloud.firestore {
       // Thêm/xóa học sinh đi qua API máy chủ để bảo đảm quy trình chờ duyệt.
       allow update: if isSignedIn() && (
         resource.data.teacherId == request.auth.uid
-        || isAdminOrMod()
+        || isAdmin()
       );
 
       allow delete: if isSignedIn() && (
         resource.data.teacherId == request.auth.uid
-        || isAdminOrMod()
+        || isAdmin()
       );
     }
 
@@ -144,17 +142,17 @@ service cloud.firestore {
 
       // Yêu cầu tham gia do API máy chủ tạo để học sinh không thể tự đặt status=active.
       allow create: if isSignedIn() && (
-        ownsClass(request.resource.data.classId) || isAdminOrMod()
+        ownsClass(request.resource.data.classId) || isAdmin()
       );
 
       allow update: if isSignedIn() && (
         ownsClass(resource.data.classId)
-        || isAdminOrMod()
+        || isAdmin()
       );
 
       allow delete: if isSignedIn() && (
         ownsClass(resource.data.classId)
-        || isAdminOrMod()
+        || isAdmin()
       );
     }
 
@@ -164,7 +162,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && isStaff();
       allow update, delete: if isSignedIn() && (
         resource.data.ownerId == request.auth.uid
-        || isAdminOrMod()
+        || isAdmin()
       );
     }
 

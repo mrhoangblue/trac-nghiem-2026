@@ -270,5 +270,5 @@ export default function QuizPageClient({ examId }: { examId: string }) {
 
   if (!quiz) return <LoadingExam />;
 
-  return <QuizClient examId={examId} {...quiz} />;
+  return <QuizClient examId={examId} {...quiz} accessPassword={password || undefined} />;
 }
