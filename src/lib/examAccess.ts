@@ -1,3 +1,4 @@
+import "server-only";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const HASH_LENGTH = 64;

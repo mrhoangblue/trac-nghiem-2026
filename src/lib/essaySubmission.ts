@@ -1,3 +1,4 @@
+import "server-only";
 import type { DocumentData, DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { createR2DownloadUrl } from "@/lib/r2Storage";

@@ -1,3 +1,4 @@
+import "server-only";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { deleteFromR2, downloadFromR2, uploadToR2 } from "@/lib/r2Storage";
 

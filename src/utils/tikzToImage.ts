@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import { uploadToR2 } from "@/lib/r2Storage";
 

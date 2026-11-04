@@ -1,5 +1,6 @@
 import { createPrivateKey } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/verifyAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +37,13 @@ function normalize(value: string | undefined): string {
   return result;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Kết quả cho biết biến môi trường nào còn thiếu nên chỉ admin được xem.
+  const authUser = await verifyAuth(request);
+  if (!authUser || authUser.role !== "admin") {
+    return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+
   const projectId = normalize(process.env.FIREBASE_PROJECT_ID);
   const clientEmail = normalize(process.env.FIREBASE_CLIENT_EMAIL);
   const privateKey = normalize(process.env.FIREBASE_PRIVATE_KEY)

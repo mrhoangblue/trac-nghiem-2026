@@ -18,7 +18,6 @@ import {
 import type { ClassDoc } from "@/utils/classroomTypes";
 import ClassLearningContent from "@/components/classroom/ClassLearningContent";
 import ClassHero, { HeroChip } from "@/components/classroom/ClassHero";
-import * as XLSX from "xlsx";
 import { AlertTriangle, ArrowLeft, BarChart3, Check, Link2 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -709,22 +708,29 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  const exportXLSX = () => {
+  const exportXLSX = async () => {
     if (!scoreRows) return;
     setExportingFormat("xlsx");
     try {
-      const wsData = [
-        ["STT", "Họ và tên", "Email", "Trường", "Phần I", "Phần II", "Phần III", "Tổng", "Nộp lúc"],
-        ...scoreRows.map((r) => [r.stt, r.fullName, r.email, r.school, r.p1, r.p2, r.p3, r.total, r.submittedAt]),
+      // Thư viện chỉ ghi file, không đọc file người dùng tải lên.
+      const { default: writeExcelFile } = await import("write-excel-file/universal");
+      const header = ["STT", "Họ và tên", "Email", "Trường", "Phần I", "Phần II", "Phần III", "Tổng", "Nộp lúc"]
+        .map((value) => ({ value, fontWeight: "bold" as const }));
+      const data = [
+        header,
+        ...scoreRows.map((r) => [r.stt, r.fullName, r.email, r.school, r.p1, r.p2, r.p3, r.total, r.submittedAt]
+          .map((value) => (typeof value === "number" ? value : String(value ?? "")))),
       ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws["!cols"] = [
-        { wch: 5 }, { wch: 25 }, { wch: 28 }, { wch: 22 },
-        { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 20 },
-      ];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Bảng điểm");
-      XLSX.writeFile(wb, `bang-diem-${classData?.name ?? classId}-${getExamTitle()}.xlsx`.replace(/\s+/g, "_"));
+      const blob = await writeExcelFile(data, {
+        sheet: "Bảng điểm",
+        columns: [5, 25, 28, 22, 8, 8, 8, 8, 20].map((width) => ({ width })),
+      }).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `bang-diem-${classData?.name ?? classId}-${getExamTitle()}.xlsx`.replace(/\s+/g, "_");
+      link.click();
+      URL.revokeObjectURL(url);
     } finally {
       setExportingFormat(null);
     }
@@ -733,15 +739,20 @@ export default function TeacherClassDetailPage() {
   const printPDF = () => {
     if (!scoreRows) return;
     setExportingFormat("pdf");
-    const examTitle = getExamTitle();
+    // Tên, trường, email do học sinh tự nhập; cửa sổ in cùng origin với trang này nên phải escape.
+    const esc = (value: unknown) => String(value ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const examTitle = esc(getExamTitle());
+    const className = esc(classData?.name);
     const rows = scoreRows.map((r) => `<tr>
-      <td>${r.stt}</td><td>${r.fullName}</td><td>${r.email}</td><td>${r.school}</td>
-      <td>${r.p1}</td><td>${r.p2}</td><td>${r.p3}</td>
-      <td><strong>${r.total}</strong></td><td>${r.submittedAt}</td>
+      <td>${esc(r.stt)}</td><td>${esc(r.fullName)}</td><td>${esc(r.email)}</td><td>${esc(r.school)}</td>
+      <td>${esc(r.p1)}</td><td>${esc(r.p2)}</td><td>${esc(r.p3)}</td>
+      <td><strong>${esc(r.total)}</strong></td><td>${esc(r.submittedAt)}</td>
     </tr>`).join("");
 
     const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/>
-<title>Bảng điểm — ${classData?.name}</title>
+<title>Bảng điểm — ${className}</title>
 <style>
   body{font-family:Arial,sans-serif;font-size:12px;margin:20px}
   h2{margin-bottom:4px} p.sub{color:#555;margin-bottom:16px;font-size:11px}
@@ -751,7 +762,7 @@ export default function TeacherClassDetailPage() {
   tr:nth-child(even){background:#f9f9f9}
   @media print{body{margin:0}}
 </style></head><body>
-<h2>Bảng điểm lớp: ${classData?.name}</h2>
+<h2>Bảng điểm lớp: ${className}</h2>
 <p class="sub">Đề thi: ${examTitle} &nbsp;|&nbsp; Xuất lúc: ${new Date().toLocaleString("vi-VN")}</p>
 <table><thead><tr>
   <th>STT</th><th>Họ và tên</th><th>Email</th><th>Trường</th>

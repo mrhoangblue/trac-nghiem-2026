@@ -5,6 +5,7 @@ import Link from "next/link";
 import AdminGuard from "@/components/AdminGuard";
 import { AlertTriangle, ArrowRight, Check, X } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { authedFetch } from "@/lib/staffApi";
 import {
   collection,
   getDocs,
@@ -90,13 +91,16 @@ export default function AdminUsersPage() {
       // Fetch all users
       const userSnap = await getDocs(query(collection(db, "users")));
 
-      // Fetch all submissions to count per user email
-      const subSnap = await getDocs(collection(db, "submissions"));
-      const countByEmail: Record<string, number> = {};
-      subSnap.docs.forEach((d) => {
-        const email = d.data().studentEmail as string;
-        if (email) countByEmail[email] = (countByEmail[email] ?? 0) + 1;
-      });
+      // Số bài nộp theo email lấy qua API (chỉ admin); lỗi thì để 0.
+      let countByEmail: Record<string, number> = {};
+      try {
+        const countResponse = await authedFetch("/api/admin/user-submission-counts");
+        if (countResponse.ok) {
+          countByEmail = ((await countResponse.json()) as { counts?: Record<string, number> }).counts ?? {};
+        }
+      } catch (countError) {
+        console.warn("Không tải được số bài nộp:", countError);
+      }
 
       const rows: UserRow[] = userSnap.docs.map((d) => {
         const data = d.data();

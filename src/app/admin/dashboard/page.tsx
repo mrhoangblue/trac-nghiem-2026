@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
+import { fetchExamSubmissionCounts } from "@/lib/staffApi";
 import {
   collection,
   getDocs,
   query,
-  where,
   orderBy,
   deleteDoc,
   doc,
@@ -63,22 +63,18 @@ export default function AdminDashboardPage() {
           query(collection(db, "exams"), orderBy("createdAt", "desc"))
         );
 
-        // 2. For each exam, count submissions
-        const rows: ExamRow[] = await Promise.all(
-          examSnap.docs.map(async (doc) => {
-            const d = doc.data();
-            const subSnap = await getDocs(
-              query(collection(db, "submissions"), where("examId", "==", doc.id))
-            );
-            return {
-              id: doc.id,
-              title: d.title ?? "Không có tên",
-              createdAt: d.createdAt ?? null,
-              questionCount: d.questionCount ?? (Array.isArray(d.questions) ? d.questions.length : 0),
-              submissionCount: subSnap.size,
-            };
-          })
-        );
+        // 2. Số lượt làm của từng đề lấy qua API
+        const counts = await fetchExamSubmissionCounts(examSnap.docs.map((doc) => doc.id));
+        const rows: ExamRow[] = examSnap.docs.map((doc) => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            title: d.title ?? "Không có tên",
+            createdAt: d.createdAt ?? null,
+            questionCount: d.questionCount ?? (Array.isArray(d.questions) ? d.questions.length : 0),
+            submissionCount: counts[doc.id] ?? 0,
+          };
+        });
 
         setExams(rows);
       } catch (err) {

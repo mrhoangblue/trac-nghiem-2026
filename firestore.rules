@@ -94,12 +94,10 @@ service cloud.firestore {
 
     // ── Bài nộp của học sinh ────────────────────────────────────────────────────
     match /submissions/{submissionId} {
-      // Học sinh xem bài của mình, admin/mod xem tất cả
-      // (TODO Bước 2: chuyển phần staff sang API để mod chỉ thấy bài của đề mình).
-      allow read: if isSignedIn() && (
-        resource.data.studentEmail == request.auth.token.email
-        || isAdminOrMod()
-      );
+      // Chỉ chính chủ đọc trực tiếp. Giáo viên/admin xem bài qua API máy chủ
+      // (/api/exams/[id]/submissions, /api/staff/...), nơi kiểm tra tác giả đề.
+      allow read: if isSignedIn()
+        && resource.data.studentEmail == request.auth.token.email;
 
       // Bài nộp chỉ do máy chủ (Admin SDK) tạo, chấm và chốt điểm qua /api/submissions.
       // Client không được tạo, sửa điểm/trạng thái hay xóa.

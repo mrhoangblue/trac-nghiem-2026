@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
 import ExamShareDialog from "@/components/ExamShareDialog";
 import { useAuth } from "@/lib/AuthContext";
+import { fetchExamSubmissionCounts } from "@/lib/staffApi";
 import {
   collection,
   getDocs,
@@ -117,12 +118,10 @@ function ExamListContent() {
         }
       }
 
-      const rows: ExamRow[] = await Promise.all(
-        examDocs.map(async (d) => {
+      // Số lượt làm lấy qua API; đề của giáo viên khác (tab chia sẻ) không có số liệu.
+      const counts = await fetchExamSubmissionCounts(examDocs.map((d) => d.id));
+      const rows: ExamRow[] = examDocs.map((d) => {
           const data = d.data();
-          const subSnap = await getDocs(
-            query(collection(db, "submissions"), where("examId", "==", d.id))
-          );
           return {
             id: d.id,
             title: data.title ?? "Không có tên",
@@ -131,7 +130,7 @@ function ExamListContent() {
             part2Count: data.part2Count ?? 0,
             part3Count: data.part3Count ?? 0,
             questionCount: data.questionCount ?? 0,
-            submissionCount: subSnap.size,
+            submissionCount: counts[d.id] ?? 0,
             hasRawLatex: Boolean(data.rawLatex || data.rawLatexSource),
             authorEmail: data.authorEmail ?? "",
             isShared: data.isShared ?? false,
@@ -140,8 +139,7 @@ function ExamListContent() {
             examType: data.examType,
             maxRetries: data.maxRetries ?? 1,
           };
-        })
-      );
+      });
       setExams(rows);
     } catch (err) {
       console.error("Lỗi tải danh sách:", err);

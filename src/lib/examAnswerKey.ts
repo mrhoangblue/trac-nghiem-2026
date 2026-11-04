@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Đáp án chỉ tồn tại ở máy chủ. Học sinh nhận đề đã gỡ đáp án/lời giải; điểm do
  * /api/submissions chấm; đáp án chỉ trả lại sau khi bài đã nộp (và đã chấm xong

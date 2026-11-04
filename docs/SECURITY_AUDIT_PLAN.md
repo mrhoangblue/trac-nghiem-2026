@@ -6,7 +6,7 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
 ## Bước 1 — Trắc nghiệm: firestore.rules + /api/submissions (làm trước)
 - [x] `users`: bỏ `allow create, update, delete: if isAdminOrMod()`; mod không được đổi `role`/xóa admin. Chỉ admin đổi role (tốt nhất qua API Admin SDK).
 - [x] `submissions`: client không tạo/sửa `status`, `scores`, `part*Results`; chỉ cho ghi tiến độ (answersJson, activityLog…) khi IN_PROGRESS. Việc chấm điểm chỉ ở `/api/submissions`.
-- [~] `exams`, `classes`, `class_members`: giáo viên chỉ sửa/xóa của chính mình (authorEmail/teacherId), admin mới sửa mọi thứ; staff không đọc bài nộp của GV khác.
+- [x] `exams`, `classes`, `class_members`: giáo viên chỉ sửa/xóa của chính mình (authorEmail/teacherId), admin mới sửa mọi thứ; staff không đọc bài nộp của GV khác (rules chỉ cho chính chủ đọc `submissions`; staff qua API).
 - [x] `/api/submissions` (start + submit): kiểm tra lại giờ mở/đóng, lớp đích (`isClassOnly`), mật khẩu/đã qua access, và `maxRetries` ở máy chủ.
 - [ ] Triển khai rules bằng `firebase deploy --only firestore:rules` SAU khi thử trên dữ liệu giả; không chạm dữ liệu thi thật.
 
@@ -18,12 +18,12 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
 - [ ] Thử bằng trang preview dữ liệu giả hoặc Playwright mock; không start/submit đề thật.
 
 ## Bước 3 — Thư viện + vệ sinh
-- [ ] Trắc nghiệm: `npm audit fix` (next, sharp, busboy, nodemailer), xem `--force` cho `@grpc/grpc-js`; thay/loại `xlsx` (không có bản vá npm) hoặc cô lập chỉ chạy trên file GV tin cậy.
-- [ ] Gia Sư: nâng `zod` 3 → 4 (breaking), chạy lại test/tsc.
-- [ ] Trắc nghiệm: thêm header bảo mật (CSP tối thiểu, X-Frame-Options, nosniff, Referrer-Policy) trong `next.config.ts`; cân nhắc bỏ SVG khỏi upload công khai.
-- [ ] Trắc nghiệm: `/api/system/firebase-health` chỉ admin; thêm `import 'server-only'` cho `firebaseAdmin.ts`, `r2Storage.ts`, `verifyAuth.ts`, `examAccess.ts`, `examSourceStorage.ts`; thêm Zod cho các route nhận body; rate limit `send-result`.
-- [ ] Chuyển file `*-firebase-adminsdk-*.json` ra ngoài thư mục dự án (git đã ignore, chưa bị lộ); cân nhắc xoay khóa nếu từng chia sẻ.
-- [ ] Gia Sư: cân nhắc `sessionVersion` để thu hồi phiên; xác nhận MOD được `createTutorManually` có chủ ý.
+- [x] Trắc nghiệm: `npm audit fix` (next, sharp, busboy, nodemailer), xem `--force` cho `@grpc/grpc-js`; thay/loại `xlsx` (không có bản vá npm) hoặc cô lập chỉ chạy trên file GV tin cậy.
+- [x] Gia Sư: nâng `zod` 3 → 4 (breaking), chạy lại test/tsc.
+- [x] Trắc nghiệm: thêm header bảo mật (CSP tối thiểu, X-Frame-Options, nosniff, Referrer-Policy) trong `next.config.ts`; cân nhắc bỏ SVG khỏi upload công khai.
+- [x] Trắc nghiệm: `/api/system/firebase-health` chỉ admin; thêm `import 'server-only'` cho `firebaseAdmin.ts`, `r2Storage.ts`, `verifyAuth.ts`, `examAccess.ts`, `examSourceStorage.ts`; thêm Zod cho các route nhận body; rate limit `send-result`.
+- [x] Chuyển file `*-firebase-adminsdk-*.json` ra ngoài thư mục dự án (git đã ignore, chưa bị lộ); cân nhắc xoay khóa nếu từng chia sẻ.
+- [~] Gia Sư: `sessionVersion` để thu hồi phiên CHƯA làm (cần cột mới + migration DB thật, chờ người dùng đồng ý). MOD được `createTutorManually`: đúng chủ ý (`requireStaff` = ADMIN hoặc MOD). Vai/trạng thái tài khoản vốn đã đọc lại từ DB mỗi request nên thu hồi quyền/khoá tài khoản có hiệu lực ngay.
 
 ## Quy trình bắt buộc cho mỗi lần build lớn và mỗi lần commit (người dùng yêu cầu 2026-11-04)
 - Trước mỗi build lớn (xong một Bước, hoặc thay đổi nhiều file/route/rules) và trước mỗi commit: chạy skill `security-review` trên các thay đổi chưa commit. Đối chiếu thêm bộ quy tắc ở đầu file này (Auth → Zod → IDOR → Execute → Sanitized output, `server-only`, không lộ secret ra client).
@@ -48,6 +48,13 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
   - security-review: 1 phát hiện mức vừa (nộp trắng rồi lấy đáp án khi đề còn mở). Đã xử lý: đề có `endTime` thì giữ đáp án đến khi đề đóng (423 `ANSWERS_NOT_RELEASED`); đề không có giờ đóng vẫn hiện sau khi nộp. Còn lại, đề không giờ đóng + nhiều lượt vẫn lộ đáp án cho lượt sau (chấp nhận, cần cờ "công bố đáp án" nếu muốn chặt hơn).
   - Kiểm tra: `tsc` sạch, eslint sạch trên file đã sửa, `npm run build` thành công (trước bản vá giữ đáp án). Chưa thử bằng tài khoản thật.
   - Chưa làm trong Bước 2: các trang admin/giáo viên vẫn đọc `submissions` trực tiếp qua Firestore nên staff vẫn đọc được bài nộp của giáo viên khác.
+
+- 2026-11-04 Chuyển trang admin sang API + Bước 3 (chưa deploy rules):
+  - API mới: `/api/staff/submissions/[id]`, `/api/staff/students/[id]/submissions`, `/api/staff/exam-submission-counts`, `/api/admin/user-submission-counts`; client dùng `src/lib/staffApi.ts`. Các trang users, dashboard, exam-list, teacher/students, teacher/review không còn đọc `submissions` qua Firestore. Rules: `submissions` chỉ chính chủ đọc.
+  - Bước 3 Trắc nghiệm: `npm audit fix` + override `@grpc/grpc-js`, thay `xlsx` bằng `write-excel-file` (chỉ ghi); header bảo mật + CSP tối thiểu (frame-ancestors, base-uri, object-src, form-action; chưa siết script-src); `firebase-health` chỉ admin; `server-only` cho các module máy chủ; Zod cho body `/api/submissions`; escape HTML khi in bảng điểm (XSS lưu qua tên học sinh); file adminsdk chuyển sang `~/.config/trac-nghiem/`. Còn lại: Zod cho các route khác (đã kiểm tay bằng typeof), siết `script-src`, bỏ SVG khỏi upload (chỉ staff upload, phục vụ từ domain R2).
+  - Gia Sư: zod 3.24.1 → 4.6.7 (sửa `errorMap` ở 5 chỗ), `npm audit fix` (vite/vitest) → 0 lỗ hổng; test 234/234, tsc, build sạch.
+  - security-review: không có phát hiện ≥8. Ghi nhận mức thấp: giáo viên bất kỳ gọi API học sinh theo id sẽ thấy tên/email (đã đọc được qua rules `users` từ trước).
+  - Kiểm tra: tsc, eslint (0 lỗi), `npm run build`, `firebase deploy --dry-run` biên dịch rules đều thành công.
 
 ## Ghi chú vận hành
 - Commit chỉ khi người dùng bảo; Gia Sư: dump DB trước migration, push main sau mỗi track (Vercel tự deploy).

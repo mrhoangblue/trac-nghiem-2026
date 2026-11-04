@@ -6,24 +6,15 @@ import { useParams, useSearchParams } from "next/navigation";
 import AdminGuard from "@/components/AdminGuard";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  documentId,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  Timestamp,
-  DocumentData,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { formatDateTime } from "@/utils/examTypes";
+import { authedFetch } from "@/lib/staffApi";
 
 interface SubmissionDisplay {
   id: string;
   examId: string;
   examTitle: string;
-  submittedAt: Timestamp | null;
+  submittedAtMillis: number | null;
   attemptForExam: number;
   scores: { total: number; p1: number; p2: number; p3: number };
   /** Bài tự luận chưa chấm: tổng chỉ là tạm tính Phần I–III. */
@@ -41,17 +32,6 @@ function Spinner() {
   );
 }
 
-function tsMillis(ts: Timestamp | null): number {
-  return ts?.toMillis() ?? 0;
-}
-
-function chunkArray<T>(items: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
-  }
-  return chunks;
-}
 
 export default function TeacherStudentDetailPage() {
   const { studentId: studentIdParam } = useParams<{ studentId: string }>();
@@ -96,107 +76,18 @@ export default function TeacherStudentDetailPage() {
         const email = String(u.email ?? "").trim().toLowerCase();
         const name = String(u.fullName ?? "");
 
-        // ── Schema note ────────────────────────────────────────────────────────
-        // Submissions are stored with `studentEmail` (the student's Google email).
-        // There is NO `studentId` field on submission docs.  The exam schema uses
-        // `authorEmail: string` for ownership and `isShared: boolean` for global
-        // sharing.  There are no `sharedWith`, `collaborators`, or `createdBy`
-        // fields in any exam document.
-        // ──────────────────────────────────────────────────────────────────────
-
-        // Step 1: fetch ALL submissions for this student by email.
-        // (Submissions have no studentId field — email is the only identifier.)
         if (!email) {
           if (!cancelled) setError("Học sinh không có địa chỉ email.");
           return;
         }
-        const subSnap = await getDocs(
-          query(collection(db, "submissions"), where("studentEmail", "==", email))
-        );
-        const subDocs = subSnap.docs;
-
-        const allSubmissions = subDocs
-          .map((d) => {
-            const sd = d.data();
-            return {
-              id: d.id,
-              examId: String(sd.examId ?? ""),
-              examTitle: String(sd.examTitle ?? ""),
-              // status field only exists on submissions created after session-
-              // restoration was added.  Old docs have no status field at all.
-              status: String(sd.status ?? ""),
-              submittedAt: (sd.submittedAt ?? null) as Timestamp | null,
-              scores:
-                sd.scores && typeof sd.scores === "object"
-                  ? (sd.scores as SubmissionDisplay["scores"])
-                  : { total: 0, p1: 0, p2: 0, p3: 0 },
-              essayPending: sd.gradingStatus === "pending",
-            };
-          })
-          .filter((s) => s.examId.length > 0);
-
-        // Step 2: fetch the actual exam docs for every examId found.
-        // Then filter access rights in JS — no composite Firestore index needed.
-        const relatedExamIds = Array.from(new Set(allSubmissions.map((s) => s.examId)));
-        // Store {id, data} pairs so we can access both doc ID and fields together.
-        const relatedExams: { id: string; data: DocumentData }[] = [];
-        for (const batch of chunkArray(relatedExamIds, 30)) {
-          if (batch.length === 0) continue;
-          const snap = await getDocs(
-            query(collection(db, "exams"), where(documentId(), "in", batch))
-          );
-          snap.docs.forEach((d) => relatedExams.push({ id: d.id, data: d.data() }));
+        // Máy chủ chỉ trả bài thuộc đề của giáo viên này (hoặc đề giao cho lớp của họ).
+        const response = await authedFetch(`/api/staff/students/${encodeURIComponent(studentId)}/submissions`);
+        const payload = await response.json().catch(() => null) as { submissions?: Array<Omit<SubmissionDisplay, "attemptForExam">> } | null;
+        if (!response.ok || !payload) {
+          if (!cancelled) setError("Không thể tải dữ liệu.");
+          return;
         }
-
-        // Step 3 (schema-aware): an exam is accessible to this teacher when:
-        //   a) They created it       → authorEmail === teacherEmail
-        //   b) It is globally shared → isShared === true
-        // (No per-teacher sharing arrays exist in this codebase's schema.)
-        const accessibleExamIds = new Set<string>();
-        const examTitles = new Map<string, string>();
-
-        relatedExams.forEach(({ id: docId, data: examData }) => {
-          const isOwnerByEmail = String(examData.authorEmail ?? "") === teacherEmail;
-          const isGloballyShared = Boolean(examData.isShared);
-
-          if (isOwnerByEmail || isGloballyShared) {
-            accessibleExamIds.add(docId);
-            examTitles.set(docId, String(examData.title ?? ""));
-          }
-        });
-
-        // Step 4: filter submissions.
-        // Exclude only active IN_PROGRESS sessions (not yet submitted).
-        // Old submissions with no status field must be included — do NOT filter
-        // by status === "COMPLETED" because that would exclude all legacy docs.
-        const filteredSubmissions = allSubmissions
-          .filter(
-            (s) =>
-              s.status !== "IN_PROGRESS" && // exclude active sessions
-              accessibleExamIds.has(s.examId)
-          )
-          .map((s) => ({
-            id: s.id,
-            examId: s.examId,
-            examTitle: s.examTitle || examTitles.get(s.examId) || "—",
-            submittedAt: s.submittedAt,
-            scores: s.scores,
-            essayPending: s.essayPending,
-          }));
-
-        // ── Debug logs (check browser console to trace failures) ───────────────
-        console.log("1. All Student Submissions:", allSubmissions);
-        console.log("2. Fetched Exams:", relatedExams.map(({ id, data }) => ({
-          id,
-          title: data.title,
-          authorEmail: data.authorEmail,
-          isShared: data.isShared,
-        })));
-        console.log("3. Current Teacher Email:", teacherEmail, "| UID:", user?.uid);
-        console.log("4. Accessible Exam IDs:", Array.from(accessibleExamIds));
-        console.log("5. Final Filtered Submissions to Render:", filteredSubmissions);
-
-        const filtered = filteredSubmissions as Omit<SubmissionDisplay, "attemptForExam">[];
+        const filtered = payload.submissions ?? [];
 
         const byExam = new Map<string, typeof filtered>();
         for (const sub of filtered) {
@@ -207,7 +98,7 @@ export default function TeacherStudentDetailPage() {
 
         const attemptMap = new Map<string, number>();
         for (const [, list] of byExam) {
-          const chronological = [...list].sort((a, b) => tsMillis(a.submittedAt) - tsMillis(b.submittedAt));
+          const chronological = [...list].sort((a, b) => (a.submittedAtMillis ?? 0) - (b.submittedAtMillis ?? 0));
           chronological.forEach((s, idx) => {
             attemptMap.set(s.id, idx + 1);
           });
@@ -218,7 +109,7 @@ export default function TeacherStudentDetailPage() {
           attemptForExam: attemptMap.get(s.id) ?? 1,
         }));
 
-        enriched.sort((a, b) => tsMillis(b.submittedAt) - tsMillis(a.submittedAt));
+        enriched.sort((a, b) => (b.submittedAtMillis ?? 0) - (a.submittedAtMillis ?? 0));
 
         if (!cancelled) {
           setStudentName(name);
@@ -320,7 +211,7 @@ export default function TeacherStudentDetailPage() {
                             {r.essayPending && <span className="mt-1 block text-[10px] font-bold text-violet-700">Tạm tính · tự luận chờ chấm</span>}
                           </td>
                           <td className="px-4 py-3 align-middle text-gray-500 whitespace-nowrap text-xs">
-                            {formatDateTime(r.submittedAt)}
+                            {formatDateTime(r.submittedAtMillis ? new Date(r.submittedAtMillis).toISOString() : null)}
                           </td>
                         </tr>
                       ))}

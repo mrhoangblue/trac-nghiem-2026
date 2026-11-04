@@ -10,9 +10,8 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import AdminGuard from "@/components/AdminGuard";
 import { useAuth } from "@/lib/AuthContext";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
+import { authedFetch } from "@/lib/staffApi";
+import type { ParsedQuestion } from "@/utils/latexParser";
 import {
   ScoreResult,
   P2_TABLE,
@@ -25,7 +24,7 @@ import {
 import ReviewMode, { type EssayReview } from "@/components/ReviewMode";
 import EssayGradedWork, { useEssayResult } from "@/components/essay/EssayGradedWork";
 import StateIcon from "@/components/StateIcon";
-import { essayQuestionPoints, hasEssayPart, orderQuestionsByPart } from "@/utils/examStructure";
+import { essayQuestionPoints, hasEssayPart } from "@/utils/examStructure";
 import { answersToDisplay, buildExamVersion } from "@/utils/examVersions";
 import { AlertTriangle, PenTool } from "lucide-react";
 
@@ -132,7 +131,7 @@ export default function TeacherSubmissionReviewPage() {
   const returnToRaw = searchParams.get("returnTo");
   const submissionId = decodeURIComponent(submissionIdParam ?? "");
 
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -177,47 +176,38 @@ export default function TeacherSubmissionReviewPage() {
       setLoading(true);
       setError(null);
       try {
-        const subSnap = await getDoc(doc(db, "submissions", submissionId));
-        if (!subSnap.exists()) {
-          if (!cancelled) setError("Không tìm thấy bài làm này.");
+        // Máy chủ kiểm quyền (admin hoặc tác giả của đề) và trả bài làm kèm đề đầy đủ.
+        const response = await authedFetch(`/api/staff/submissions/${encodeURIComponent(submissionId)}`);
+        const payload = await response.json().catch(() => null) as {
+          error?: string;
+          submission?: {
+            id: string; examId: string; examTitle: string | null; examCode: string | null;
+            gradingStatus: "pending" | "graded" | null; answersJson: string; scores: Partial<ScoreResult> | null;
+            activityLog: ExamActivityEvent[]; questionTimings: QuestionTimingStat[]; hasActivity: boolean;
+            totalElapsedSeconds: number; lastInteractionAtSeconds: number; idleBeforeSubmitSeconds: number;
+          };
+          exam?: {
+            title: string; structure: unknown; versioning: unknown;
+            scoringConfig: { part4TotalScore?: unknown } | null; questions: ParsedQuestion[];
+          };
+        } | null;
+        if (!response.ok || !payload?.submission || !payload.exam) {
+          const message = response.status === 404 ? "Không tìm thấy bài làm này."
+            : response.status === 403 ? "Bạn không có quyền xem bài làm này (không phải đề của bạn)."
+              : "Lỗi khi tải dữ liệu. Vui lòng thử lại.";
+          if (!cancelled) setError(message);
           return;
         }
-        const sub = subSnap.data();
-
-        const examSnap = await getDoc(doc(db, "exams", sub.examId));
-        if (!examSnap.exists()) {
-          if (!cancelled) setError("Không tìm thấy đề thi tương ứng.");
-          return;
-        }
-        const exam = examSnap.data();
-        const authorEmail = String(exam.authorEmail ?? "");
-
-        if (!isAdmin && authorEmail !== user.email) {
-          if (!cancelled) setError("Bạn không có quyền xem bài làm này (không phải đề của bạn).");
-          return;
-        }
+        const sub = payload.submission;
+        const exam = payload.exam;
 
         if (cancelled) return;
 
         setExamTitle(sub.examTitle ?? exam.title ?? "Bài thi");
 
-        let qs: ParsedQuestion[];
-        if (exam.tikzProcessed && Array.isArray(exam.questions)) {
-          qs = exam.questions as ParsedQuestion[];
-        } else if (exam.rawLatex) {
-          const { part1 = "", part2 = "", part3 = "", part4 = "" } = exam.rawLatex;
-          qs = orderQuestionsByPart([
-            ...parseLatexExam(part1),
-            ...parseLatexExam(part2),
-            ...parseLatexExam(part3),
-            ...parseLatexExam(part4, { essay: true }),
-          ]);
-        } else {
-          qs = (exam.questions ?? []) as ParsedQuestion[];
-        }
         // Đề trộn nhiều mã: hiện đúng bản đề học sinh đã làm.
-        const version = buildExamVersion(qs, exam.versioning, sub.examCode, String(sub.examId));
-        qs = version.questions;
+        const version = buildExamVersion(exam.questions, exam.versioning, sub.examCode, sub.examId);
+        const qs = version.questions;
         setQuestions(qs);
 
         const { p1Ans: a1, p2Ans: a2, p3Ans: a3 } = answersToDisplay(parseAnswers(sub.answersJson ?? "{}"), version.orders);
@@ -225,19 +215,19 @@ export default function TeacherSubmissionReviewPage() {
         setP2Ans(a2);
         setP3Ans(a3);
 
-        const score = recalcScore(qs, a1, a2, a3, sub.scores);
+        const score = recalcScore(qs, a1, a2, a3, sub.scores ?? undefined);
         setScoreResult(score);
         if (sub.gradingStatus === "pending" || sub.gradingStatus === "graded") {
-          setEssayGrade({ examId: String(sub.examId), status: sub.gradingStatus });
+          setEssayGrade({ examId: sub.examId, status: sub.gradingStatus });
           if (hasEssayPart(exam.structure)) setPart4TotalScore(Number(exam.scoringConfig?.part4TotalScore ?? 0));
         }
-        if (Array.isArray(sub.activityLog) || Array.isArray(sub.questionTimings)) {
+        if (sub.hasActivity) {
           setActivitySummary({
-            activityLog: (sub.activityLog ?? []) as ExamActivityEvent[],
-            questionTimings: (sub.questionTimings ?? []) as QuestionTimingStat[],
-            totalElapsedSeconds: Number(sub.totalElapsedSeconds ?? 0),
-            lastInteractionAtSeconds: Number(sub.lastInteractionAtSeconds ?? 0),
-            idleBeforeSubmitSeconds: Number(sub.idleBeforeSubmitSeconds ?? 0),
+            activityLog: sub.activityLog,
+            questionTimings: sub.questionTimings,
+            totalElapsedSeconds: sub.totalElapsedSeconds,
+            lastInteractionAtSeconds: sub.lastInteractionAtSeconds,
+            idleBeforeSubmitSeconds: sub.idleBeforeSubmitSeconds,
           });
         }
       } catch (err) {
@@ -252,7 +242,7 @@ export default function TeacherSubmissionReviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [submissionId, user?.email, authLoading, isAdmin]);
+  }, [submissionId, user?.email, authLoading]);
 
   if (authLoading) return <Spinner />;
 

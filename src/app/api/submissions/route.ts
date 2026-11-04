@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { normalizeAnswer } from "@/utils/examTypes";
@@ -14,23 +15,24 @@ export const runtime = "nodejs";
 
 type AnswerMap = Record<string, unknown>;
 
-interface SubmitExamBody {
-  action?: "start" | "submit";
-  examId?: string;
-  submissionId?: string;
-  studentName?: string;
-  studentAvatar?: string;
-  answersJson?: string;
-  cheatCount?: number;
-  activityLog?: unknown[];
-  questionTimings?: unknown[];
-  totalElapsedSeconds?: number;
-  idleBeforeSubmitSeconds?: number;
-  lastInteractionAtSeconds?: number;
-  isTeacherPreview?: boolean;
-  exitedEarly?: boolean;
-  password?: string;
-}
+// Kiểm tra kiểu và độ dài của body trước khi dùng; giá trị số còn được kẹp lại ở phía dưới.
+const SubmitExamBody = z.object({
+  action: z.enum(["start", "submit"]).nullish(),
+  examId: z.string().trim().min(1).max(128),
+  submissionId: z.string().max(128).nullish(),
+  studentName: z.string().max(400).nullish(),
+  studentAvatar: z.string().max(2000).nullish(),
+  answersJson: z.string().max(500_000).nullish(),
+  cheatCount: z.number().nullish(),
+  activityLog: z.array(z.unknown()).max(5000).nullish(),
+  questionTimings: z.array(z.unknown()).max(5000).nullish(),
+  totalElapsedSeconds: z.number().nullish(),
+  idleBeforeSubmitSeconds: z.number().nullish(),
+  lastInteractionAtSeconds: z.number().nullish(),
+  isTeacherPreview: z.boolean().nullish(),
+  exitedEarly: z.boolean().nullish(),
+  password: z.string().max(200).nullish(),
+});
 
 function timestampMillis(value: unknown): number | null {
   return (value as { toMillis?: () => number } | null)?.toMillis?.() ?? null;
@@ -164,11 +166,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
     }
 
-    const body = await request.json() as SubmitExamBody;
-    const examId = body.examId?.trim();
-    if (!examId) {
-      return NextResponse.json({ error: "EXAM_ID_REQUIRED" }, { status: 400 });
+    const parsedBody = SubmitExamBody.safeParse(await request.json().catch(() => null));
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
     }
+    const body = parsedBody.data;
+    const examId = body.examId;
 
     const examSnapshot = await adminDb.collection("exams").doc(examId).get();
     if (!examSnapshot.exists) {
