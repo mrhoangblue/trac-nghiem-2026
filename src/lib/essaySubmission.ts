@@ -16,6 +16,12 @@ export interface LoadedSubmission {
   isGrader: boolean;
 }
 
+/**
+ * Điểm nháp của giáo viên lưu ở collection riêng (client không đọc được). Tài
+ * liệu bài nộp, thứ học sinh đọc trực tiếp được, chỉ nhận điểm khi đã công bố.
+ */
+export const GRADING_DRAFTS_COLLECTION = "essay_grading_drafts";
+
 export function millis(value: unknown): number | null {
   return (value as { toMillis?: () => number } | null)?.toMillis?.() ?? null;
 }

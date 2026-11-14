@@ -8,6 +8,7 @@ import {
   millis,
   signEssayFiles,
   uploadWindow,
+  GRADING_DRAFTS_COLLECTION,
 } from "@/lib/essaySubmission";
 import { createR2UploadUrl, deleteFromR2, getR2ObjectMetadata, getR2Status } from "@/lib/r2Storage";
 import { verifyAuth } from "@/lib/verifyAuth";
@@ -65,7 +66,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     let grading: EssayGrading | null = null;
     let annotations: EssayAnnotations | null = null;
     if (revealGrading) {
-      const stored = (data.grading ?? null) as (EssayGrading & { gradedAt?: unknown }) | null;
+      // Giáo viên thấy bản nháp mới nhất (lưu riêng); học sinh chỉ thấy điểm đã công bố.
+      const draft = isGrader ? (await adminDb.collection(GRADING_DRAFTS_COLLECTION).doc(submissionId).get()).data() : undefined;
+      const stored = (draft?.grading ?? data.grading ?? null) as (EssayGrading & { gradedAt?: unknown }) | null;
       grading = stored ? { ...stored, gradedAt: millis(stored.gradedAt) } : null;
       const annotationSnapshot = await adminDb.collection("essay_annotations").doc(submissionId).get();
       annotations = (annotationSnapshot.data()?.pages ?? null) as EssayAnnotations | null;

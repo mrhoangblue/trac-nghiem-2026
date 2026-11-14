@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
-import { loadSubmissionForUser } from "@/lib/essaySubmission";
+import { GRADING_DRAFTS_COLLECTION, loadSubmissionForUser } from "@/lib/essaySubmission";
 import { verifyAuth } from "@/lib/verifyAuth";
 import { essayQuestionPoints } from "@/utils/examStructure";
 import type { EssayAnnotations } from "@/utils/essayTypes";
@@ -81,16 +81,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updatedBy: authUser.email,
       updatedAt: FieldValue.serverTimestamp(),
     });
-    batch.update(ref, {
-      grading,
-      ...(body.final ? {
+    const draftRef = adminDb.collection(GRADING_DRAFTS_COLLECTION).doc(submissionId);
+    if (body.final) {
+      // Công bố: điểm vào tài liệu bài nộp (học sinh đọc được), bỏ bản nháp.
+      batch.update(ref, {
+        grading,
         gradingStatus: "graded",
         "scores.p4": p4,
         "scores.total": round(autoTotal + p4),
         // Chấm xong thì khóa luôn việc thêm/xóa ảnh.
         ...(data.essay?.finalizedAt ? {} : { "essay.finalizedAt": FieldValue.serverTimestamp() }),
-      } : {}),
-    });
+      });
+      batch.delete(draftRef);
+    } else {
+      // Lưu nháp: chỉ ghi vào collection riêng, học sinh không đọc được.
+      batch.set(draftRef, { submissionId, examId: data.examId, grading, updatedBy: authUser.email, updatedAt: FieldValue.serverTimestamp() });
+      // Bài chờ chấm còn điểm nháp kiểu cũ trong tài liệu bài nộp: gỡ đi.
+      if (data.gradingStatus === "pending" && data.grading !== undefined) batch.update(ref, { grading: FieldValue.delete() });
+    }
     await batch.commit();
 
     return NextResponse.json({ success: true, p4, total: round(autoTotal + p4), gradingStatus: body.final ? "graded" : data.gradingStatus });

@@ -67,6 +67,11 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
   - Ghi nhận mức thấp: (1) chữ trong bài làm có thể cố "ra lệnh" cho AI để nâng điểm nháp; giáo viên duyệt trước khi công bố. (2) Có từ trước: điểm nháp của giáo viên (`grading`) nằm trong tài liệu bài nộp nên học sinh tự gọi Firestore có thể đọc trước khi công bố.
   - Kiểm tra: `tsc` sạch, eslint 0 lỗi, `npm run build` thành công; gọi thật Gemini trên bài mẫu trả kết quả đúng định dạng.
 
+- 2026-11-14 Điểm nháp tự luận lưu riêng (chưa commit):
+  - `PUT /api/submissions/[id]/grade` khi lưu nháp ghi vào `essay_grading_drafts/{submissionId}` (luật catch-all chặn client) thay vì trường `grading` của bài nộp; khi Hoàn tất mới ghi `grading` vào bài nộp và xoá bản nháp. `GET .../essay` trả bản nháp cho giáo viên, học sinh chỉ nhận điểm đã công bố.
+  - Dữ liệu thật: 1 bài đang chờ chấm, không bài nào còn điểm nháp kiểu cũ, nên không cần chuyển dữ liệu.
+  - Kiểm tra: `tsc` sạch, eslint 0 lỗi, `npm run build` thành công. Chưa thử lưu nháp trên trình duyệt.
+
 ## Ghi chú vận hành
 - Commit chỉ khi người dùng bảo; Gia Sư: dump DB trước migration, push main sau mỗi track (Vercel tự deploy).
 - Làm từng bước, báo kết quả + bằng chứng trước khi sang bước sau.
