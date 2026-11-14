@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, Check, Globe2, ImagePlus, Layers, Layers3, ListChecks, ListTodo, Loader2, PenTool, School, Shuffle } from "lucide-react";
+import { AlertTriangle, Check, FileSignature, Globe2, ImagePlus, Layers, Layers3, ListChecks, ListTodo, Loader2, PenTool, School, Shuffle } from "lucide-react";
 import { assignsClasses, type ExamTargetType } from "@/utils/examAudience";
 import { EXAM_STRUCTURES, structureParts, type ExamStructure } from "@/utils/examStructure";
 import { VERSION_COUNT_MAX, VERSION_COUNT_MIN, versionCodes, type ExamVersioning } from "@/utils/examVersions";
@@ -30,7 +30,7 @@ export function ExamStructurePicker({ value, onChange }: { value: ExamStructure;
         value: item.value,
         label: item.label,
         description: item.description,
-        icon: [ListChecks, ListTodo, Layers3, PenTool][index],
+        icon: [ListChecks, ListTodo, Layers3, PenTool, FileSignature][index],
       }))}
     />
   );
@@ -246,16 +246,18 @@ export function ExamRulesFields({
       <div>
         <SubHeading>Điểm số</SubHeading>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Phần I · Nhiều phương án" htmlFor={`${idPrefix}-p1`} hint="Chia đều cho số câu.">
-            <NumberField id={`${idPrefix}-p1`} value={scoring.part1TotalScore} onChange={(value) => onScoring({ ...scoring, part1TotalScore: value })} step={0.25} unit="điểm" />
-          </Field>
+          {parts.includes("p1") && (
+            <Field label="Phần I · Nhiều phương án" htmlFor={`${idPrefix}-p1`} hint="Chia đều cho số câu.">
+              <NumberField id={`${idPrefix}-p1`} value={scoring.part1TotalScore} onChange={(value) => onScoring({ ...scoring, part1TotalScore: value })} step={0.25} unit="điểm" />
+            </Field>
+          )}
           {parts.includes("p3") && (
             <Field label="Phần III · Trả lời ngắn" htmlFor={`${idPrefix}-p3`} hint="Chia đều cho số câu.">
               <NumberField id={`${idPrefix}-p3`} value={scoring.part3TotalScore} onChange={(value) => onScoring({ ...scoring, part3TotalScore: value })} step={0.25} unit="điểm" />
             </Field>
           )}
           {parts.includes("p4") && (
-            <Field label="Phần IV · Tự luận" htmlFor={`${idPrefix}-p4`} hint={<>Đặt điểm từng câu ở bản xem trước, tổng này tự cộng. Chưa đặt thì chia đều; có thể ghi sẵn <code className="rounded bg-gray-100 px-1">{"\\diem{1,5}"}</code> trong khối ex.</>}>
+            <Field label={parts.length === 1 ? "Tự luận" : "Phần IV · Tự luận"} htmlFor={`${idPrefix}-p4`} hint={<>Đặt điểm từng câu ở bản xem trước, tổng này tự cộng. Chưa đặt thì chia đều; có thể ghi sẵn <code className="rounded bg-gray-100 px-1">{"\\diem{1,5}"}</code> trong khối ex.</>}>
               <NumberField id={`${idPrefix}-p4`} value={scoring.part4TotalScore ?? 0} onChange={(value) => onScoring({ ...scoring, part4TotalScore: value })} step={0.25} unit="điểm" />
             </Field>
           )}

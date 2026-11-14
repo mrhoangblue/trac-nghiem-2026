@@ -34,7 +34,7 @@ export function resolveExamQuestions(exam: DocumentData): ParsedQuestion[] {
 }
 
 /** Tên trường mang đáp án, lời giải hay ghi chú chấm của giáo viên. */
-const ANSWER_FIELD = /answer|explanation|solution|review|loigiai/i;
+const ANSWER_FIELD = /answer|explanation|solution|review|loigiai|rubric/i;
 
 /** Câu hỏi gửi cho học sinh khi đang làm bài: không có đáp án, lời giải, ghi chú chấm. */
 export function stripQuestionAnswers(question: ParsedQuestion): ParsedQuestion {

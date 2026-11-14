@@ -8,7 +8,7 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
 - [x] `submissions`: client không tạo/sửa `status`, `scores`, `part*Results`; chỉ cho ghi tiến độ (answersJson, activityLog…) khi IN_PROGRESS. Việc chấm điểm chỉ ở `/api/submissions`.
 - [x] `exams`, `classes`, `class_members`: giáo viên chỉ sửa/xóa của chính mình (authorEmail/teacherId), admin mới sửa mọi thứ; staff không đọc bài nộp của GV khác (rules chỉ cho chính chủ đọc `submissions`; staff qua API).
 - [x] `/api/submissions` (start + submit): kiểm tra lại giờ mở/đóng, lớp đích (`isClassOnly`), mật khẩu/đã qua access, và `maxRetries` ở máy chủ.
-- [ ] Triển khai rules bằng `firebase deploy --only firestore:rules` SAU khi thử trên dữ liệu giả; không chạm dữ liệu thi thật.
+- [x] Triển khai rules bằng `firebase deploy --only firestore:rules` (đã deploy 2026-11-14, xem Nhật ký).
 
 ## Bước 2 — Trắc nghiệm: không gửi đáp án cho học sinh
 - [x] `/api/exams/[id]/access`: bỏ `correctAnswer`, lời giải, `rawLatex` khỏi payload học sinh (giáo viên/admin giữ nguyên).
@@ -55,6 +55,17 @@ Dự án: Trắc nghiệm = `~/Documents/WORKSPACE/1_Projects/website trac nghie
   - Gia Sư: zod 3.24.1 → 4.6.7 (sửa `errorMap` ở 5 chỗ), `npm audit fix` (vite/vitest) → 0 lỗ hổng; test 234/234, tsc, build sạch.
   - security-review: không có phát hiện ≥8. Ghi nhận mức thấp: giáo viên bất kỳ gọi API học sinh theo id sẽ thấy tên/email (đã đọc được qua rules `users` từ trước).
   - Kiểm tra: tsc, eslint (0 lỗi), `npm run build`, `firebase deploy --dry-run` biên dịch rules đều thành công.
+
+- 2026-11-14 Deploy `firestore.rules` lên production (`test-website-5779f`):
+  - Phát hiện: luật đang chạy vẫn là bản 05/06/2026 (`allow read: if true` cho mọi collection, kể cả không đăng nhập; ghi đã hết hạn từ 08/06). Toàn bộ `exams` (đáp án, hướng dẫn chấm), `users`, `submissions` đọc được công khai.
+  - Trước khi deploy đã rà mọi chỗ client đọc Firestore trực tiếp (`submissions` của chính chủ, `users` role mod/admin, `classes`, `exams` ở trang staff): đều khớp luật mới.
+  - Sau deploy: đọc ẩn danh `exams`/`users`/`submissions`/`classes` qua REST đều trả 403. Chưa thử bằng tài khoản học sinh và giáo viên thật trên trình duyệt; nếu có trang báo thiếu quyền thì bản luật cũ còn trong lịch sử Firebase Console (ruleset `0d076d8a`).
+
+- 2026-11-14 Đề chỉ tự luận, thang chấm `\buoc`, chấm nháp bằng AI:
+  - Mới: `src/utils/essayRubric.ts`, `src/lib/aiGrading.ts` (`server-only`), `POST/GET /api/submissions/[id]/ai-grade`, `AiGradeDetail`, `RubricList`. Sửa: `examStructure`, `latexParser`, `examAnswerKey`, trang tạo/sửa/chấm đề, `QuizClient`, `EssayUploadStage`.
+  - security-review (rà tay trên diff chưa commit): không có phát hiện độ tin cậy ≥8. Đã kiểm: route AI chỉ cho tác giả đề/admin (học sinh chủ bài nhận 403); kết quả AI lưu ở `essay_ai_grading` (luật catch-all chặn client); `rubric` bị gỡ khỏi `/access` cùng đáp án và chỉ trả qua `/review` sau khi chấm xong; khoá Gemini chỉ ở máy chủ, gửi qua header, không ghi log; file gửi AI lấy theo key đã được kiểm lúc attach; đầu ra AI được Zod kiểm và kẹp điểm theo thang chấm thật; nội dung AI hiển thị qua React (không `dangerouslySetInnerHTML`).
+  - Ghi nhận mức thấp: (1) chữ trong bài làm có thể cố "ra lệnh" cho AI để nâng điểm nháp; giáo viên duyệt trước khi công bố. (2) Có từ trước: điểm nháp của giáo viên (`grading`) nằm trong tài liệu bài nộp nên học sinh tự gọi Firestore có thể đọc trước khi công bố.
+  - Kiểm tra: `tsc` sạch, eslint 0 lỗi, `npm run build` thành công; gọi thật Gemini trên bài mẫu trả kết quả đúng định dạng.
 
 ## Ghi chú vận hành
 - Commit chỉ khi người dùng bảo; Gia Sư: dump DB trước migration, push main sau mỗi track (Vercel tự deploy).

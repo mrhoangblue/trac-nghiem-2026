@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { formatCountdown } from "@/utils/examTypes";
-import { essayQuestionPoints } from "@/utils/examStructure";
+import { essayQuestionPoints, hasEssayPart } from "@/utils/examStructure";
 import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
 import { AlertTriangle, BarChart3, Crosshair, PenTool, RotateCcw, Shuffle, X } from "lucide-react";
 import StateIcon from "@/components/StateIcon";
@@ -309,9 +309,9 @@ export default function ExamDetailPage() {
           authorEmail: d.authorEmail ?? "",
           startTime: d.startTime ?? null,
           endTime: d.endTime ?? null,
-          hasEssay: d.structure === "p1234",
+          hasEssay: hasEssayPart(d.structure),
           part4TotalScore: Number(d.scoringConfig?.part4TotalScore ?? 0),
-          essayPoints: d.structure === "p1234" && Array.isArray(d.questions)
+          essayPoints: hasEssayPart(d.structure) && Array.isArray(d.questions)
             ? (() => {
                 const questions = d.questions as Array<{ id: number; type: string; points?: number }>;
                 const points = essayQuestionPoints(questions, Number(d.scoringConfig?.part4TotalScore ?? 0));
@@ -762,6 +762,7 @@ export default function ExamDetailPage() {
 
         {/* Scoring rule reminder */}
         <div className="mb-8 bg-gradient-to-r from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-5 flex flex-wrap gap-6 text-sm">
+          {exam.part1Count + exam.part2Count + exam.part3Count > 0 && (<>
           <div>
             <span className="font-bold text-brand-700">P1 tổng điểm: </span>
             <span className="text-gray-700">{scoringConfig.part1TotalScore} đ</span>
@@ -774,6 +775,7 @@ export default function ExamDetailPage() {
             <span className="font-bold text-success-700">P3 tổng điểm: </span>
             <span className="text-gray-700">{scoringConfig.part3TotalScore} đ</span>
           </div>
+          </>)}
           {exam.hasEssay && (
             <div>
               <span className="font-bold text-violet-700">P4 tự luận (giáo viên chấm): </span>

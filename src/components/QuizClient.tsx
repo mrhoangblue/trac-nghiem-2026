@@ -11,7 +11,7 @@ import ReviewMode from "@/components/ReviewMode";
 import EssayUploadPanel from "@/components/essay/EssayUploadPanel";
 import EssayUploadStage from "@/components/essay/EssayUploadStage";
 import { FitCard, FitStage } from "@/components/QuizFit";
-import type { ExamStructure } from "@/utils/examStructure";
+import { hasEssayPart, isEssayOnly, type ExamStructure } from "@/utils/examStructure";
 import { answersToDisplay, answersToOriginal, buildExamVersion } from "@/utils/examVersions";
 import { db } from "@/lib/firebase";
 import {
@@ -747,7 +747,7 @@ export default function QuizClient({
   }, [started, isSubmitted]);
 
   // ── Question partitioning — memoized to avoid array churn ─────────────────
-  const hasEssay = structure === "p1234" && questions.some((q) => q.type === "essay");
+  const hasEssay = hasEssayPart(structure) && questions.some((q) => q.type === "essay");
   const essayCount = hasEssay ? questions.filter((q) => q.type === "essay").length : 0;
 
   const p2AnsweredCount = Object.values(p2Ans).filter((arr) =>
@@ -1038,6 +1038,7 @@ export default function QuizClient({
         title={title}
         submissionId={essayStage.submissionId}
         deadlineMillis={essayStage.deadlineMillis}
+        essayOnly={isEssayOnly(structure)}
         getToken={getIdToken}
       />
     );

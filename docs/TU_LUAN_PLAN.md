@@ -89,4 +89,23 @@ Màn hình chấm `/teacher/grade/[submissionId]`, không cần tải file về:
 - Chấm: `/admin/grade/[examId]`, `EssayAnnotator` (bút perfect-freehand, dạ quang, chữ, dấu, tẩy, hoàn tác, phóng to, chế độ chỉ bút), `api/submissions/[id]/grade` (lưu nháp/hoàn tất, `essay_annotations/{id}`).
 - Điểm: bài chờ chấm không tính ở bảng xếp hạng, lớp, lịch sử; trang kết quả đề có nút "Chấm tự luận"; học sinh xem bài đã chấm kèm nét chữa.
 
-Còn lại: email "Bài đã được chấm", xuất PDF bài đã chấm, xoay trang khi chấm, luật Firestore chặn học sinh đọc trực tiếp `exams/{id}` (hiện học sinh vẫn có thể đọc hướng dẫn chấm nếu tự gọi Firestore).
+Còn lại: email "Bài đã được chấm", xuất PDF bài đã chấm, xoay trang khi chấm, (luật Firestore chặn học sinh đọc trực tiếp `exams/{id}` đã deploy 2026-11-14).
+
+## 8. Đề chỉ tự luận, thang chấm \buoc và chấm bằng AI (bắt đầu 2026-11-14)
+
+Thứ tự: (1) cấu trúc đề "Tự luận" → (2) thang chấm `\buoc` → (3) route chấm AI → (4) giao diện duyệt.
+
+**Đã làm (chưa commit, chưa thử trên trình duyệt):**
+- Cấu trúc `p4` "Tự luận" (`src/utils/examStructure.ts`): chỉ có câu tự luận, tổng điểm mặc định 10. `hasEssayPart()` đúng cho cả `p1234` và `p4`; mọi chỗ so sánh `=== "p1234"` đã chuyển sang hàm này. Dán đề chỉ có câu tự luận thì tự chọn `p4`. Học sinh làm bài rồi sang bước nộp ảnh như đề 4 phần.
+- Thang chấm (`src/utils/essayRubric.ts`): trong `\loigiai` của câu tự luận viết `\buoc{0,25}{nội dung ý}`. Parser tách thành `question.rubric[] = { points, text }`, phần chữ còn lại vẫn là hướng dẫn chung. Không có `\diem` thì điểm câu = tổng các `\buoc`; lệch thì báo ở trang tạo/sửa đề. `rubric` bị gỡ khỏi dữ liệu gửi học sinh (`examAnswerKey.ts`). Hiển thị ở bản xem trước và phiếu chấm (`RubricList`).
+- Đề đã lưu trước đó chưa có `rubric`: mở sửa đề, bấm Phân tích lại rồi lưu.
+
+- Chấm AI (2026-11-14): `src/lib/aiGrading.ts` gọi Gemini qua REST (khoá `GEMINI_API_KEY`, mô hình `AI_GRADING_MODEL`, mặc định `gemini-3.5-flash-lite`), gửi thẳng ảnh/PDF từ R2 kèm đề và `rubric`, nhận JSON theo schema rồi chuẩn hoá lại theo thang chấm thật (điểm từng ý bị kẹp trong 0..điểm ý). Route `POST/GET /api/submissions/[id]/ai-grade` chỉ cho tác giả đề và admin; kết quả lưu ở collection riêng `essay_ai_grading/{submissionId}` (luật Firestore chặn client), có khoá chống chạy trùng.
+- Giao diện duyệt ở `/admin/grade/[examId]`: nút "Chấm bằng AI" (bài đang mở) và "AI chấm các bài chờ" (lần lượt, cách nhau 4 giây). Điểm AI chỉ điền vào ô còn trống; từng câu hiện điểm từng ý, chỗ AI dựa vào, mức chắc chắn và nút "Dùng điểm này". Điểm chính thức vẫn lưu qua route `grade` khi giáo viên bấm Hoàn tất.
+- Đã thử thật trên một bài mẫu dựng bằng máy (không phải chữ viết tay thật): `gemini-3.5-flash-lite` trả kết quả sau ~3 giây, đọc đúng nội dung nhưng cho nhầm 0,25 điểm ở ý "kết luận đúng" dù nghiệm sai. `gemini-flash-latest` và `gemini-3.8-flash` bị treo quá 2 phút với khoá free tier.
+
+**Chưa làm:**
+- Thử trên trình duyệt với bài nộp thật (ảnh viết tay), so điểm AI với điểm giáo viên trên 20–30 bài.
+- Hình vẽ của đề (TikZ/ảnh) chưa được gửi kèm cho AI; câu hình học phụ thuộc hình sẽ thiếu ngữ cảnh.
+- Chạy theo lô qua Batch API và chọn mô hình chính thức (đang cân nhắc Claude Haiku 5.5 Batch).
+- `security-review` cho toàn bộ thay đổi trước khi commit.

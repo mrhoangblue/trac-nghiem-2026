@@ -7,6 +7,7 @@ import { AlertTriangle, Check, X } from "lucide-react";
 import type { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import TikzRenderer from "@/components/TikzRenderer";
+import RubricList from "@/components/essay/RubricList";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import { essayQuestionPoints } from "@/utils/examStructure";
 
@@ -97,12 +98,15 @@ export default function ExamPreview({
                       ))}
                     </div>
                   )}
-                  {question.explanation && !hideAnswers && (
+                  {(question.explanation || question.rubric?.length) && !hideAnswers && (
                     <details className="group mt-3 rounded-xl bg-gray-50 text-sm text-gray-700">
                       <summary className="flex min-h-10 cursor-pointer list-none items-center px-3 font-semibold text-gray-600 marker:hidden">
                         <span className="mr-2 transition-transform group-open:rotate-90">›</span>{question.type === "essay" ? "Hướng dẫn chấm (học sinh không thấy)" : "Lời giải"}
                       </summary>
-                      <div className="border-t border-gray-200 px-3 py-3"><ExplanationRenderer explanation={question.explanation} /></div>
+                      <div className="space-y-3 border-t border-gray-200 px-3 py-3">
+                        {question.rubric?.length ? <RubricList rubric={question.rubric} /> : null}
+                        {question.explanation && <ExplanationRenderer explanation={question.explanation} />}
+                      </div>
                     </details>
                   )}
                 </div>
@@ -250,7 +254,7 @@ function AnswerPreview({ question, hideAnswers }: { question: ParsedQuestion; hi
     );
   }
   if (question.type === "essay") {
-    return <p className="rounded-xl border border-dashed border-violet-200 bg-violet-50/50 px-3 py-2 text-xs font-medium text-violet-800">Học sinh làm ra giấy, chụp ảnh hoặc tải PDF lên sau khi nộp Phần I–III. Giáo viên chấm trực tiếp trên bài.</p>;
+    return <p className="rounded-xl border border-dashed border-violet-200 bg-violet-50/50 px-3 py-2 text-xs font-medium text-violet-800">Học sinh làm ra giấy, chụp ảnh hoặc tải PDF lên sau khi nộp bài. Giáo viên chấm trực tiếp trên bài.</p>;
   }
   return null;
 }

@@ -15,7 +15,8 @@ import {
 import AdminGuard from "@/components/AdminGuard";
 import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { joinLatexParts, smartParseLatex, type SmartParseCounts } from "@/utils/smartParseLatex";
-import { countQuestionsByPart, essayPointProblems, explicitEssayTotal, normalizeStructure, orderQuestionsByPart, withEssayPoints, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
+import { rubricProblems } from "@/utils/essayRubric";
+import { essayQuestionPoints, countQuestionsByPart, defaultEssayTotal, hasEssayPart, structureForCounts, essayPointProblems, explicitEssayTotal, normalizeStructure, orderQuestionsByPart, withEssayPoints, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
 import type { ClassDoc } from "@/utils/classroomTypes";
@@ -89,6 +90,16 @@ export default function EditExamPage() {
     part1TotalScore: 3,
     part3TotalScore: 3,
   });
+
+  // Đổi cấu trúc: tổng điểm tự luận theo mặc định của cấu trúc mới nếu giáo viên chưa sửa.
+  const applyStructure = (next: ExamStructure) => {
+    if (next === structure) return;
+    setStructure(next);
+    setScoringConfig((current) => {
+      const untouched = current.part4TotalScore === undefined || current.part4TotalScore === defaultEssayTotal(structure);
+      return hasEssayPart(next) && untouched ? { ...current, part4TotalScore: defaultEssayTotal(next) } : current;
+    });
+  };
   const [duration, setDuration] = useState(90);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -212,7 +223,7 @@ export default function EditExamPage() {
       setPart3(classified.part3);
       setPart4(classified.part4);
       setSmartCounts(classified.counts);
-      if (classified.counts.p4 > 0) setStructure("p1234");
+      applyStructure(structureForCounts(structure, classified.counts));
       const all = orderQuestionsByPart([
         ...parseLatexExam(classified.part1),
         ...parseLatexExam(classified.part2),
@@ -245,7 +256,7 @@ export default function EditExamPage() {
       setPart3(classified.part3);
       setPart4(classified.part4);
       setSmartCounts(classified.counts);
-      if (classified.counts.p4 > 0) setStructure("p1234");
+      applyStructure(structureForCounts(structure, classified.counts));
       setPreviewData({ title: examTitle.trim() || payload.title || file.name.replace(/\.(docx|pdf|tex)$/i, ""), questions: orderQuestionsByPart(payload.questions) });
       setImportWarnings(payload.warnings ?? []);
       setImportSummary(payload.stats ?? null);
@@ -400,13 +411,13 @@ export default function EditExamPage() {
         scoringConfig: {
           part1TotalScore: Number(scoringConfig.part1TotalScore),
           part3TotalScore: Number(scoringConfig.part3TotalScore),
-          ...(structure === "p1234" ? { part4TotalScore: explicitEssayTotal(previewData.questions) ?? Number(scoringConfig.part4TotalScore ?? 0) } : {}),
+          ...(hasEssayPart(structure) ? { part4TotalScore: explicitEssayTotal(previewData.questions) ?? Number(scoringConfig.part4TotalScore ?? 0) } : {}),
         },
         structure,
         duration: Number(duration),
         startTime: toStoredDateTime(startTime),
         endTime: toStoredDateTime(endTime),
-        rawLatex: { part1, part2, part3, ...(structure === "p1234" ? { part4 } : {}) },
+        rawLatex: { part1, part2, part3, ...(hasEssayPart(structure) ? { part4 } : {}) },
         tikzProcessed: processed.tikzProcessed,
         tikzImageCount: processed.convertedCount,
         maxRetries: Number(maxRetries),
@@ -449,7 +460,7 @@ export default function EditExamPage() {
             questions: questionsToSave,
             structure,
             scoringConfig: examPayload.scoringConfig,
-            rawLatex: { part1, part2, part3, ...(structure === "p1234" ? { part4 } : {}) },
+            rawLatex: { part1, part2, part3, ...(hasEssayPart(structure) ? { part4 } : {}) },
             tikzProcessed: processed.tikzProcessed,
             tikzImageCount: processed.convertedCount,
           }),
@@ -475,7 +486,7 @@ export default function EditExamPage() {
     setPreviewData((prev) => (prev ? { ...prev, questions: withEssayPoints(prev.questions, questionId, points) } : prev));
   };
   // Khi đã đặt điểm cho mọi câu, tổng Phần IV là tổng các câu (không cần ô nhập riêng).
-  const explicitPart4Total = structure === "p1234" ? explicitEssayTotal(previewData?.questions ?? []) : null;
+  const explicitPart4Total = hasEssayPart(structure) ? explicitEssayTotal(previewData?.questions ?? []) : null;
   const scoringView: ScoringConfig = explicitPart4Total === null ? scoringConfig : { ...scoringConfig, part4TotalScore: explicitPart4Total };
 
   if (pageLoading) {
@@ -536,13 +547,14 @@ export default function EditExamPage() {
             <EditorCard id="exam-content" step={1} icon={FileCode2} title="Nội dung đề" description="Sửa trực tiếp mã LaTeX hoặc tải file mới để thay toàn bộ đề.">
               <div className="mb-4">
                 <p className="mb-2 text-sm font-semibold text-gray-800">Cấu trúc đề</p>
-                <ExamStructurePicker value={structure} onChange={(value) => { setStructure(value); }} />
+                <ExamStructurePicker value={structure} onChange={applyStructure} />
                 {structureParts(structure).includes("p4") && (
                   <p className="mt-2 text-xs leading-5 text-gray-500">Khối <code className="rounded bg-gray-100 px-1">ex</code> không có lệnh đáp án là câu tự luận; <code className="rounded bg-gray-100 px-1">{"\\loigiai"}</code> là hướng dẫn chấm. Đổi cấu trúc được lưu khi bấm <b>Lưu nội dung đề</b>.</p>
                 )}
                 {questions.length > 0 && [
                   ...structureProblems(structure, countQuestionsByPart(questions)),
-                  ...(structure === "p1234" ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)) : []),
+                  ...(hasEssayPart(structure) ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)) : []),
+                  ...(hasEssayPart(structure) ? rubricProblems(questions, essayQuestionPoints(questions, Number(scoringView.part4TotalScore ?? 0))) : []),
                 ].map((problem) => (
                   <p key={problem} role="alert" className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-amber-700"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />{problem}</p>
                 ))}
@@ -647,8 +659,8 @@ export default function EditExamPage() {
                     title={examTitle.trim() || previewData.title}
                     description={description.trim()}
                     chips={[gradeLevel, ...(gradeLevel !== MOCK_EXAM_GRADE ? [examType] : []), `${duration} phút`]}
-                    part4TotalScore={structure === "p1234" ? scoringView.part4TotalScore ?? 0 : undefined}
-                    onEssayPointsChange={structure === "p1234" ? handleEssayPoints : undefined}
+                    part4TotalScore={hasEssayPart(structure) ? scoringView.part4TotalScore ?? 0 : undefined}
+                    onEssayPointsChange={hasEssayPart(structure) ? handleEssayPoints : undefined}
                   />
                 ) : (
                   <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">

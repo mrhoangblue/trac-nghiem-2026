@@ -21,11 +21,14 @@ export default function EssayUploadStage({
   submissionId,
   deadlineMillis,
   getToken,
+  essayOnly = false,
 }: {
   title: string;
   submissionId: string;
   deadlineMillis: number | null;
   getToken: () => Promise<string>;
+  /** Đề chỉ có tự luận: không có phần trắc nghiệm nào để khóa. */
+  essayOnly?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [finalized, setFinalized] = useState(false);
@@ -91,7 +94,7 @@ export default function EssayUploadStage({
       <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
         <div className="flex flex-wrap items-center gap-4">
           <div className="min-w-0 flex-1">
-            <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} aria-hidden="true" />Đã nộp Phần I–III</p>
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} aria-hidden="true" />{essayOnly ? "Đã hết phần làm bài" : "Đã nộp Phần I–III"}</p>
             <h1 className="mt-1 font-display text-xl font-extrabold text-gray-900">Nộp bài làm tự luận</h1>
             <p className="mt-1 text-sm text-gray-500">{title}</p>
           </div>
@@ -104,7 +107,7 @@ export default function EssayUploadStage({
           </div>
         </div>
         <p className="mt-4 flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs leading-5 text-gray-600">
-          <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />Phần trắc nghiệm đã khóa, không sửa được nữa. Hết giờ, hệ thống tự hoàn tất với những trang đã tải lên.
+          <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />{essayOnly ? "Chụp rõ từng trang bài làm theo đúng thứ tự." : "Phần trắc nghiệm đã khóa, không sửa được nữa."} Hết giờ, hệ thống tự hoàn tất với những trang đã tải lên.
         </p>
       </div>
 

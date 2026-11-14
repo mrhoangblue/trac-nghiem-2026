@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Check, Eye, FileCode2, Loader2, PenLine, Save, SlidersHorizontal } from "lucide-react";
 import { getMissingShortAnswerQuestionNumbers, parseLatexExam, ParsedQuestion } from "@/utils/latexParser";
 import { smartParseLatex, type SmartParseCounts } from "@/utils/smartParseLatex";
-import { countQuestionsByPart, essayPointProblems, explicitEssayTotal, orderQuestionsByPart, withEssayPoints, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
+import { rubricProblems } from "@/utils/essayRubric";
+import { essayQuestionPoints, countQuestionsByPart, defaultEssayTotal, hasEssayPart, structureForCounts, essayPointProblems, explicitEssayTotal, orderQuestionsByPart, withEssayPoints, structureParts, structureProblems, type ExamStructure } from "@/utils/examStructure";
 import AdminGuard from "@/components/AdminGuard";
 import { useAuth } from "@/lib/AuthContext";
 import { GRADE_LEVELS, EXAM_TYPES } from "@/components/Sidebar";
@@ -63,6 +64,16 @@ export default function CreateExamPage() {
     part3TotalScore: examDefaults.part3TotalScore,
     part4TotalScore: 3,
   });
+
+  // Đổi cấu trúc: tổng điểm tự luận theo mặc định của cấu trúc mới nếu giáo viên chưa sửa.
+  const applyStructure = (next: ExamStructure) => {
+    if (next === structure) return;
+    setStructure(next);
+    setScoringConfig((current) => {
+      const untouched = current.part4TotalScore === undefined || current.part4TotalScore === defaultEssayTotal(structure);
+      return hasEssayPart(next) && untouched ? { ...current, part4TotalScore: defaultEssayTotal(next) } : current;
+    });
+  };
   const [duration, setDuration] = useState(examDefaults.duration);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -120,7 +131,7 @@ export default function CreateExamPage() {
     setPart3(result.part3);
     setPart4(result.part4);
     setSmartResult({ counts: result.counts });
-    if (result.counts.p4 > 0) setStructure("p1234");
+    applyStructure(structureForCounts(structure, result.counts));
     const questions = orderQuestionsByPart([
       ...parseLatexExam(result.part1),
       ...parseLatexExam(result.part2),
@@ -182,7 +193,7 @@ export default function CreateExamPage() {
       setPart3(classified.part3);
       setPart4(classified.part4);
       setSmartResult({ counts: classified.counts });
-      if (classified.counts.p4 > 0) setStructure("p1234");
+      applyStructure(structureForCounts(structure, classified.counts));
       setPreviewData({ title: importedTitle, questions: orderQuestionsByPart(payload.questions) });
       setImportWarnings(payload.warnings ?? []);
       setImportSummary(payload.stats ?? null);
@@ -238,14 +249,14 @@ export default function CreateExamPage() {
           scoringConfig: {
             part1TotalScore: Number(scoringConfig.part1TotalScore),
             part3TotalScore: Number(scoringConfig.part3TotalScore),
-            ...(structure === "p1234" ? { part4TotalScore: explicitEssayTotal(previewData.questions) ?? Number(scoringConfig.part4TotalScore ?? 0) } : {}),
+            ...(hasEssayPart(structure) ? { part4TotalScore: explicitEssayTotal(previewData.questions) ?? Number(scoringConfig.part4TotalScore ?? 0) } : {}),
           },
           structure,
           duration: Number(duration),
           startTime: toStoredDateTime(startTime),
           endTime: toStoredDateTime(endTime),
           password: examPassword,
-          rawLatex: { part1, part2, part3, ...(structure === "p1234" ? { part4 } : {}) },
+          rawLatex: { part1, part2, part3, ...(hasEssayPart(structure) ? { part4 } : {}) },
           authorEmail: user?.email ?? "",
           maxRetries: Number(maxRetries),
           versioning: normalizeVersioning(versioning),
@@ -291,7 +302,7 @@ export default function CreateExamPage() {
     setPreviewData((prev) => (prev ? { ...prev, questions: withEssayPoints(prev.questions, questionId, points) } : prev));
   };
   // Khi đã đặt điểm cho mọi câu, tổng Phần IV là tổng các câu (không cần ô nhập riêng).
-  const explicitPart4Total = structure === "p1234" ? explicitEssayTotal(previewData?.questions ?? []) : null;
+  const explicitPart4Total = hasEssayPart(structure) ? explicitEssayTotal(previewData?.questions ?? []) : null;
   const scoringView: ScoringConfig = explicitPart4Total === null ? scoringConfig : { ...scoringConfig, part4TotalScore: explicitPart4Total };
 
   const missingAnswers = getMissingShortAnswerQuestionNumbers(questions);
@@ -300,7 +311,8 @@ export default function CreateExamPage() {
     { label: questions.length ? `Đã nhận ${questions.length} câu hỏi` : "Nhập nội dung đề", ok: questions.length > 0, hint: "Dán LaTeX rồi bấm Phân tích, hoặc tải file đề." },
     { label: "Đặt tên bài thi", ok: Boolean(examTitle.trim()) },
     ...(questions.length ? structureProblems(structure, countQuestionsByPart(questions)).map((problem) => ({ label: "Câu hỏi khớp cấu trúc đề", ok: false, hint: problem })) : []),
-    ...(structure === "p1234" ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)).map((problem) => ({ label: "Điểm tự luận khớp tổng Phần IV", ok: false, hint: problem })) : []),
+    ...(hasEssayPart(structure) ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)).map((problem) => ({ label: "Điểm tự luận khớp tổng Phần IV", ok: false, hint: problem })) : []),
+    ...(hasEssayPart(structure) ? rubricProblems(questions, essayQuestionPoints(questions, Number(scoringView.part4TotalScore ?? 0))).map((problem) => ({ label: "Thang chấm \\buoc khớp điểm câu", ok: false, hint: problem })) : []),
     ...(questions.length ? [{ label: "Đủ đáp án trả lời ngắn", ok: missingAnswers.length === 0, hint: `Thiếu đáp án câu ${missingAnswers.join(", ")}.` }] : []),
     ...(assignsClasses(targetType) ? [{ label: "Chọn lớp được giao", ok: targetClassIds.length > 0 }] : []),
     ...(timeError ? [{ label: "Khung thời gian hợp lệ", ok: false, hint: timeError }] : []),
@@ -345,9 +357,9 @@ export default function CreateExamPage() {
             <EditorCard id="exam-content" step={1} icon={FileCode2} title="Nội dung đề" description="Chọn cấu trúc đề, Smart Input tự tách các phần." done={questions.length > 0}>
               <div className="mb-4">
                 <p className="mb-2 text-sm font-semibold text-gray-800">Cấu trúc đề</p>
-                <ExamStructurePicker value={structure} onChange={setStructure} />
+                <ExamStructurePicker value={structure} onChange={applyStructure} />
                 {structureParts(structure).includes("p4") && (
-                  <p className="mt-2 text-xs leading-5 text-gray-500">Khối <code className="rounded bg-gray-100 px-1">ex</code> không có <code className="rounded bg-gray-100 px-1">{"\\choice"}</code>, <code className="rounded bg-gray-100 px-1">{"\\choiceTF"}</code>, <code className="rounded bg-gray-100 px-1">{"\\shortans"}</code> là câu tự luận. <code className="rounded bg-gray-100 px-1">{"\\loigiai"}</code> của câu tự luận là hướng dẫn chấm, học sinh không thấy.</p>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">Khối <code className="rounded bg-gray-100 px-1">ex</code> không có <code className="rounded bg-gray-100 px-1">{"\\choice"}</code>, <code className="rounded bg-gray-100 px-1">{"\\choiceTF"}</code>, <code className="rounded bg-gray-100 px-1">{"\\shortans"}</code> là câu tự luận. <code className="rounded bg-gray-100 px-1">{"\\loigiai"}</code> của câu tự luận là hướng dẫn chấm, học sinh không thấy; ghi thang chấm từng ý bằng <code className="rounded bg-gray-100 px-1">{"\\buoc{0,25}{nội dung ý}"}</code>.</p>
                 )}
               </div>
               <ExamSourceInput
@@ -441,8 +453,8 @@ export default function CreateExamPage() {
                     description={description.trim()}
                     coverImageUrl={coverImageUrl}
                     chips={[gradeLevel, ...(gradeLevel !== MOCK_EXAM_GRADE ? [examType] : []), `${duration} phút`]}
-                    part4TotalScore={structure === "p1234" ? scoringView.part4TotalScore ?? 0 : undefined}
-                    onEssayPointsChange={structure === "p1234" ? handleEssayPoints : undefined}
+                    part4TotalScore={hasEssayPart(structure) ? scoringView.part4TotalScore ?? 0 : undefined}
+                    onEssayPointsChange={hasEssayPart(structure) ? handleEssayPoints : undefined}
                   />
                 ) : (
                   <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">

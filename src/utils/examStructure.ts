@@ -2,7 +2,7 @@
  * Cấu trúc đề: các phần có trong đề. Phần IV (tự luận) do giáo viên chấm trên
  * ảnh/PDF bài làm học sinh nộp; Phần I–III chấm tự động.
  */
-export type ExamStructure = "p1" | "p12" | "p123" | "p1234";
+export type ExamStructure = "p1" | "p12" | "p123" | "p1234" | "p4";
 export type ExamPart = "p1" | "p2" | "p3" | "p4";
 
 export const EXAM_STRUCTURES: Array<{ value: ExamStructure; label: string; description: string; parts: ExamPart[] }> = [
@@ -10,6 +10,7 @@ export const EXAM_STRUCTURES: Array<{ value: ExamStructure; label: string; descr
   { value: "p12", label: "Trắc nghiệm + Đúng/Sai", description: "Phần I, II", parts: ["p1", "p2"] },
   { value: "p123", label: "3 phần", description: "Trắc nghiệm, Đúng/Sai, Trả lời ngắn", parts: ["p1", "p2", "p3"] },
   { value: "p1234", label: "4 phần (có tự luận)", description: "Thêm Phần IV, học sinh nộp ảnh/PDF", parts: ["p1", "p2", "p3", "p4"] },
+  { value: "p4", label: "Tự luận", description: "Chỉ có câu tự luận, học sinh nộp ảnh/PDF", parts: ["p4"] },
 ];
 
 export const PART_LABELS: Record<ExamPart, string> = {
@@ -36,7 +37,7 @@ export function questionPart(type: string): ExamPart | null {
 
 /** Đề cũ không có trường structure được coi là "3 phần" như trước đây. */
 export function normalizeStructure(value: unknown): ExamStructure {
-  return value === "p1" || value === "p12" || value === "p123" || value === "p1234" ? value : "p123";
+  return value === "p1" || value === "p12" || value === "p123" || value === "p1234" || value === "p4" ? value : "p123";
 }
 
 export function structureParts(structure: ExamStructure): ExamPart[] {
@@ -44,7 +45,26 @@ export function structureParts(structure: ExamStructure): ExamPart[] {
 }
 
 export function hasEssayPart(structure: unknown): boolean {
-  return normalizeStructure(structure) === "p1234";
+  return structureParts(normalizeStructure(structure)).includes("p4");
+}
+
+/** Đề chỉ có tự luận: không có phần chấm tự động. */
+export function isEssayOnly(structure: unknown): boolean {
+  return normalizeStructure(structure) === "p4";
+}
+
+/**
+ * Cấu trúc nên chọn sau khi phân loại nội dung dán vào: có câu tự luận thì
+ * chuyển sang đề có Phần IV (chỉ tự luận nếu không còn loại câu nào khác).
+ */
+export function structureForCounts(current: ExamStructure, counts: StructureCounts): ExamStructure {
+  if (counts.p4 === 0) return current;
+  return counts.p1 + counts.p2 + counts.p3 === 0 ? "p4" : "p1234";
+}
+
+/** Tổng điểm tự luận mặc định khi giáo viên chưa đặt. */
+export function defaultEssayTotal(structure: ExamStructure): number {
+  return structure === "p4" ? 10 : 3;
 }
 
 /**
@@ -137,7 +157,7 @@ export function structureProblems(structure: ExamStructure, counts: StructureCou
       problems.push(`Đề có ${counts[part]} câu ${PART_LABELS[part]} nhưng cấu trúc đã chọn không có phần này.`);
     }
   });
-  if (structure === "p1234" && counts.p4 === 0) problems.push("Đề 4 phần cần ít nhất một câu tự luận (khối ex không có \\choice, \\choiceTF, \\shortans).");
+  if (parts.includes("p4") && counts.p4 === 0) problems.push("Đề có phần tự luận cần ít nhất một câu tự luận (khối ex không có \\choice, \\choiceTF, \\shortans).");
   return problems;
 }
 
@@ -151,7 +171,7 @@ export function sanitizeScoringConfig(value: unknown, structure: ExamStructure) 
   return {
     part1TotalScore: score(source.part1TotalScore, 3),
     part3TotalScore: score(source.part3TotalScore, 3),
-    ...(structure === "p1234" ? { part4TotalScore: score(source.part4TotalScore, 3) } : {}),
+    ...(hasEssayPart(structure) ? { part4TotalScore: score(source.part4TotalScore, defaultEssayTotal(structure)) } : {}),
   };
 }
 

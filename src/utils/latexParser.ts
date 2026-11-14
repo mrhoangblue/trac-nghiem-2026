@@ -1,3 +1,4 @@
+import { extractRubric, rubricTotal, type RubricStep } from './essayRubric';
 import { normalizeExTestLatex } from './latexNormalize';
 
 export interface ParsedQuestion {
@@ -18,6 +19,8 @@ export interface ParsedQuestion {
   imageUrls?: string[];
   /** Điểm tối đa của câu tự luận, ghi trong đề bằng \diem{1,5}. */
   points?: number;
+  /** Thang chấm từng ý của câu tự luận, viết bằng \buoc{điểm}{nội dung} trong \loigiai. */
+  rubric?: RubricStep[];
 }
 
 export function getMissingShortAnswerQuestionNumbers(questions: ParsedQuestion[]): number[] {
@@ -353,6 +356,15 @@ export function parseLatexExam(latex: string, parseOptions: ParseExamOptions = {
     // ── 5. Post-process question text ────────────────────────────────────────
     questionText = preprocessQuestionText(questionText.trim());
 
+    // ── 6. Thang chấm \buoc của câu tự luận; không có \diem thì điểm câu = tổng các ý.
+    let rubric: RubricStep[] = [];
+    if (type === 'essay' && explanation.includes('\\buoc')) {
+      const extracted = extractRubric(explanation);
+      rubric = extracted.rubric;
+      explanation = extracted.explanation;
+      if (points === undefined && rubric.length > 0) points = rubricTotal(rubric);
+    }
+
     questions.push({
       id: id++,
       type,
@@ -364,6 +376,7 @@ export function parseLatexExam(latex: string, parseOptions: ParseExamOptions = {
       ...(explanationTikzCode ? { explanationTikzCode } : {}),
       ...(imageUrls.length > 0 ? { imageUrls } : {}),
       ...(points !== undefined ? { points } : {}),
+      ...(rubric.length > 0 ? { rubric } : {}),
     });
   }
 

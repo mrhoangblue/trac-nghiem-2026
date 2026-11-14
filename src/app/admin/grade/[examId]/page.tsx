@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import {
-  ArrowLeft, Check, ChevronDown, Eraser, Hand, Highlighter, Loader2, Minus, PenLine, Plus, Redo2, Save, Send, Stamp, Type, Undo2,
+  ArrowLeft, Check, ChevronDown, Eraser, Hand, Highlighter, Loader2, Minus, PenLine, Plus, Redo2, Save, Send, Sparkles, Stamp, Type, Undo2,
 } from "lucide-react";
 import AdminGuard from "@/components/AdminGuard";
 import StateIcon from "@/components/StateIcon";
+import AiGradeDetail from "@/components/essay/AiGradeDetail";
+import RubricList from "@/components/essay/RubricList";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import EssayAnnotator, { type AnnotationTool } from "@/components/essay/EssayAnnotator";
 import { useEssayPages } from "@/components/essay/useEssayPages";
@@ -17,6 +19,7 @@ import { useAuth } from "@/lib/AuthContext";
 import type { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
 import { essayQuestionPoints } from "@/utils/examStructure";
+import type { AiGradingResult } from "@/utils/aiGradingTypes";
 import { ESSAY_STAMPS, type EssayAnnotations, type EssayFileView, type EssayGrading, type EssayStampKind } from "@/utils/essayTypes";
 
 interface ExamInfo {
@@ -84,6 +87,9 @@ function GradeWorkspace() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState<"draft" | "final" | null>(null);
   const [notice, setNotice] = useState("");
+  const [ai, setAi] = useState<{ id: string; result: AiGradingResult | null; configured: boolean } | null>(null);
+  const [aiBusy, setAiBusy] = useState<"one" | "all" | null>(null);
+  const [aiProgress, setAiProgress] = useState("");
 
   const essayQuestions = useMemo(() => exam?.questions.filter((question) => question.type === "essay") ?? [], [exam]);
   const maxPoints = useMemo(() => exam ? essayQuestionPoints(exam.questions, exam.part4TotalScore) : new Map<number, number>(), [exam]);
@@ -130,6 +136,88 @@ function GradeWorkspace() {
     return () => { cancelled = true; };
   }, [examId, user, loadList]);
 
+  // Ghi điểm/nhận xét AI vào phiếu chấm. overwrite=false: chỉ điền ô còn trống.
+  const fillFromAi = useCallback((result: AiGradingResult, overwrite: boolean, onlyQuestionId?: number, markDirty = true) => {
+    const picked = result.questions.filter((item) => onlyQuestionId === undefined || item.questionId === onlyQuestionId);
+    setScores((state) => {
+      const next = { ...state };
+      picked.forEach((item) => { if (overwrite || next[item.questionId] === undefined || next[item.questionId] === "") next[item.questionId] = String(item.score); });
+      return next;
+    });
+    setComments((state) => {
+      const next = { ...state };
+      picked.forEach((item) => { if (item.comment && (overwrite || !next[item.questionId])) next[item.questionId] = item.comment; });
+      return next;
+    });
+    if (onlyQuestionId === undefined && result.generalComment) setGeneralComment((value) => (overwrite || !value ? result.generalComment : value));
+    if (markDirty) setDirty(true);
+  }, []);
+
+  const AI_ERRORS: Record<string, string> = {
+    AI_NOT_CONFIGURED: "Máy chủ chưa có khoá API để chấm bằng AI.",
+    RATE_LIMITED: "Dịch vụ AI đang giới hạn lượt gọi, chờ khoảng một phút rồi thử lại.",
+    NO_FILES: "Bài này chưa có trang nào để AI đọc.",
+    FILES_TOO_LARGE: "Bài làm quá nặng để gửi cho AI trong một lần.",
+    ALREADY_RUNNING: "AI đang chấm bài này, chờ lượt đó xong đã.",
+    AI_BAD_OUTPUT: "AI trả kết quả không đọc được, hãy thử lại.",
+  };
+
+  const requestAiGrade = useCallback(async (submissionId: string): Promise<AiGradingResult> => {
+    const response = await fetch(`/api/submissions/${encodeURIComponent(submissionId)}/ai-grade`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await user!.getIdToken()}` },
+    });
+    const payload = await response.json().catch(() => null) as { result?: AiGradingResult; error?: string } | null;
+    if (!response.ok || !payload?.result) throw new Error(payload?.error ?? "AI_GRADE_FAILED");
+    return payload.result;
+  }, [user]);
+
+  const runAiForCurrent = async () => {
+    if (!user || !current || aiBusy) return;
+    setAiBusy("one");
+    setNotice("");
+    try {
+      const result = await requestAiGrade(current.id);
+      setAi({ id: current.id, result, configured: true });
+      fillFromAi(result, false);
+      setNotice("AI đã chấm nháp. Thầy cô xem lại từng câu rồi mới bấm Hoàn tất.");
+    } catch (aiError) {
+      setNotice(AI_ERRORS[aiError instanceof Error ? aiError.message : ""] ?? "AI chưa chấm được bài này, hãy thử lại.");
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  // Chấm lần lượt các bài chờ chấm; kết quả lưu ở máy chủ và tự điền khi mở từng bài.
+  const runAiForAll = async () => {
+    if (!user || !list || aiBusy) return;
+    const targets = list.filter((item) => item.gradingStatus === "pending" && item.essayFileCount > 0);
+    if (targets.length === 0) { setNotice("Không có bài chờ chấm nào có trang bài làm."); return; }
+    if (!window.confirm(`Cho AI chấm nháp ${targets.length} bài chờ chấm? Mỗi bài mất khoảng 10–40 giây; giữ nguyên trang này trong lúc chạy.`)) return;
+    setAiBusy("all");
+    setNotice("");
+    let done = 0;
+    let failed = 0;
+    for (const item of targets) {
+      setAiProgress(`AI đang chấm ${done + failed + 1}/${targets.length}: ${item.studentName}`);
+      try {
+        const result = await requestAiGrade(item.id);
+        done += 1;
+        if (item.id === selectedId) { setAi({ id: item.id, result, configured: true }); fillFromAi(result, false); }
+      } catch (aiError) {
+        failed += 1;
+        const code = aiError instanceof Error ? aiError.message : "";
+        if (code === "AI_NOT_CONFIGURED") break;
+        // Bị giới hạn lượt gọi: nghỉ lâu hơn trước bài kế tiếp.
+        if (code === "RATE_LIMITED") await new Promise((resolve) => window.setTimeout(resolve, 30_000));
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 4_000));
+    }
+    setAiProgress("");
+    setAiBusy(null);
+    setNotice(`AI đã chấm nháp ${done}/${targets.length} bài${failed ? `, ${failed} bài chưa chấm được` : ""}. Mở từng bài để duyệt điểm.`);
+  };
+
   // Chưa chọn bài nào: mở bài chờ chấm đầu tiên.
   useEffect(() => {
     if (selectedId || !list?.length) return;
@@ -155,9 +243,19 @@ function GradeWorkspace() {
       setGeneralComment(stored?.generalComment ?? "");
       setDirty(false);
       setNotice("");
+      // Kết quả chấm nháp của AI (nếu đã chạy): chưa có điểm lưu thì điền sẵn để giáo viên duyệt.
+      setAi(null);
+      const aiResponse = await fetch(`/api/submissions/${encodeURIComponent(selectedId)}/ai-grade`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        cache: "no-store",
+      }).catch(() => null);
+      const aiPayload = aiResponse?.ok ? await aiResponse.json().catch(() => null) as { configured?: boolean; result?: AiGradingResult | null } | null : null;
+      if (cancelled || !aiPayload) return;
+      setAi({ id: selectedId, result: aiPayload.result ?? null, configured: Boolean(aiPayload.configured) });
+      if (aiPayload.result && Object.keys(stored?.essayScores ?? {}).length === 0) fillFromAi(aiPayload.result, false, undefined, false);
     })();
     return () => { cancelled = true; };
-  }, [selectedId, user]);
+  }, [selectedId, user, fillFromAi]);
 
   const changeAnnotations = useCallback((next: EssayAnnotations) => {
     setHistory((state) => ({ past: [...state.past.slice(-99), state.present], present: next, future: [] }));
@@ -355,6 +453,22 @@ function GradeWorkspace() {
               </p>
             </div>
 
+            {ai?.id === selectedId && ai.configured && (
+              <div className="rounded-3xl border border-violet-200 bg-white p-3 shadow-[var(--shadow-soft)]">
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => void runAiForCurrent()} disabled={Boolean(aiBusy) || !current || (current.data.files.length === 0)} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-2xl bg-violet-600 px-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50">
+                    {aiBusy === "one" ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}{ai.result ? "AI chấm lại" : "Chấm bằng AI"}
+                  </button>
+                  <button type="button" onClick={() => void runAiForAll()} disabled={Boolean(aiBusy)} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-violet-200 px-3 text-sm font-semibold text-violet-800 transition hover:bg-violet-50 disabled:opacity-50">
+                    {aiBusy === "all" ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : null}AI chấm các bài chờ
+                  </button>
+                </div>
+                <p role="status" className="mt-2 text-[11px] leading-5 text-gray-500">
+                  {aiProgress || (aiBusy === "one" ? "AI đang đọc bài làm, thường mất 10–40 giây…" : ai.result ? `AI chấm nháp lúc ${new Date(ai.result.gradedAtMillis).toLocaleString("vi-VN")}. Điểm chỉ là gợi ý, học sinh chưa thấy.` : "AI đọc ảnh bài làm và chấm nháp theo thang chấm. Thầy cô duyệt rồi mới công bố.")}
+                </p>
+              </div>
+            )}
+
             <div className="max-h-[calc(100vh-22rem)] space-y-2.5 overflow-y-auto rounded-3xl border border-gray-200 bg-white p-3 shadow-[var(--shadow-soft)] lg:max-h-[calc(100vh-24rem)]">
               {essayQuestions.map((question) => {
                 const number = exam.questions.indexOf(question) + 1;
@@ -376,11 +490,16 @@ function GradeWorkspace() {
                         <span className="text-gray-500">/ {fmt(max)}</span>
                       </label>
                     </div>
+                    {(() => {
+                      const aiQuestion = ai?.id === selectedId ? ai.result?.questions.find((item) => item.questionId === question.id) : undefined;
+                      return aiQuestion && ai?.result ? <AiGradeDetail result={aiQuestion} rubric={question.rubric ?? []} onApply={() => fillFromAi(ai.result!, true, question.id)} /> : null;
+                    })()}
                     <details className="group mt-2 text-sm">
                       <summary className="cursor-pointer list-none text-xs font-semibold text-gray-500 marker:hidden"><span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>Đề bài và hướng dẫn chấm</summary>
                       <div className="mt-2 space-y-2 rounded-xl bg-gray-50 p-2.5 text-[13px] leading-6 text-gray-800">
                         <div>{processLatexText(question.questionText)}</div>
-                        {question.explanation ? <div className="border-t border-gray-200 pt-2"><ExplanationRenderer explanation={question.explanation} /></div> : <p className="text-xs text-gray-400">Đề không có \loigiai làm hướng dẫn chấm.</p>}
+                        {question.rubric?.length ? <div className="border-t border-gray-200 pt-2"><RubricList rubric={question.rubric} /></div> : null}
+                        {question.explanation ? <div className="border-t border-gray-200 pt-2"><ExplanationRenderer explanation={question.explanation} /></div> : !question.rubric?.length && <p className="text-xs text-gray-400">Đề không có \loigiai làm hướng dẫn chấm.</p>}
                       </div>
                     </details>
                     <textarea value={comments[question.id] ?? ""} onChange={(event) => { setComments({ ...comments, [question.id]: event.target.value }); setDirty(true); }}
