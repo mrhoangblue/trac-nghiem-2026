@@ -26,6 +26,7 @@ import StateIcon from "@/components/StateIcon";
 import { EditorCard, Field, Toggle, inputClass } from "@/components/exam-editor/EditorKit";
 import ExamSourceInput, { type ImportStats } from "@/components/exam-editor/ExamSourceInput";
 import ExamPreview from "@/components/exam-editor/ExamPreview";
+import { hasLatexErrors, lintQuestion } from "@/utils/latexLint";
 import { importExamFile } from "@/components/exam-editor/importExamFile";
 import { ExamInfoFields, ExamRulesFields, ExamStructurePicker, MOCK_EXAM_GRADE, type ClassOption, type ScoringConfig } from "@/components/exam-editor/ExamSettingsFields";
 import { assignsClasses, normalizeTargetType, type ExamTargetType } from "@/utils/examAudience";
@@ -346,6 +347,11 @@ export default function EditExamPage() {
     const missingAnswers = getMissingShortAnswerQuestionNumbers(previewData.questions);
     if (missingAnswers.length > 0) {
       alert(`Không thể cập nhật: câu ${missingAnswers.join(", ")} đang thiếu đáp án trả lời ngắn.`);
+      return;
+    }
+    const latexErrors = previewData.questions.flatMap((question, index) => (hasLatexErrors(lintQuestion(question)) ? [index + 1] : []));
+    if (latexErrors.length > 0) {
+      alert(`Không thể cập nhật: câu ${latexErrors.join(", ")} có công thức LaTeX không dựng được. Sửa nguồn hoặc bấm "Nhờ AI sửa" rồi phân tích lại.`);
       return;
     }
     const problems = structureProblems(structure, countQuestionsByPart(previewData.questions));

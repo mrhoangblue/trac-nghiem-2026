@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
 import { AlertTriangle, Check, X } from "lucide-react";
 import type { ParsedQuestion } from "@/utils/latexParser";
@@ -247,7 +246,7 @@ function AnswerPreview({ question, hideAnswers }: { question: ParsedQuestion; hi
           // eslint-disable-next-line @next/next/no-img-element
           <img src={question.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-20 max-w-full align-middle" />
         ) : (
-          <Latex>{String(question.correctAnswer ?? "")}</Latex>
+          processLatexText(String(question.correctAnswer ?? ""))
         )}
         {question.requiresAnswerReview && <span className="basis-full text-xs font-semibold text-amber-700">Cần nhập giá trị chữ/số để chấm tự động.</span>}
       </div>

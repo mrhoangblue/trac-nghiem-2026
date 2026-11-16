@@ -46,3 +46,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude
+
+# Bản chép câu hỏi tạm của npm run audit:latex
+.latex-audit-dump.json

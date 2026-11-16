@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
 import AdminGuard from "@/components/AdminGuard";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
@@ -11,6 +10,7 @@ import TikzRenderer from "@/components/TikzRenderer";
 import { useAuth } from "@/lib/AuthContext";
 import type { ParsedQuestion } from "@/utils/latexParser";
 import { processLatexText } from "@/utils/textProcessor";
+import { hasLatexErrors, lintQuestion } from "@/utils/latexLint";
 
 type Filter = "all" | "multiple_choice" | "true_false" | "short_answer" | "issues";
 
@@ -67,6 +67,10 @@ function questionIssues(question: ParsedQuestion): string[] {
     issues.push("Loại câu hỏi chưa xác định");
   }
   if (question.requiresAnswerReview) issues.push("Đáp án cần giáo viên xác nhận");
+  const latexIssues = lintQuestion(question);
+  if (latexIssues.length > 0) {
+    issues.push(hasLatexErrors(latexIssues) ? `LaTeX hiển thị sai (${latexIssues.length} chỗ)` : `LaTeX chưa chuẩn, đã tự sửa (${latexIssues.length} chỗ)`);
+  }
   if (question.tikzCode && !question.tikzImageUrl) issues.push("Hình TikZ câu hỏi chưa có ảnh R2");
   if (question.explanationTikzCode && !question.explanationTikzImageUrl) {
     issues.push("Hình TikZ lời giải chưa có ảnh R2");
@@ -281,7 +285,7 @@ function QuestionCard({
               </div>
             ) : (
               <strong className="rounded-xl bg-white px-4 py-2 text-lg text-success-900 shadow-sm">
-                <Latex>{String(question.correctAnswer ?? "Chưa có đáp án")}</Latex>
+                {processLatexText(String(question.correctAnswer ?? "Chưa có đáp án"))}
               </strong>
             )}
           </div>

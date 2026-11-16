@@ -17,6 +17,7 @@ import StateIcon from "@/components/StateIcon";
 import { Checklist, EditorCard, Field, inputClass, type ChecklistItem } from "@/components/exam-editor/EditorKit";
 import ExamSourceInput from "@/components/exam-editor/ExamSourceInput";
 import ExamPreview from "@/components/exam-editor/ExamPreview";
+import { hasLatexErrors, lintQuestion } from "@/utils/latexLint";
 import { importExamFile, type FileImportResponse } from "@/components/exam-editor/importExamFile";
 import { ExamInfoFields, ExamRulesFields, ExamStructurePicker, MOCK_EXAM_GRADE, type ClassOption, type ScoringConfig } from "@/components/exam-editor/ExamSettingsFields";
 import { assignsClasses, type ExamTargetType } from "@/utils/examAudience";
@@ -307,6 +308,7 @@ export default function CreateExamPage() {
 
   const missingAnswers = getMissingShortAnswerQuestionNumbers(questions);
   const timeError = validateTimeRange(startTime, endTime);
+  const latexErrorNumbers = questions.flatMap((question, index) => (hasLatexErrors(lintQuestion(question)) ? [index + 1] : []));
   const checklist: ChecklistItem[] = [
     { label: questions.length ? `Đã nhận ${questions.length} câu hỏi` : "Nhập nội dung đề", ok: questions.length > 0, hint: "Dán LaTeX rồi bấm Phân tích, hoặc tải file đề." },
     { label: "Đặt tên bài thi", ok: Boolean(examTitle.trim()) },
@@ -314,6 +316,7 @@ export default function CreateExamPage() {
     ...(hasEssayPart(structure) ? essayPointProblems(questions, Number(scoringView.part4TotalScore ?? 0)).map((problem) => ({ label: "Điểm tự luận khớp tổng Phần IV", ok: false, hint: problem })) : []),
     ...(hasEssayPart(structure) ? rubricProblems(questions, essayQuestionPoints(questions, Number(scoringView.part4TotalScore ?? 0))).map((problem) => ({ label: "Thang chấm \\buoc khớp điểm câu", ok: false, hint: problem })) : []),
     ...(questions.length ? [{ label: "Đủ đáp án trả lời ngắn", ok: missingAnswers.length === 0, hint: `Thiếu đáp án câu ${missingAnswers.join(", ")}.` }] : []),
+    ...(latexErrorNumbers.length ? [{ label: "LaTeX hiển thị đúng", ok: false, hint: `Câu ${latexErrorNumbers.join(", ")} có công thức không dựng được. Sửa nguồn hoặc bấm "Nhờ AI sửa" ở bước 1.` }] : []),
     ...(assignsClasses(targetType) ? [{ label: "Chọn lớp được giao", ok: targetClassIds.length > 0 }] : []),
     ...(timeError ? [{ label: "Khung thời gian hợp lệ", ok: false, hint: timeError }] : []),
   ];

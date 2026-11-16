@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Latex from "react-latex-next";
 import "katex/dist/katex.min.css";
 import { Award, BookOpenCheck, Check, ChevronDown, History, Home, Lightbulb, Minus, Target, TrendingUp, X } from "lucide-react";
 import { ParsedQuestion } from "@/utils/latexParser";
@@ -351,7 +350,7 @@ export default function ReviewMode({
                 )}
 
                 {q.type === "essay" && String(q.correctAnswer ?? "").trim() && (
-                  <p className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"><b>Đáp số:</b> <Latex>{String(q.correctAnswer)}</Latex></p>
+                  <p className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"><b>Đáp số:</b> {processLatexText(String(q.correctAnswer))}</p>
                 )}
 
                 {q.type === "essay" && essay?.comments[q.id] && (
@@ -372,7 +371,7 @@ export default function ReviewMode({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={q.correctAnswerImageUrl} alt="Đáp án MathType" className="inline-block h-auto max-h-16 max-w-full align-middle" />
                         ) : (
-                          <Latex>{String(q.correctAnswer ?? "")}</Latex>
+                          processLatexText(String(q.correctAnswer ?? ""))
                         )}
                       </p>
                     </div>

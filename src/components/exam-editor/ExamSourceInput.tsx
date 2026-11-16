@@ -3,6 +3,7 @@
 import { useState, type DragEvent } from "react";
 import { AlertTriangle, Code2, FileText, FileUp, Loader2, Sparkles, Trash2, Wand2 } from "lucide-react";
 import type { SmartParseCounts } from "@/utils/smartParseLatex";
+import LatexCheckPanel from "@/components/exam-editor/LatexCheckPanel";
 
 export interface ImportStats {
   questionCount: number;
@@ -153,6 +154,8 @@ export default function ExamSourceInput({
           )}
         </div>
       )}
+
+      {!importing && <LatexCheckPanel source={value} onChange={onChange} />}
 
       {warnings.length > 0 && (
         <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
