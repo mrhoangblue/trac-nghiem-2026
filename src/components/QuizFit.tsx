@@ -130,6 +130,8 @@ export function FitCard({ className = "", children }: { className?: string; chil
     if (content) mutationObserver.observe(content, { childList: true, subtree: true, characterData: true });
     // Ảnh hình vẽ tải xong làm câu hỏi cao lên: sự kiện load không nổi bọt nên bắt ở pha capture.
     box.addEventListener("load", fit, true);
+    // Bố cục phương án đổi số cột (QuizClient) làm chiều cao nội dung đổi.
+    box.addEventListener("quiz:refit", fit);
     box.addEventListener("scroll", markOverflow, { passive: true });
     window.addEventListener("resize", onWindowResize);
     void document.fonts?.ready.then(fit);
@@ -138,6 +140,7 @@ export function FitCard({ className = "", children }: { className?: string; chil
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       box.removeEventListener("load", fit, true);
+      box.removeEventListener("quiz:refit", fit);
       box.removeEventListener("scroll", markOverflow);
       window.removeEventListener("resize", onWindowResize);
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, memo, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { AlertTriangle, ArrowLeft, ArrowRight, Ban, CalendarClock, Check, Clock3, DoorOpen, GraduationCap, Info, Lock, LogIn, Send, Sparkles, Timer } from "lucide-react";
@@ -1466,11 +1466,11 @@ interface CardProps {
 }
 
 /**
- * Số cột cho 4 phương án theo độ dài chữ hiển thị (bỏ lệnh LaTeX), như đề in:
- * đáp án ngắn xếp một hàng, vừa thì 2 cột, dài hoặc có hình/bảng thì mỗi dòng một phương án.
+ * Số cột đoán trước cho 4 phương án theo độ dài chữ (bỏ lệnh LaTeX). Chỉ dùng
+ * cho lần vẽ đầu; ngay sau đó useOptionColumns đo bề rộng thật và sửa lại.
  */
-function optionGridClass(options: string[]): string {
-  if (options.some((opt) => /\\begin|\[\[EXAM_INLINE_IMAGE|\$\$|\\\[/.test(opt))) return "grid-cols-1";
+function guessOptionColumns(options: string[]): 1 | 2 | 4 {
+  if (options.some((opt) => /\\begin|\[\[EXAM_|\$\$|\\\[/.test(opt))) return 1;
   const visible = (opt: string) => opt
     .replace(/\\(?:d?frac|tfrac)/g, "")
     .replace(/\\[a-zA-Z]+/g, "")
@@ -1478,12 +1478,84 @@ function optionGridClass(options: string[]): string {
     .replace(/\s+/g, " ")
     .trim().length;
   const longest = Math.max(0, ...options.map(visible));
-  if (longest <= 14) return "grid-cols-2 lg:grid-cols-4";
-  if (longest <= 34) return "grid-cols-1 sm:grid-cols-2";
-  return "grid-cols-1";
+  if (longest <= 6) return 4;
+  if (longest <= 22) return 2;
+  return 1;
 }
 
-const QuestionCard = memo(
+const OPTION_GAP_PX = 10;
+
+/**
+ * Xếp 4 phương án như đề in, theo bề rộng thật trên màn hình: một hàng 4 cột
+ * khi mọi phương án vừa một dòng, không thì 2 cột, không nữa thì mỗi phương án
+ * một dòng (chữ tự xuống dòng, công thức quá dài thì cuộn ngang trong ô).
+ *
+ * Bề rộng được quy về cỡ chữ gốc (chia cho --fit) để việc FitCard thu nhỏ chữ
+ * không làm số cột đổi qua lại.
+ */
+function useOptionColumns(options: string[] | undefined): [RefObject<HTMLDivElement | null>, 1 | 2 | 4] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState<1 | 2 | 4>(() => (options ? guessOptionColumns(options) : 1));
+
+  useLayoutEffect(() => {
+    const grid = ref.current;
+    if (!grid) return;
+    let lastWidth = -1;
+    const measure = () => {
+      const texts = Array.from(grid.querySelectorAll<HTMLElement>("[data-option-text]"));
+      if (texts.length === 0 || grid.clientWidth === 0) return;
+      lastWidth = grid.clientWidth;
+      const fit = Number.parseFloat(getComputedStyle(grid).getPropertyValue("--fit")) || 1;
+      let widest = 0;
+      let block = false;
+      // Bề rộng của phần không ngắt dòng được (công thức dài) trong từng phương án.
+      const unbreakable: number[] = [];
+      for (const text of texts) {
+        const inner = text.firstElementChild as HTMLElement | null;
+        text.style.removeProperty("font-size");
+        if (!inner) { unbreakable.push(0); continue; }
+        if (inner.querySelector("table, img, .katex-display, br")) { block = true; break; }
+        // Bề rộng khi viết trên một dòng.
+        const previous = inner.style.width;
+        inner.style.maxWidth = "none";
+        inner.style.width = "max-content";
+        widest = Math.max(widest, inner.getBoundingClientRect().width / fit);
+        inner.style.width = "min-content";
+        unbreakable.push(inner.getBoundingClientRect().width / fit);
+        inner.style.width = previous;
+        inner.style.removeProperty("max-width");
+      }
+      // Phần ô không dành cho chữ: lề, chữ cái A–D, dấu chọn.
+      const button = texts[0].closest("button");
+      const chrome = button ? button.getBoundingClientRect().width - texts[0].getBoundingClientRect().width : 0;
+      const room = (count: number) => (grid.clientWidth - OPTION_GAP_PX * (count - 1)) / count - chrome - 8;
+      const next: 1 | 2 | 4 = block ? 1 : widest <= room(4) ? 4 : widest <= room(2) ? 2 : 1;
+      // Một cột mà công thức vẫn dài hơn ô: thu chữ của riêng phương án đó (không
+      // dưới 78%); dài hơn nữa thì ô cuộn ngang.
+      if (next === 1 && !block) {
+        texts.forEach((text, index) => {
+          const need = unbreakable[index] ?? 0;
+          if (need > room(1)) text.style.fontSize = `${Math.max(0.78, room(1) / need).toFixed(3)}em`;
+        });
+      }
+      setColumns((current) => {
+        if (current !== next) requestAnimationFrame(() => grid.dispatchEvent(new CustomEvent("quiz:refit", { bubbles: true })));
+        return next;
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(() => {
+      if (Math.abs(grid.clientWidth - lastWidth) >= 2) measure();
+    });
+    observer.observe(grid);
+    void document.fonts?.ready.then(measure);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, columns];
+}
+
+export const QuestionCard = memo(
   function QuestionCard({ question, questionNumber, p1Ans, p2Ans, p3Ans, onP1, onP2, onP3, showPartNote = false }: CardProps) {
     const { id, type, questionText, options, tikzCode, tikzImageUrl, imageUrls } = question;
 
@@ -1510,7 +1582,7 @@ const QuestionCard = memo(
         ? { label: "Tự luận",      cls: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200" }
         : { label: "Trả lời ngắn", cls: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" };
     const part = SECTION_META[type];
-    const optionGrid = type === "multiple_choice" && options ? optionGridClass(options) : "";
+    const [optionRef, optionColumns] = useOptionColumns(type === "multiple_choice" ? options : undefined);
 
     return (
       <div className="exam-reading">
@@ -1565,7 +1637,7 @@ const QuestionCard = memo(
 
         {/* P1 — Multiple choice */}
         {type === "multiple_choice" && options && (
-          <div className={`grid gap-2.5 ${optionGrid}`} role="radiogroup" aria-label={`Phương án câu ${questionNumber}`}>
+          <div ref={optionRef} className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${optionColumns}, minmax(0, 1fr))` }} role="radiogroup" aria-label={`Phương án câu ${questionNumber}`}>
             {options.map((opt, i) => {
               const selected = p1Ans[id] === i;
               return (
@@ -1583,8 +1655,8 @@ const QuestionCard = memo(
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl font-sans text-sm font-bold transition-all duration-200 ${selected ? "scale-105 bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30" : "bg-gray-100 text-gray-500 group-hover/opt:bg-indigo-50 group-hover/opt:text-indigo-600"}`}>
                     {String.fromCharCode(65 + i)}
                   </span>
-                  <span className={`flex-1 leading-relaxed ${selected ? "font-medium text-indigo-950" : "text-gray-700"}`}>
-                    {renderedOptions[i]}
+                  <span data-option-text className={`-my-1.5 min-w-0 flex-1 overflow-x-auto overflow-y-hidden py-1.5 leading-relaxed [overflow-wrap:anywhere] ${selected ? "font-medium text-indigo-950" : "text-gray-700"}`}>
+                    <span className="inline-block max-w-full align-top">{renderedOptions[i]}</span>
                   </span>
                   <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${selected ? "scale-100 bg-indigo-500 text-white opacity-100" : "scale-50 opacity-0"}`} aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
                 </button>

@@ -120,7 +120,28 @@ function dropUnmatchedClosers(body: string): string {
   return out;
 }
 
-function katexHtml(body: string, display: boolean): string {
+/**
+ * Hàng của array chứa phân số lớn (\dfrac) sát nhau tới mức mẫu số dòng trên
+ * chạm tử số dòng dưới. Thêm khoảng cách sau mỗi hàng có phân số lớn.
+ * KaTeX (như LaTeX) hiểu \\[g] là "phần dưới hàng tối thiểu g + 0.36em", nên
+ * 0.75em cho khoảng hở thật chừng 0.4em dưới một \dfrac.
+ */
+const TALL_ROW = /\\dfrac|\\displaystyle/;
+export function spaceFractionRows(body: string): string {
+  if (!body.includes("\\begin{array}") || !TALL_ROW.test(body)) return body;
+  return body.replace(/(\\begin\{array\})([\s\S]*?)(\\end\{array\})/g, (whole, open: string, inner: string, close: string) => {
+    if (!TALL_ROW.test(inner) || inner.includes("\\begin{")) return whole;
+    const rows = inner.split(/\\\\(?!\s*\[)/);
+    return open + rows.map((row, index) => {
+      if (index === rows.length - 1) return row;
+      const next = rows[index + 1];
+      return row + (TALL_ROW.test(row) && next.trim() ? "\\\\[0.75em]" : "\\\\");
+    }).join("") + close;
+  });
+}
+
+function katexHtml(source: string, display: boolean): string {
+  const body = spaceFractionRows(source);
   return katex.renderToString(body, {
     displayMode: display,
     macros: { ...KATEX_MACROS },
