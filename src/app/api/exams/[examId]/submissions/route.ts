@@ -55,6 +55,25 @@ export async function GET(
       classStudentEmails = new Set(profiles.map((profile) => String(profile.data()?.email ?? membershipEmails.get(profile.id) ?? "").trim().toLowerCase()).filter(Boolean));
     }
 
+    // Phần I: thứ tự câu và đáp án đúng, để thống kê học sinh chọn nhầm phương án nào.
+    // Đề trộn mã đảo thứ tự phương án theo từng mã nên không gộp được.
+    const versioned = (exam.versioning as { enabled?: unknown } | undefined)?.enabled === true;
+    const p1Questions = (Array.isArray(exam.questions) ? exam.questions as Array<{ id?: unknown; type?: unknown; correctAnswer?: unknown }> : [])
+      .filter((question) => question?.type === "multiple_choice");
+    const p1Correct = versioned ? [] : p1Questions.map((question) => (typeof question.correctAnswer === "number" ? question.correctAnswer : null));
+    const p1ChoicesOf = (submission: Record<string, unknown>): Array<number | null> | null => {
+      if (versioned || typeof submission.examCode === "string" || typeof submission.answersJson !== "string") return null;
+      try {
+        const answers = (JSON.parse(submission.answersJson) as { p1Ans?: Record<string, unknown> }).p1Ans ?? {};
+        return p1Questions.map((question) => {
+          const choice = answers[String(question.id)];
+          return typeof choice === "number" && Number.isInteger(choice) ? choice : null;
+        });
+      } catch {
+        return null;
+      }
+    };
+
     const snapshot = await adminDb.collection("submissions").where("examId", "==", examId).get();
     const submissions = snapshot.docs
       .map((document) => ({ id: document.id, ...document.data() } as Record<string, unknown> & { id: string }))
@@ -89,8 +108,44 @@ export async function GET(
           : 0,
         isTeacherPreview: submission.isTeacherPreview === true,
         examCode: typeof submission.examCode === "string" ? submission.examCode : null,
+        studentId: typeof submission.studentId === "string" && submission.studentId
+          ? submission.studentId
+          : typeof submission.uid === "string" ? submission.uid : null,
+        p1Choices: p1ChoicesOf(submission),
       }));
-    return NextResponse.json({ submissions }, { headers: { "Cache-Control": "private, no-store" } });
+
+    // Các lớp được giao đề mà người gọi quản lý, kèm danh sách học sinh: dùng để
+    // lọc theo lớp, so sánh lớp và biết ai chưa nộp.
+    const assignedIds = Array.from(new Set([
+      ...(Array.isArray(exam.targetClassIds) ? exam.targetClassIds : []),
+      ...(Array.isArray(exam.classIds) ? exam.classIds : []),
+    ].filter((value: unknown): value is string => typeof value === "string" && value.length > 0))).slice(0, 30);
+    const classSnapshots = assignedIds.length
+      ? await adminDb.getAll(...assignedIds.map((value) => adminDb.collection("classes").doc(value)))
+      : [];
+    const classes = await Promise.all(classSnapshots
+      .filter((item) => item.exists && (authUser.role === "admin" || item.data()?.teacherId === authUser.uid))
+      .map(async (item) => {
+        const data = item.data() ?? {};
+        const ids: string[] = (Array.isArray(data.studentIds) ? data.studentIds : [])
+          .filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
+          .slice(0, 300);
+        const profiles = ids.length
+          ? await adminDb.getAll(...ids.map((value) => adminDb.collection("users").doc(value)), { fieldMask: ["fullName", "displayName", "email"] })
+          : [];
+        return {
+          id: item.id,
+          name: typeof data.name === "string" ? data.name : "Lớp học",
+          students: profiles.map((profile) => ({
+            uid: profile.id,
+            name: String(profile.data()?.fullName ?? profile.data()?.displayName ?? profile.data()?.email ?? "Học sinh"),
+            email: String(profile.data()?.email ?? ""),
+          })),
+        };
+      }));
+    classes.sort((a, b) => a.name.localeCompare(b.name, "vi", { numeric: true }));
+
+    return NextResponse.json({ submissions, classes, p1Correct }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("GET /api/exams/[examId]/submissions failed:", error);
     return NextResponse.json({ error: "SUBMISSIONS_LOAD_FAILED" }, { status: 500 });

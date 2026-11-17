@@ -7,7 +7,8 @@ import { db } from "@/lib/firebase";
 import AdminGuard from "@/components/AdminGuard";
 import ExamShareDialog from "@/components/ExamShareDialog";
 import { useAuth } from "@/lib/AuthContext";
-import { fetchExamSubmissionCounts } from "@/lib/staffApi";
+import { authedFetch, fetchExamSubmissionCounts } from "@/lib/staffApi";
+import { foldText } from "@/utils/examResultStats";
 import {
   collection,
   getDocs,
@@ -74,6 +75,11 @@ function ExamListContent() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [pendingOnly, setPendingOnly] = useState(false);
+  /** Số bài tự luận chờ chấm của từng đề (chỉ có với đề của mình). */
+  const [pendingByExam, setPendingByExam] = useState<Record<string, number>>({});
   const [sharingExam, setSharingExam] = useState<ExamRow | null>(null);
 
   const userEmail = user?.email ?? "";
@@ -141,6 +147,13 @@ function ExamListContent() {
           };
       });
       setExams(rows);
+      // Số bài chờ chấm tải sau, không chặn danh sách.
+      void authedFetch("/api/staff/overview")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload: { perExam?: Record<string, { pendingEssays?: number }> } | null) => {
+          setPendingByExam(Object.fromEntries(Object.entries(payload?.perExam ?? {}).map(([examId, item]) => [examId, item.pendingEssays ?? 0])));
+        })
+        .catch(() => { /* thiếu số chờ chấm thì chỉ mất bộ lọc đó */ });
     } catch (err) {
       console.error("Lỗi tải danh sách:", err);
     } finally {
@@ -190,9 +203,16 @@ function ExamListContent() {
     }
   }
 
+  const gradeOptions = Array.from(new Set(tabFiltered.map((e) => e.gradeLevel).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
+  const typeOptions = Array.from(new Set(tabFiltered.map((e) => e.examType).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, "vi"));
+  const pendingTotal = tabFiltered.filter((e) => (pendingByExam[e.id] ?? 0) > 0).length;
   const filtered = tabFiltered.filter((e) =>
-    e.title.toLowerCase().includes(search.toLowerCase())
+    foldText(e.title).includes(foldText(search.trim()))
+    && (!gradeFilter || e.gradeLevel === gradeFilter)
+    && (!typeFilter || e.examType === typeFilter)
+    && (!pendingOnly || (pendingByExam[e.id] ?? 0) > 0)
   );
+  const filtering = Boolean(search.trim() || gradeFilter || typeFilter || pendingOnly);
 
   // Can a mod edit this exam?
   const canEdit = (exam: ExamRow) => {
@@ -262,15 +282,45 @@ function ExamListContent() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="mb-6">
+      {/* Tìm và lọc */}
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center">
         <input
-          type="text"
+          type="search"
           placeholder="Tìm kiếm tên đề thi…"
+          aria-label="Tìm kiếm tên đề thi"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full max-w-md p-3 border-2 border-gray-200 rounded-xl text-sm focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all"
         />
+        <div className="flex flex-wrap items-center gap-2">
+          {gradeOptions.length > 1 && (
+            <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)} aria-label="Lọc theo khối" className="rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:border-brand-400">
+              <option value="">Mọi khối</option>
+              {gradeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          )}
+          {typeOptions.length > 1 && (
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Lọc theo loại đề" className="max-w-56 rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:border-brand-400">
+              <option value="">Mọi loại đề</option>
+              {typeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          )}
+          {pendingTotal > 0 && (
+            <button
+              type="button"
+              onClick={() => setPendingOnly((value) => !value)}
+              aria-pressed={pendingOnly}
+              className={`rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition ${pendingOnly ? "border-violet-500 bg-violet-600 text-white" : "border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400"}`}
+            >
+              Còn bài chờ chấm ({pendingTotal})
+            </button>
+          )}
+          {filtering && (
+            <button type="button" onClick={() => { setSearch(""); setGradeFilter(""); setTypeFilter(""); setPendingOnly(false); }} className="px-2 py-2.5 text-sm font-semibold text-gray-500 hover:text-brand-700">
+              Bỏ lọc
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -291,7 +341,7 @@ function ExamListContent() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center text-gray-400">
             <StateIcon icon="inbox" />
-            <p>{search ? "Không tìm thấy đề thi phù hợp." : "Chưa có đề thi nào."}</p>
+            <p>{filtering ? "Không có đề thi nào khớp bộ lọc." : "Chưa có đề thi nào."}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -318,6 +368,11 @@ function ExamListContent() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-gray-900">{exam.title}</span>
+                        {(pendingByExam[exam.id] ?? 0) > 0 && (
+                          <Link href={`/admin/grade/${exam.id}`} className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-bold hover:bg-violet-200">
+                            {pendingByExam[exam.id]} chờ chấm
+                          </Link>
+                        )}
                         {!exam.hasRawLatex && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 font-medium" title="Đề cũ không thể sửa">
                             legacy

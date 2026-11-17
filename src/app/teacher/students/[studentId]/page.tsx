@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { formatDateTime } from "@/utils/examTypes";
 import { authedFetch } from "@/lib/staffApi";
+import StudentProgressChart, { type ProgressPoint } from "@/components/exam-results/StudentProgressChart";
 
 interface SubmissionDisplay {
   id: string;
@@ -129,6 +130,19 @@ export default function TeacherStudentDetailPage() {
     };
   }, [studentId, teacherEmail, authLoading, user?.uid]);
 
+  // Mỗi đề lấy lượt điểm cao nhất đã chấm xong, xếp theo ngày nộp.
+  const progress = useMemo<ProgressPoint[]>(() => {
+    const best = new Map<string, ProgressPoint>();
+    for (const row of rows) {
+      if (row.essayPending || !Number.isFinite(row.scores?.total)) continue;
+      const current = best.get(row.examId);
+      if (!current || row.scores.total > current.total) {
+        best.set(row.examId, { examId: row.examId, title: row.examTitle, total: row.scores.total, millis: row.submittedAtMillis ?? 0 });
+      }
+    }
+    return Array.from(best.values()).sort((a, b) => a.millis - b.millis);
+  }, [rows]);
+
   const returnQuery =
     `/teacher/students/${encodeURIComponent(studentId)}${fromClass ? `?fromClass=${encodeURIComponent(fromClass)}` : ""}`;
 
@@ -156,6 +170,8 @@ export default function TeacherStudentDetailPage() {
               <h1 className="text-2xl font-extrabold text-gray-900">{studentName || "—"}</h1>
               <p className="text-sm text-gray-500 mt-1">{studentEmail}</p>
             </header>
+
+            <StudentProgressChart points={progress} />
 
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-50">

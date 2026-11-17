@@ -14,7 +14,9 @@ import {
 import { formatCountdown } from "@/utils/examTypes";
 import { essayQuestionPoints, hasEssayPart } from "@/utils/examStructure";
 import { toDateTimeLocal, toStoredDateTime } from "@/utils/examSchedule";
-import { AlertTriangle, BarChart3, Crosshair, PenTool, RotateCcw, Shuffle, X } from "lucide-react";
+import { AlertTriangle, Mail, PenTool, RotateCcw, Shuffle, X } from "lucide-react";
+import { ClassPanels, NO_CLASS, QuestionBreakdown, ResultAnalytics, ResultFilters, SortHeader } from "@/components/exam-results/ExamResultPanels";
+import { classBreakdown, classIdsOf, matchesSearch, questionStats, scoreSummary, sortStudents, type ClassRoster, type ResultStudent, type SortKey } from "@/utils/examResultStats";
 import StateIcon from "@/components/StateIcon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -57,6 +59,9 @@ interface Submission {
   p4: number | null;
   gradingStatus: "pending" | "graded" | null;
   examCode: string | null;
+  studentId: string | null;
+  /** Phương án đã chọn ở Phần I; null khi đề trộn mã hoặc bài nộp cũ không lưu. */
+  p1Choices: Array<number | null> | null;
 }
 
 interface ScoreBreakdown {
@@ -283,6 +288,11 @@ export default function ExamDetailPage() {
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
   const [resetNotice, setResetNotice] = useState("");
+  const [classes, setClasses] = useState<ClassRoster[]>([]);
+  const [p1Correct, setP1Correct] = useState<Array<number | null>>([]);
+  const [classFilter, setClassFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; direction: "asc" | "desc" }>({ key: "total", direction: "desc" });
 
   useEffect(() => {
     if (!id || authLoading) return;
@@ -341,6 +351,8 @@ export default function ExamDetailPage() {
         });
         const submissionPayload = await submissionResponse.json().catch(() => null) as {
           submissions?: Array<Record<string, unknown>>;
+          classes?: ClassRoster[];
+          p1Correct?: Array<number | null>;
           error?: string;
         } | null;
         if (!submissionResponse.ok) {
@@ -363,9 +375,13 @@ export default function ExamDetailPage() {
             p4: typeof (s.scores as { p4?: unknown } | undefined)?.p4 === "number" ? (s.scores as { p4: number }).p4 : null,
             gradingStatus: s.gradingStatus === "pending" || s.gradingStatus === "graded" ? s.gradingStatus : null,
             examCode: typeof s.examCode === "string" ? s.examCode : null,
+            studentId: typeof s.studentId === "string" ? s.studentId : null,
+            p1Choices: Array.isArray(s.p1Choices) ? s.p1Choices as Array<number | null> : null,
           };
         });
         setSubmissions(subs);
+        setClasses(Array.isArray(submissionPayload?.classes) ? submissionPayload.classes : []);
+        setP1Correct(Array.isArray(submissionPayload?.p1Correct) ? submissionPayload.p1Correct : []);
       } catch (err) {
         console.error(err);
         if (!cancelled) setError("Lỗi khi tải dữ liệu. Vui lòng thử lại.");
@@ -385,37 +401,51 @@ export default function ExamDetailPage() {
   }, [exam, submissions]);
   const pendingEssays = submissions.filter((submission) => submission.gradingStatus === "pending").length;
 
-  // ── Analytics — per unique student (best attempt) ────────────────────────────
-  const analytics = useMemo(() => {
-    if (!exam || studentRows.length === 0) return null;
-    const n = studentRows.length;
-    const allScores = studentRows.map((r) => r.bestScore.total);
-
-    const avg = allScores.reduce((a, b) => a + b, 0) / n;
-    const dist = { high: 0, mid: 0, low: 0 };
-    allScores.forEach((s) => {
-      if (s >= 8) dist.high++;
-      else if (s >= 5) dist.mid++;
-      else dist.low++;
-    });
-
-    const wrong: { label: string; part: string; wrongCount: number; rate: number }[] = [];
-    for (let i = 0; i < exam.part1Count; i++) {
-      const w = studentRows.filter((r) => !(r.bestSub.part1Results[i] ?? false)).length;
-      wrong.push({ label: `Câu ${i + 1}`, part: "P1", wrongCount: w, rate: w / n });
-    }
-    for (let i = 0; i < exam.part2Count; i++) {
-      const w = studentRows.filter((r) => (r.bestSub.part2Results[i] ?? 0) < 4).length;
-      wrong.push({ label: `Câu ${exam.part1Count + i + 1}`, part: "P2", wrongCount: w, rate: w / n });
-    }
-    for (let i = 0; i < exam.part3Count; i++) {
-      const w = studentRows.filter((r) => !(r.bestSub.part3Results[i] ?? false)).length;
-      wrong.push({ label: `Câu ${exam.part1Count + exam.part2Count + i + 1}`, part: "P3", wrongCount: w, rate: w / n });
-    }
-    const top3 = [...wrong].sort((a, b) => b.rate - a.rate).slice(0, 3);
-
-    return { avg: Math.round(avg * 100) / 100, dist, top3, n };
-  }, [exam, studentRows]);
+  // ── Bảng và thống kê: mỗi học sinh một dòng (lượt điểm cao nhất) ────────────────
+  type TableRow = ResultStudent & { row: StudentRow; classIds: string[] };
+  const tableRows = useMemo<TableRow[]>(() => studentRows.map((row) => {
+    const base = { studentId: row.bestSub.studentId, email: row.studentEmail };
+    return {
+      key: row.studentEmail || row.bestSub.id,
+      name: row.studentName,
+      ...base,
+      total: row.bestScore.total,
+      p1: row.bestScore.p1,
+      p2: row.bestScore.p2,
+      p3: row.bestScore.p3,
+      part1Results: row.bestSub.part1Results,
+      part2Results: row.bestSub.part2Results,
+      part3Results: row.bestSub.part3Results,
+      p1Choices: row.bestSub.p1Choices,
+      pending: row.bestSub.gradingStatus === "pending",
+      attempts: row.attempts,
+      latestMillis: row.latestSubmittedAt?.toMillis() ?? 0,
+      elapsedSeconds: row.bestSub.totalElapsedSeconds ?? 0,
+      cheatCount: row.totalCheatCount,
+      classIds: classIdsOf(base, classes),
+      row,
+    };
+  }), [studentRows, classes]);
+  const classNames = useMemo(() => new Map(classes.map((item) => [item.id, item.name])), [classes]);
+  // Lọc theo lớp áp dụng cho cả thống kê lẫn bảng; ô tìm kiếm chỉ thu hẹp bảng.
+  const scopedRows = useMemo(() => tableRows.filter((item) => (
+    !classFilter || (classFilter === NO_CLASS ? item.classIds.length === 0 : item.classIds.includes(classFilter))
+  )), [tableRows, classFilter]);
+  const visibleRows = useMemo(
+    () => sortStudents(scopedRows.filter((item) => matchesSearch(item, search)), sort.key, sort.direction),
+    [scopedRows, search, sort],
+  );
+  const summary = useMemo(() => scoreSummary(scopedRows), [scopedRows]);
+  const stats = useMemo(
+    () => (exam ? questionStats(scopedRows, { p1: exam.part1Count, p2: exam.part2Count, p3: exam.part3Count }, p1Correct) : []),
+    [exam, scopedRows, p1Correct],
+  );
+  const breakdown = useMemo(() => classBreakdown(tableRows, classes), [tableRows, classes]);
+  const handleSort = (key: SortKey) => setSort((current) => (
+    current.key === key
+      ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+      : { key, direction: key === "name" ? "asc" : "desc" }
+  ));
 
   // ── Gửi lại email (unchanged logic) ─────────────────────────────────────────
   const handleResendEmail = async (sub: Submission) => {
@@ -662,103 +692,37 @@ export default function ExamDetailPage() {
           ))}
         </div>
 
-        {/* ── Analytics ──────────────────────────────────────────────────────── */}
-        {analytics && (
-          <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Score overview */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-extrabold text-gray-800 mb-4 flex items-center gap-2">
-                <BarChart3 size={18} className="text-brand-500" aria-hidden="true" /> Phổ điểm
-              </h2>
-              <div className="flex items-center gap-4 mb-5">
-                <div className="text-center">
-                  <p className="text-4xl font-extrabold text-brand-700">{analytics.avg}</p>
-                  <p className="text-xs text-gray-400 mt-1">Điểm trung bình</p>
-                </div>
-                <div className="flex-1 grid grid-cols-3 gap-2 text-center text-sm">
-                  <div className="bg-success-50 border border-success-100 rounded-xl py-3">
-                    <p className="text-xl font-extrabold text-success-700">{analytics.dist.high}</p>
-                    <p className="text-xs text-success-600 font-medium mt-0.5">Giỏi (≥8)</p>
-                  </div>
-                  <div className="bg-yellow-50 border border-yellow-100 rounded-xl py-3">
-                    <p className="text-xl font-extrabold text-yellow-700">{analytics.dist.mid}</p>
-                    <p className="text-xs text-yellow-600 font-medium mt-0.5">TB (5-8)</p>
-                  </div>
-                  <div className="bg-danger-50 border border-danger-100 rounded-xl py-3">
-                    <p className="text-xl font-extrabold text-danger-700">{analytics.dist.low}</p>
-                    <p className="text-xs text-danger-600 font-medium mt-0.5">Yếu (&lt;5)</p>
-                  </div>
-                </div>
-              </div>
-              {/* Score bar */}
-              <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                {analytics.n > 0 && (
-                  <>
-                    <div
-                      className="bg-success-400 h-full transition-all"
-                      style={{ width: `${(analytics.dist.high / analytics.n) * 100}%` }}
-                    />
-                    <div
-                      className="bg-yellow-400 h-full transition-all"
-                      style={{ width: `${(analytics.dist.mid / analytics.n) * 100}%` }}
-                    />
-                    <div
-                      className="bg-danger-400 h-full transition-all"
-                      style={{ width: `${(analytics.dist.low / analytics.n) * 100}%` }}
-                    />
-                  </>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mt-2 text-right">
-                {analytics.n} học sinh · {submissions.length} lượt nộp
-              </p>
-            </div>
-
-            {/* Killer questions */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-extrabold text-gray-800 mb-4 flex items-center gap-2">
-                <Crosshair size={18} className="text-danger-500" aria-hidden="true" /> Top 3 câu hỏi sát thủ
-              </h2>
-              {analytics.top3.length === 0 ? (
-                <p className="text-sm text-gray-400">Chưa đủ dữ liệu.</p>
-              ) : (
-                <div className="space-y-3">
-                  {analytics.top3.map((q, i) => {
-                    const medals = ["🥇", "🥈", "🥉"];
-                    const pct = Math.round(q.rate * 100);
-                    return (
-                      <div key={q.label} className="flex items-center gap-3">
-                        <span className="text-xl w-7 shrink-0">{medals[i]}</span>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-gray-800 text-sm">
-                              {q.label}
-                              <span className="ml-1.5 text-xs font-semibold text-gray-400">
-                                ({q.part})
-                              </span>
-                            </span>
-                            <span className="text-sm font-extrabold text-danger-600">
-                              {pct}% sai
-                            </span>
-                          </div>
-                          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="bg-danger-400 h-full rounded-full transition-all"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {q.wrongCount}/{analytics.n} học sinh làm sai
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+        {/* ── Thống kê ───────────────────────────────────────────────────────── */}
+        {tableRows.length > 0 && (classes.length > 0 && !classId) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold text-gray-500">Đang xem:</span>
+            {[{ id: "", name: "Tất cả lớp" }, ...classes].map((item) => (
+              <button
+                key={item.id || "all"}
+                type="button"
+                onClick={() => setClassFilter(item.id)}
+                aria-pressed={classFilter === item.id}
+                className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${classFilter === item.id ? "bg-brand-600 text-white shadow-sm" : "border border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:text-brand-700"}`}
+              >
+                {item.name}
+              </button>
+            ))}
           </div>
         )}
+        {summary.count > 0 && (
+          <ResultAnalytics
+            summary={summary}
+            stats={stats}
+            scopeLabel={`${summary.count} học sinh${classFilter && classFilter !== NO_CLASS ? ` · ${classNames.get(classFilter) ?? ""}` : ""}`}
+            parts={[
+              { label: "Phần I", count: exam.part1Count, average: summary.p1, max: scoringConfig.part1TotalScore, tone: "text-brand-700", bar: "bg-brand-400" },
+              { label: "Phần II", count: exam.part2Count, average: summary.p2, max: exam.part2Count, tone: "text-amber-700", bar: "bg-amber-400" },
+              { label: "Phần III", count: exam.part3Count, average: summary.p3, max: scoringConfig.part3TotalScore, tone: "text-success-700", bar: "bg-success-400" },
+            ].filter((part) => part.count > 0)}
+          />
+        )}
+        {summary.count > 0 && <QuestionBreakdown stats={stats} p1Correct={p1Correct} />}
+        <ClassPanels breakdown={breakdown} classFilter={classFilter} onClass={setClassFilter} lockedClass={Boolean(classId)} />
 
         {/* Scoring rule reminder */}
         <div className="mb-8 bg-gradient-to-r from-brand-50 to-brand-50 border border-brand-100 rounded-2xl p-5 flex flex-wrap gap-6 text-sm">
@@ -797,13 +761,19 @@ export default function ExamDetailPage() {
           </div>
         )}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-            <h2 className="font-bold text-gray-800">Danh sách học sinh đã nộp bài</h2>
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <span className="font-semibold text-brand-600">{studentRows.length} học sinh</span>
-              <span>·</span>
-              <span>{submissions.length} lượt nộp</span>
+          <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="font-bold text-gray-800">Danh sách học sinh đã nộp bài</h2>
+              <p className="mt-0.5 text-sm text-gray-400">
+                <span className="font-semibold text-brand-600">
+                  {visibleRows.length === studentRows.length ? `${studentRows.length} học sinh` : `${visibleRows.length}/${studentRows.length} học sinh`}
+                </span>
+                {" · "}{submissions.length} lượt nộp · bấm tiêu đề cột để sắp xếp
+              </p>
             </div>
+            {studentRows.length > 0 && (
+              <ResultFilters classes={classes} classFilter={classFilter} onClass={setClassFilter} lockedClass={Boolean(classId)} search={search} onSearch={setSearch} />
+            )}
           </div>
 
           {studentRows.length === 0 ? (
@@ -811,155 +781,131 @@ export default function ExamDetailPage() {
               <StateIcon icon="inbox" />
               <p>Chưa có học sinh nào nộp bài cho bài thi này.</p>
             </div>
+          ) : visibleRows.length === 0 ? (
+            <div className="px-6 py-14 text-center text-sm text-gray-500">
+              Không có học sinh nào khớp bộ lọc.{" "}
+              <button type="button" onClick={() => { setSearch(""); setClassFilter(""); }} className="font-bold text-brand-700 hover:underline">Bỏ lọc</button>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                    <th className="text-left px-6 py-3 font-semibold">Học sinh</th>
-                    <th className="text-left px-4 py-3 font-semibold">Email</th>
-                    <th className="text-center px-3 py-3 font-semibold">Số lần làm bài</th>
-                    <th className="text-center px-3 py-3 font-semibold">P1</th>
-                    <th className="text-center px-3 py-3 font-semibold">P2</th>
-                    <th className="text-center px-3 py-3 font-semibold">P3</th>
-                    <th className="text-center px-3 py-3 font-semibold">Điểm cao nhất</th>
-                    <th className="text-left px-4 py-3 font-semibold">Lần nộp gần nhất</th>
-                    <th className="text-center px-3 py-3 font-semibold">Thời gian làm</th>
-                    <th className="text-center px-3 py-3 font-semibold">Gian lận</th>
-                    <th className="text-center px-3 py-3 font-semibold">Chi tiết</th>
-                    <th className="text-center px-4 py-3 font-semibold">Thao tác</th>
+                  <tr className="bg-gray-50 text-gray-500 text-xs">
+                    <th scope="col" className="w-10 py-3 pl-5 pr-1 text-center font-semibold uppercase tracking-wider">#</th>
+                    <SortHeader label="Học sinh" sortKey="name" sort={sort} onSort={handleSort} align="left" />
+                    {classes.length > 0 && <th scope="col" className="px-2 py-3 text-left font-semibold uppercase tracking-wider">Lớp</th>}
+                    <SortHeader label="Lần" sortKey="attempts" sort={sort} onSort={handleSort} />
+                    <SortHeader label="P1" sortKey="p1" sort={sort} onSort={handleSort} />
+                    <SortHeader label="P2" sortKey="p2" sort={sort} onSort={handleSort} />
+                    <SortHeader label="P3" sortKey="p3" sort={sort} onSort={handleSort} />
+                    <SortHeader label="Điểm" sortKey="total" sort={sort} onSort={handleSort} />
+                    <SortHeader label="Nộp lúc" sortKey="latest" sort={sort} onSort={handleSort} align="left" />
+                    <SortHeader label="Làm trong" sortKey="elapsed" sort={sort} onSort={handleSort} />
+                    <SortHeader label="Gian lận" sortKey="cheat" sort={sort} onSort={handleSort} />
+                    <th scope="col" className="py-3 pl-2 pr-5 text-right font-semibold uppercase tracking-wider">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {studentRows.map((row, i) => (
-                    <tr
-                      key={row.studentEmail}
-                      className={`hover:bg-brand-50/30 transition-colors ${i % 2 === 1 ? "bg-gray-50/50" : ""}`}
-                    >
-                      {/* Avatar + Name */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                  {visibleRows.map(({ row, classIds }, i) => (
+                    <tr key={row.studentEmail || row.bestSub.id} className={`transition-colors hover:bg-brand-50/30 ${i % 2 === 1 ? "bg-gray-50/50" : ""}`}>
+                      <td className="py-3 pl-5 pr-1 text-center text-xs tabular-nums text-gray-400">{i + 1}</td>
+
+                      {/* Ảnh + tên + email gộp một ô để tên không bị bẻ thành nhiều dòng */}
+                      <td className="px-2 py-3">
+                        <div className="flex min-w-48 items-center gap-3">
                           {row.studentAvatar ? (
-                            <img
-                              src={row.studentAvatar}
-                              alt={row.studentName}
-                              className="w-8 h-8 rounded-full object-cover border border-gray-200"
-                              referrerPolicy="no-referrer"
-                            />
+                            <img src={row.studentAvatar} alt="" className="h-8 w-8 shrink-0 rounded-full border border-gray-200 object-cover" referrerPolicy="no-referrer" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center font-bold text-xs">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-600">
                               {row.studentName.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <span className="font-semibold text-gray-900">{row.studentName}</span>
-                          {row.bestSub.examCode && <span title="Mã đề của lượt điểm cao nhất" className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-700 ring-1 ring-brand-100">{row.bestSub.examCode}</span>}
+                          <div className="min-w-0">
+                            <p className="flex items-center gap-1.5 font-semibold text-gray-900">
+                              <span className="truncate">{row.studentName}</span>
+                              {row.bestSub.examCode && <span title="Mã đề của lượt điểm cao nhất" className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-700 ring-1 ring-brand-100">{row.bestSub.examCode}</span>}
+                            </p>
+                            <p className="truncate text-xs text-gray-500">{row.studentEmail}</p>
+                          </div>
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 text-gray-500 text-xs">{row.studentEmail}</td>
+                      {classes.length > 0 && (
+                        <td className="px-2 py-3">
+                          {classIds.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {classIds.map((value) => (
+                                <span key={value} className="whitespace-nowrap rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">{classNames.get(value)}</span>
+                              ))}
+                            </div>
+                          ) : <span className="text-xs text-gray-300">—</span>}
+                        </td>
+                      )}
 
-                      {/* Attempts */}
-                      <td className="px-3 py-4 text-center">
-                        <span
-                          className={`font-bold px-2.5 py-1 rounded-full text-xs ${
-                            row.attempts > 1
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-gray-100 text-gray-500"
-                          }`}
-                        >
-                          {row.attempts}x
-                        </span>
+                      <td className="px-2 py-3 text-center">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${row.attempts > 1 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"}`}>{row.attempts}</span>
                       </td>
-
-                      {/* Best score breakdown */}
-                      <td className="px-3 py-4 text-center">
-                        <span className="font-bold text-brand-700">{row.bestScore.p1}</span>
-                      </td>
-                      <td className="px-3 py-4 text-center">
-                        <span className="font-bold text-amber-700">{row.bestScore.p2}</span>
-                      </td>
-                      <td className="px-3 py-4 text-center">
-                        <span className="font-bold text-success-700">{row.bestScore.p3}</span>
-                      </td>
-                      <td className="px-3 py-4 text-center">
-                        <span
-                          className={`font-extrabold text-base px-3 py-1 rounded-lg ${
-                            row.bestScore.total >= 8
-                              ? "bg-success-100 text-success-700"
-                              : row.bestScore.total >= 5
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-danger-100 text-danger-700"
-                          }`}
-                        >
+                      <td className="px-2 py-3 text-center font-bold tabular-nums text-brand-700">{row.bestScore.p1}</td>
+                      <td className="px-2 py-3 text-center font-bold tabular-nums text-amber-700">{row.bestScore.p2}</td>
+                      <td className="px-2 py-3 text-center font-bold tabular-nums text-success-700">{row.bestScore.p3}</td>
+                      <td className="px-2 py-3 text-center">
+                        <span className={`inline-block rounded-lg px-2.5 py-1 text-base font-extrabold tabular-nums ${
+                          row.bestScore.total >= 8 ? "bg-success-100 text-success-700" : row.bestScore.total >= 5 ? "bg-yellow-100 text-yellow-700" : "bg-danger-100 text-danger-700"
+                        }`}>
                           {row.bestScore.total}
                         </span>
-                        {row.bestSub.gradingStatus === "pending" && (
-                          <span className="mt-1 block text-[10px] font-bold text-violet-700">Tự luận chờ chấm</span>
-                        )}
+                        {row.bestSub.gradingStatus === "pending" && <span className="mt-1 block text-[10px] font-bold text-violet-700">Tự luận chờ chấm</span>}
                       </td>
 
-                      {/* Latest submission time */}
-                      <td className="px-4 py-4 text-gray-500 whitespace-nowrap text-xs">
-                        {formatDateTime(row.latestSubmittedAt)}
-                      </td>
+                      <td className="whitespace-nowrap px-2 py-3 text-xs text-gray-500">{formatDateTime(row.latestSubmittedAt)}</td>
 
-                      <td className="px-3 py-4 text-center text-xs">
+                      <td className="px-2 py-3 text-center text-xs">
                         {row.bestSub.totalElapsedSeconds ? (
                           <div>
-                            <p className="font-bold text-earth">{formatCountdown(row.bestSub.totalElapsedSeconds)}</p>
+                            <p className="font-bold tabular-nums text-earth">{formatCountdown(row.bestSub.totalElapsedSeconds)}</p>
                             {(row.bestSub.idleBeforeSubmitSeconds ?? 0) >= 300 && (
-                              <p className="mt-1 font-semibold text-danger-600">
-                                nghỉ {formatCountdown(row.bestSub.idleBeforeSubmitSeconds ?? 0)}
-                              </p>
+                              <p className="mt-0.5 font-semibold text-danger-600">nghỉ {formatCountdown(row.bestSub.idleBeforeSubmitSeconds ?? 0)}</p>
                             )}
                           </div>
                         ) : <span className="text-gray-300">—</span>}
                       </td>
 
-                      {/* Total cheat events across all attempts */}
-                      <td className="px-3 py-4 text-center">
+                      <td className="px-2 py-3 text-center">
                         {row.totalCheatCount > 0 ? (
-                          <span className="font-bold text-danger-600 bg-danger-50 px-2 py-0.5 rounded-full text-xs">
-                            {row.totalCheatCount}x <AlertTriangle size={12} className="inline align-[-1px]" aria-hidden="true" />
+                          <span className="whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
+                            {row.totalCheatCount} <AlertTriangle size={12} className="inline align-[-1px]" aria-hidden="true" />
                           </span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
+                        ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
 
-                      <td className="px-3 py-4 text-center">
-                        <Link
-                          href={`/teacher/review/${row.bestSub.id}?returnTo=${encodeURIComponent(`/admin/exam/${id}`)}`}
-                          className="font-bold text-brand-700 hover:underline"
-                        >
-                          Nhật ký →
-                        </Link>
-                      </td>
-
-                      <td className="px-4 py-4 text-center">
-                        <div className="flex min-w-28 flex-col items-stretch gap-2">
+                      <td className="py-3 pl-2 pr-5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            href={`/teacher/review/${row.bestSub.id}?returnTo=${encodeURIComponent(`/admin/exam/${id}`)}`}
+                            className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-50"
+                          >
+                            Nhật ký
+                          </Link>
                           <button
+                            type="button"
                             onClick={() => handleResendEmail(row.bestSub)}
                             disabled={sendingEmail === row.bestSub.id}
-                            title={`Gửi email kết quả đến ${row.studentEmail}`}
-                            className="inline-flex items-center justify-center gap-1 text-brand-600 hover:text-brand-800 font-semibold border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={`Gửi lại email kết quả đến ${row.studentEmail}`}
+                            aria-label={`Gửi lại email kết quả cho ${row.studentName}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 text-brand-600 transition hover:border-brand-400 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {sendingEmail === row.bestSub.id ? (
-                              <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              "📧"
-                            )}
-                            {sendingEmail === row.bestSub.id ? "Đang gửi…" : "Gửi lại"}
+                            {sendingEmail === row.bestSub.id
+                              ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
+                              : <Mail size={14} aria-hidden="true" />}
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setResetError("");
-                              setStudentToReset(row);
-                            }}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-danger-200 bg-danger-50/60 px-3 py-1.5 text-xs font-bold text-danger-700 transition hover:border-danger-400 hover:bg-danger-50"
+                            onClick={() => { setResetError(""); setStudentToReset(row); }}
+                            title="Xoá các lượt làm để học sinh làm lại"
+                            aria-label={`Reset bài của ${row.studentName}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-danger-200 bg-danger-50/60 text-danger-700 transition hover:border-danger-400 hover:bg-danger-50"
                           >
-                            <RotateCcw size={13} /> Reset bài
+                            <RotateCcw size={14} aria-hidden="true" />
                           </button>
                         </div>
                       </td>
