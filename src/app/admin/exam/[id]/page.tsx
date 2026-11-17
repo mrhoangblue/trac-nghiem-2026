@@ -802,7 +802,7 @@ export default function ExamDetailPage() {
                     <SortHeader label="Nộp lúc" sortKey="latest" sort={sort} onSort={handleSort} align="left" />
                     <SortHeader label="Làm trong" sortKey="elapsed" sort={sort} onSort={handleSort} />
                     <SortHeader label="Gian lận" sortKey="cheat" sort={sort} onSort={handleSort} />
-                    <th scope="col" className="py-3 pl-2 pr-5 text-right font-semibold uppercase tracking-wider">Thao tác</th>
+                    <th scope="col" className="sticky right-0 bg-gray-50 py-3 pl-2 pr-5 text-right font-semibold uppercase tracking-wider">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -878,7 +878,7 @@ export default function ExamDetailPage() {
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
 
-                      <td className="py-3 pl-2 pr-5">
+                      <td className={`sticky right-0 py-3 pl-2 pr-5 shadow-[-8px_0_8px_-8px_rgba(16,24,40,0.12)] ${i % 2 === 1 ? "bg-gray-50" : "bg-white"}`}>
                         <div className="flex items-center justify-end gap-1.5">
                           <Link
                             href={`/teacher/review/${row.bestSub.id}?returnTo=${encodeURIComponent(`/admin/exam/${id}`)}`}

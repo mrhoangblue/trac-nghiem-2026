@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     const perExam: Record<string, { submissions: number; students: number; pendingEssays: number; average: number | null }> = {};
     const attempts: AttemptRecord[] = [];
     const allStudents = new Set<string>();
-    await Promise.all(exams.map(async (exam) => {
+    const submissionsLoaded = Promise.all(exams.map(async (exam) => {
       const snapshot = await adminDb.collection("submissions").where("examId", "==", exam.id)
         .select("studentEmail", "studentName", "uid", "studentId", "scores", "gradingStatus", "submittedAt", "status", "isTeacherPreview")
         .get();
@@ -93,8 +93,9 @@ export async function GET(request: NextRequest) {
       };
     }));
 
+    // Chạy song song với truy vấn bài nộp: hai phần không phụ thuộc nhau.
     // ── Lớp của giáo viên: danh sách học sinh và yêu cầu chờ duyệt ───────────
-    const classes = await Promise.all(classSnapshot.docs.map(async (document) => {
+    const classesLoaded = Promise.all(classSnapshot.docs.map(async (document) => {
       const data = document.data();
       const ids: string[] = (Array.isArray(data.studentIds) ? data.studentIds : [])
         .filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
           .map((exam) => exam.id),
       };
     }));
+    const [classes] = await Promise.all([classesLoaded, submissionsLoaded]);
 
     const attention = attentionList(buildProgress(attempts, examTitles, classes)).slice(0, 12).map((item) => ({
       studentId: item.studentId,
