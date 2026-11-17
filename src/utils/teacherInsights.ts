@@ -108,7 +108,11 @@ export function buildProgress(
   for (const item of classes) {
     for (const member of item.students) {
       const key = keyOf(member.uid, member.email);
-      if (key && !byStudent.has(key)) byStudent.set(key, { studentId: member.uid, name: member.name, email: member.email, best: new Map() });
+      if (!key) continue;
+      const existing = byStudent.get(key);
+      // Bài nộp thường chỉ có email; mã học sinh lấy từ danh sách lớp để mở được trang học sinh.
+      if (existing) { if (!existing.studentId) existing.studentId = member.uid; }
+      else byStudent.set(key, { studentId: member.uid, name: member.name, email: member.email, best: new Map() });
     }
   }
   return Array.from(byStudent.entries()).map(([key, entry]) => {
