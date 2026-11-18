@@ -10,7 +10,8 @@ import {
 import AdminGuard from "@/components/AdminGuard";
 import StateIcon from "@/components/StateIcon";
 import AiGradeDetail from "@/components/essay/AiGradeDetail";
-import RubricList from "@/components/essay/RubricList";
+import RubricChecklist from "@/components/essay/RubricChecklist";
+import CommentTemplates from "@/components/essay/CommentTemplates";
 import ExplanationRenderer from "@/components/ExplanationRenderer";
 import EssayAnnotator, { type AnnotationTool } from "@/components/essay/EssayAnnotator";
 import { useEssayPages } from "@/components/essay/useEssayPages";
@@ -93,6 +94,7 @@ function GradeWorkspace() {
   const [filter, setFilter] = useState<"all" | "pending">("all");
   const [autoNote, setAutoNote] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [ticks, setTicks] = useState<Record<number, boolean[]>>({});
   // Bản mới nhất của phiếu chấm, để tự lưu và phím tắt đọc được mà không phải gắn lại.
   const latest = useRef({ id: "", dirty: false, invalid: false, body: "" });
   const autoInflight = useRef<Promise<boolean> | null>(null);
@@ -156,6 +158,18 @@ function GradeWorkspace() {
       picked.forEach((item) => { if (item.comment && (overwrite || !next[item.questionId])) next[item.questionId] = item.comment; });
       return next;
     });
+    if (overwrite) {
+      setTicks((state) => {
+        const next = { ...state };
+        picked.forEach((item) => {
+          const ticked = item.steps.map((step) => step.awarded >= step.points - 1e-9);
+          const sum = item.steps.reduce((total, step, index) => (ticked[index] ? total + step.points : total), 0);
+          // Chỉ tick khi các ý đạt trọn điểm cộng lại đúng điểm AI chấm; điểm lẻ từng phần thì để giáo viên tự tick.
+          if (ticked.length > 0 && Math.abs(sum - item.score) < 1e-6) next[item.questionId] = ticked; else delete next[item.questionId];
+        });
+        return next;
+      });
+    }
     if (onlyQuestionId === undefined && result.generalComment) setGeneralComment((value) => (overwrite || !value ? result.generalComment : value));
     if (markDirty) setDirty(true);
   }, []);
@@ -248,6 +262,7 @@ function GradeWorkspace() {
       setScores(Object.fromEntries(Object.entries(stored?.essayScores ?? {}).map(([key, value]) => [key, String(value)])));
       setComments(stored?.essayComments ?? {});
       setGeneralComment(stored?.generalComment ?? "");
+      setTicks({});
       setDirty(false);
       setNotice("");
       // Kết quả chấm nháp của AI (nếu đã chạy): chưa có điểm lưu thì điền sẵn để giáo viên duyệt.
@@ -279,6 +294,7 @@ function GradeWorkspace() {
       const next = Math.min(max, Math.round((Number(state[activeQuestion] || 0) + points) * 100) / 100);
       return { ...state, [activeQuestion]: String(next) };
     });
+    setTicks((state) => { const next = { ...state }; delete next[activeQuestion]; return next; });
   }, [activeQuestion, maxPoints]);
 
   useEffect(() => {
@@ -312,6 +328,27 @@ function GradeWorkspace() {
     const value = Number(raw);
     return !Number.isFinite(value) || value < 0 || value > (maxPoints.get(question.id) ?? 0);
   });
+
+  const editScore = (questionId: number, value: string) => {
+    setScores((state) => ({ ...state, [questionId]: value }));
+    setTicks((state) => { const next = { ...state }; delete next[questionId]; return next; });
+    setDirty(true);
+  };
+  const toggleStep = (question: ParsedQuestion, index: number) => {
+    const rubric = question.rubric ?? [];
+    const next = rubric.map((_, i) => (i === index ? !(ticks[question.id]?.[i]) : Boolean(ticks[question.id]?.[i])));
+    const sum = rubric.reduce((total, step, i) => (next[i] ? total + step.points : total), 0);
+    const max = maxPoints.get(question.id) ?? 0;
+    setTicks((state) => ({ ...state, [question.id]: next }));
+    setScores((state) => ({ ...state, [question.id]: String(Math.min(max, Math.round(sum * 100) / 100)) }));
+    setDirty(true);
+  };
+  const addComment = (key: string | number, text: string) => {
+    const apply = (existing: string) => (existing.trim() ? `${existing.trim()} ${text}` : text);
+    if (key === "general") setGeneralComment(apply);
+    else setComments((state) => ({ ...state, [key]: apply(state[key] ?? "") }));
+    setDirty(true);
+  };
 
   useEffect(() => {
     latest.current = {
@@ -592,32 +629,41 @@ function GradeWorkspace() {
                       <label className="ml-auto flex items-center gap-1.5 text-sm">
                         <span className="sr-only">Điểm câu {number}</span>
                         <input type="number" inputMode="decimal" min={0} max={max} step={0.25} value={raw}
-                          onChange={(event) => { setScores({ ...scores, [question.id]: event.target.value }); setDirty(true); }}
+                          onChange={(event) => editScore(question.id, event.target.value)}
                           aria-invalid={over}
                           className={`h-10 w-20 rounded-xl border px-2 text-right font-display font-bold tabular-nums outline-none focus:border-brand-400 ${over ? "border-rose-400 bg-rose-50 text-rose-700" : "border-gray-200"}`} />
                         <span className="text-gray-500">/ {fmt(max)}</span>
                       </label>
                     </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={`Điểm nhanh câu ${number}`}>
+                      <span className="text-xs text-gray-500">Điểm nhanh</span>
+                      {[["0", 0], ["½", max / 2], ["Tối đa", max]].map(([label, value]) => (
+                        <button key={String(label)} type="button" onClick={() => editScore(question.id, String(Math.round(Number(value) * 100) / 100))}
+                          className="min-h-8 rounded-full border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 hover:border-brand-300 hover:bg-brand-50">{label}</button>
+                      ))}
+                    </div>
+                    {question.rubric?.length ? <RubricChecklist rubric={question.rubric} ticked={ticks[question.id] ?? []} onToggle={(index) => toggleStep(question, index)} /> : null}
                     {(() => {
                       const aiQuestion = ai?.id === selectedId ? ai.result?.questions.find((item) => item.questionId === question.id) : undefined;
                       return aiQuestion && ai?.result ? <AiGradeDetail result={aiQuestion} rubric={question.rubric ?? []} onApply={() => fillFromAi(ai.result!, true, question.id)} /> : null;
                     })()}
                     <details className="group mt-2 text-sm">
-                      <summary className="cursor-pointer list-none text-xs font-semibold text-gray-500 marker:hidden"><span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>Đề bài và hướng dẫn chấm</summary>
+                      <summary className="cursor-pointer list-none text-xs font-semibold text-gray-500 marker:hidden"><span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>Đề bài và lời giải mẫu</summary>
                       <div className="mt-2 space-y-2 rounded-xl bg-gray-50 p-2.5 text-[13px] leading-6 text-gray-800">
                         <div>{processLatexText(question.questionText)}</div>
-                        {question.rubric?.length ? <div className="border-t border-gray-200 pt-2"><RubricList rubric={question.rubric} /></div> : null}
                         {question.explanation ? <div className="border-t border-gray-200 pt-2"><ExplanationRenderer explanation={question.explanation} /></div> : !question.rubric?.length && <p className="text-xs text-gray-400">Đề không có \loigiai làm hướng dẫn chấm.</p>}
                       </div>
                     </details>
                     <textarea value={comments[question.id] ?? ""} onChange={(event) => { setComments({ ...comments, [question.id]: event.target.value }); setDirty(true); }}
                       rows={2} placeholder="Nhận xét câu này (không bắt buộc)" aria-label={`Nhận xét câu ${number}`}
                       className="mt-2 w-full resize-y rounded-xl border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-brand-400" />
+                    <CommentTemplates current={comments[question.id] ?? ""} onPick={(text) => addComment(question.id, text)} />
                   </div>
                 );
               })}
               <textarea value={generalComment} onChange={(event) => { setGeneralComment(event.target.value); setDirty(true); }} rows={2} placeholder="Nhận xét chung cho cả bài" aria-label="Nhận xét chung"
                 className="w-full resize-y rounded-xl border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-brand-400" />
+              <CommentTemplates current={generalComment} onPick={(text) => addComment("general", text)} />
             </div>
 
             {notice && <p role="status" className="max-lg:hidden rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">{notice}</p>}
@@ -643,7 +689,7 @@ function GradeWorkspace() {
                   <label className="flex shrink-0 items-center gap-1 text-sm">
                     <span className="sr-only">Điểm câu {activeNumber}</span>
                     <input type="number" inputMode="decimal" min={0} max={activeMax} step={0.25} value={scores[activeQuestion] ?? ""}
-                      onChange={(event) => { setScores({ ...scores, [activeQuestion]: event.target.value }); setDirty(true); }}
+                      onChange={(event) => editScore(activeQuestion, event.target.value)}
                       className="h-11 w-[4.5rem] rounded-xl border border-gray-200 px-2 text-right font-display font-bold tabular-nums outline-none focus:border-brand-400" />
                     <span className="text-gray-500">/ {fmt(activeMax)}</span>
                   </label>
