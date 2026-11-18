@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Coins, FileSearch, Gauge, Home, LogOut, ScrollText, ShieldCheck, UsersRound } from "lucide-react";
+import { Activity, Coins, FileSearch, Gauge, GraduationCap, Home, LogOut, School, ScrollText, ShieldAlert, ShieldCheck, UsersRound } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { systemRequest } from "@/components/system/ui";
 
 const NAV = [
   { href: "/system", label: "Tổng quan", icon: Gauge },
   { href: "/system/users", label: "Người dùng", icon: UsersRound },
+  { href: "/system/teachers", label: "Giáo viên", icon: GraduationCap },
+  { href: "/system/classes", label: "Lớp học", icon: School },
   { href: "/system/exams", label: "Đề thi", icon: FileSearch },
+  { href: "/system/risks", label: "An toàn", icon: ShieldAlert },
   { href: "/system/costs", label: "Chi phí", icon: Coins },
+  { href: "/system/health", label: "Hệ thống", icon: Activity },
   { href: "/system/audit", label: "Nhật ký", icon: ScrollText },
 ] as const;
 
@@ -80,10 +84,10 @@ export default function SystemShell({ children }: { children: React.ReactNode })
             <span className="flex items-center gap-2 font-display text-sm font-extrabold text-gray-900"><ShieldCheck size={17} className="text-indigo-600" aria-hidden="true" />Quản trị hệ thống</span>
             <button type="button" onClick={logout} aria-label="Đăng xuất" className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500"><LogOut size={17} aria-hidden="true" /></button>
           </div>
-          <nav aria-label="Menu quản trị" className="grid grid-cols-5 border-t border-gray-100">
+          <nav aria-label="Menu quản trị" className="no-scrollbar flex overflow-x-auto border-t border-gray-100">
             {NAV.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href} aria-current={isActive(href) ? "page" : undefined}
-                className={`flex min-h-12 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${isActive(href) ? "text-indigo-700" : "text-gray-500"}`}>
+                className={`flex min-h-12 min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-semibold ${isActive(href) ? "text-indigo-700" : "text-gray-500"}`}>
                 <Icon size={17} aria-hidden="true" />{label}
               </Link>
             ))}

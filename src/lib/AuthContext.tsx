@@ -56,6 +56,8 @@ interface AuthContextValue {
   loading: boolean;
   isAdmin: boolean;
   isMod: boolean;
+  /** Tài khoản quản trị hệ thống (máy chủ xác nhận). null: đang kiểm tra. */
+  isSystemAdmin: boolean | null;
   /** SAFARI: plain function — must not be async so popup opens inside gesture */
   login: () => void;
   logout: () => void;
@@ -103,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sysCheck, setSysCheck] = useState<{ uid: string; ok: boolean } | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -153,16 +156,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.style.setProperty("--exam-scale", String(EXAM_FONT_SCALE[examFontScale]));
   }, [examFontScale]);
 
+  // ── Tài khoản quản trị hệ thống: máy chủ xác nhận, bỏ qua chọn vai trò ────
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    void (async () => {
+      let ok = false;
+      try {
+        const response = await fetch("/api/system/me", { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: "no-store" });
+        ok = response.ok;
+      } catch { /* mất mạng: coi như người dùng thường */ }
+      if (!cancelled) setSysCheck({ uid: user.uid, ok });
+    })();
+    return () => { cancelled = true; };
+  }, [loading, user]);
+  const isSystemAdmin: boolean | null = !user ? false : sysCheck?.uid === user.uid ? sysCheck.ok : null;
+
+  // Vừa đăng nhập: vào thẳng khu quản trị một lần mỗi phiên trình duyệt, sau đó vẫn xem được trang người học.
+  useEffect(() => {
+    if (isSystemAdmin !== true) return;
+    if (pathname !== "/" && pathname !== "/onboarding") return;
+    try {
+      if (window.sessionStorage.getItem("system-admin-landed")) return;
+      window.sessionStorage.setItem("system-admin-landed", "1");
+    } catch { /* sessionStorage bị chặn: chỉ chuyển hướng mỗi lần mở trang chủ */ }
+    router.replace("/system");
+  }, [isSystemAdmin, pathname, router]);
+
   // ── Route guard: profile incomplete → force /onboarding ───────────────────
   useEffect(() => {
     if (loading) return;
     if (!user) return;
+    if (isSystemAdmin !== false) return; // đang kiểm tra hoặc là quản trị hệ thống: không ép chọn vai trò
     if (OPEN_ROUTES.includes(pathname)) return; // already there — don't loop
     if (pathname.startsWith("/system")) return; // khu quản trị hệ thống không cần hồ sơ học sinh/giáo viên
     if (!userProfile) {
       router.replace("/onboarding");
     }
-  }, [loading, user, userProfile, pathname, router]);
+  }, [loading, user, userProfile, pathname, router, isSystemAdmin]);
 
   // ── Route guard: profile complete + on /onboarding → redirect home ─────────
   useEffect(() => {
@@ -192,6 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    try { window.sessionStorage.removeItem("system-admin-landed"); } catch { /* bỏ qua */ }
     signOut(auth).catch((err) => console.error("signOut error:", err));
   };
 
@@ -204,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, userProfile, loading, isAdmin, isMod, login, logout, refreshProfile }}
+      value={{ user, userProfile, loading, isAdmin, isMod, isSystemAdmin, login, logout, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

@@ -63,7 +63,9 @@ export function millis(value: unknown): number | null {
   if (value && typeof value === "object" && "toMillis" in value && typeof (value as { toMillis: unknown }).toMillis === "function") {
     return (value as { toMillis: () => number }).toMillis();
   }
-  return typeof value === "number" ? value : null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") { const parsed = Date.parse(value); return Number.isNaN(parsed) ? null : parsed; }
+  return null;
 }
 
 /** Khóa ngày theo giờ Việt Nam, dạng yyyy-mm-dd. */

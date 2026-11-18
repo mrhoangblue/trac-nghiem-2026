@@ -92,7 +92,7 @@ export function Kpi({ label, value, icon: Icon, footer, tone = "default" }: {
 }
 
 /** Biểu đồ cột theo ngày bằng SVG: cột xám nhạt, cột cuối đậm; rê chuột xem số liệu chính xác. */
-export function BarChart({ points, height = 120, color = "#4f46e5" }: { points: Array<{ label: string; value: number }>; height?: number; color?: string }) {
+export function BarChart({ points, height = 120, color = "#4f46e5", rawLabels = false }: { points: Array<{ label: string; value: number }>; height?: number; color?: string; rawLabels?: boolean }) {
   const max = Math.max(1, ...points.map((point) => point.value));
   const width = 600;
   const gap = 3;
@@ -112,9 +112,9 @@ export function BarChart({ points, height = 120, color = "#4f46e5" }: { points: 
         })}
       </svg>
       <div className="mt-1 flex justify-between text-[11px] tabular-nums text-gray-400">
-        <span>{points[0]?.label.slice(5).split("-").reverse().join("/")}</span>
+        <span>{rawLabels ? points[0]?.label : points[0]?.label.slice(5).split("-").reverse().join("/")}</span>
         <span className="font-semibold text-gray-600">{fmtNum(total)}</span>
-        <span>{points[points.length - 1]?.label.slice(5).split("-").reverse().join("/")}</span>
+        <span>{rawLabels ? points[points.length - 1]?.label : points[points.length - 1]?.label.slice(5).split("-").reverse().join("/")}</span>
       </div>
     </div>
   );
@@ -169,6 +169,70 @@ export function ReasonDialog({ title, detail, confirmLabel, danger, requireReaso
             className={`h-11 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${danger ? "bg-rose-600 hover:bg-rose-700" : "bg-indigo-600 hover:bg-indigo-700"}`}>{busy ? "Đang xử lý…" : confirmLabel}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Phễu: mỗi bước một thanh, độ dài theo tỉ lệ so với bước đầu, kèm tỉ lệ giữ lại so với bước trước. */
+export function Funnel({ steps, color = "bg-indigo-500" }: { steps: Array<{ label: string; value: number }>; color?: string }) {
+  const top = Math.max(1, steps[0]?.value ?? 1);
+  return (
+    <ol className="space-y-2.5">
+      {steps.map((step, index) => {
+        const previous = index > 0 ? steps[index - 1].value : 0;
+        return (
+          <li key={step.label}>
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="font-semibold text-gray-700">{step.label}</span>
+              <span className="tabular-nums text-gray-500"><span className="font-display text-sm font-extrabold text-gray-900">{fmtNum(step.value)}</span>{index > 0 && previous > 0 ? ` · ${Math.round((step.value / previous) * 100)}%` : ""}</span>
+            </div>
+            <div className="mt-1 h-2 rounded-full bg-gray-100"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(1, (step.value / top) * 100)}%`, opacity: 1 - index * 0.12 }} /></div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Danh sách xếp hạng với thanh dài tương đối. */
+export function RankList({ items, empty = "Chưa có dữ liệu." }: { items: Array<{ label: string; value: number; sub?: string }>; empty?: string }) {
+  if (items.length === 0) return <p className="py-6 text-center text-sm text-gray-400">{empty}</p>;
+  const max = Math.max(1, ...items.map((item) => item.value));
+  return (
+    <ul className="space-y-2.5">
+      {items.map((item) => (
+        <li key={item.label}>
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate font-semibold text-gray-800">{item.label}</span>
+            <span className="shrink-0 text-xs tabular-nums text-gray-500"><span className="font-bold text-gray-900">{fmtNum(item.value)}</span>{item.sub ? ` · ${item.sub}` : ""}</span>
+          </div>
+          <div className="mt-1 h-1.5 rounded-full bg-gray-100"><div className="h-full rounded-full bg-indigo-400" style={{ width: `${Math.max(2, (item.value / max) * 100)}%` }} /></div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Bảng giữ chân: mỗi hàng một nhóm học sinh theo tuần đăng ký, ô đậm dần theo tỉ lệ còn nộp bài ở các tuần sau. */
+export function CohortTable({ cohorts }: { cohorts: Array<{ label: string; size: number; retained: Array<number | null> }> }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[420px] text-xs">
+        <thead><tr className="text-left text-gray-500"><th className="py-1.5 pr-3 font-semibold">Tuần đăng ký</th><th className="px-2 text-right font-semibold">Số HS</th>{["Tuần 0", "+1", "+2", "+3", "+4"].map((label) => <th key={label} className="px-1 text-center font-semibold">{label}</th>)}</tr></thead>
+        <tbody>
+          {cohorts.map((row) => (
+            <tr key={row.label}>
+              <td className="py-1 pr-3 font-semibold text-gray-700">{row.label}</td>
+              <td className="px-2 text-right tabular-nums text-gray-500">{fmtNum(row.size)}</td>
+              {row.retained.map((value, index) => (
+                <td key={index} className="p-0.5">
+                  <div className="flex h-8 items-center justify-center rounded-md text-[11px] font-bold tabular-nums" style={value === null ? { background: "#f3f4f6", color: "#9ca3af" } : { background: `rgba(79,70,229,${0.08 + (value / 100) * 0.7})`, color: value > 55 ? "#fff" : "#312e81" }}>{value === null ? "—" : `${value}%`}</div>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
