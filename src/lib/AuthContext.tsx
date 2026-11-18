@@ -27,7 +27,6 @@ import { EXAM_FONT_SCALE, resolveUserSettings, type UserSettings } from "@/utils
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const ADMIN_EMAIL = "mrhoangblue@gmail.com";
 
 // Routes that bypass the profile-complete guard
 const OPEN_ROUTES = ["/onboarding"];
@@ -118,28 +117,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Fetch / upsert user profile from Firestore ─────────────────────────────
   const fetchProfile = useCallback(async (firebaseUser: User): Promise<UserProfile | null> => {
     const ref = doc(db, "users", firebaseUser.uid);
-
-    // Admin VIP: ensure role=admin in Firestore then return profile
-    if (firebaseUser.email === ADMIN_EMAIL) {
-      const snap = await getDoc(ref);
-      if (!snap.exists() || snap.data().role !== "admin") {
-        await setDoc(
-          ref,
-          {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            fullName: firebaseUser.displayName ?? "Admin",
-            school: "Royal School",
-            role: "admin",
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-        const updated = await getDoc(ref);
-        return (updated.data() as UserProfile) ?? null;
-      }
-      return snap.data() as UserProfile;
-    }
 
     // Regular user: fetch doc, return null if incomplete
     const snap = await getDoc(ref);
