@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import {
-  ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Eraser, Hand, Highlighter, Loader2, Minus, PenLine, Plus, Redo2, Save, Send, Sparkles, Stamp, Type, Undo2,
+  ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eraser, Hand, Highlighter, Loader2, Minus, PenLine, Plus, Redo2, Save, Send, Sparkles, Stamp, Type, Undo2,
 } from "lucide-react";
 import AdminGuard from "@/components/AdminGuard";
 import StateIcon from "@/components/StateIcon";
@@ -92,6 +92,7 @@ function GradeWorkspace() {
   const [aiProgress, setAiProgress] = useState("");
   const [filter, setFilter] = useState<"all" | "pending">("all");
   const [autoNote, setAutoNote] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
   // Bản mới nhất của phiếu chấm, để tự lưu và phím tắt đọc được mà không phải gắn lại.
   const latest = useRef({ id: "", dirty: false, invalid: false, body: "" });
   const autoInflight = useRef<Promise<boolean> | null>(null);
@@ -435,11 +436,19 @@ function GradeWorkspace() {
     return <div role="status" className="flex flex-1 items-center justify-center py-20 text-sm text-gray-500"><Loader2 size={18} className="mr-2 animate-spin" aria-hidden="true" />Đang tải bài cần chấm…</div>;
   }
 
+  const questionIndex = essayQuestions.findIndex((question) => question.id === activeQuestion);
+  const activeMax = activeQuestion === null ? 0 : maxPoints.get(activeQuestion) ?? 0;
+  const activeNumber = questionIndex < 0 ? 0 : exam.questions.indexOf(essayQuestions[questionIndex]) + 1;
+  const cycleQuestion = (delta: number) => {
+    const target = essayQuestions[questionIndex + delta];
+    if (target) setActiveQuestion(target.id);
+  };
+  const statusLine = notice || (dirty ? "Có thay đổi chưa lưu…" : autoNote);
   const pendingCount = list.filter((item) => item.gradingStatus === "pending").length;
   const currentItem = list.find((item) => item.id === selectedId);
 
   return (
-    <div className="workspace-page mx-auto w-full max-w-[1600px] px-3 pb-8 pt-5 sm:px-5">
+    <div className="workspace-page mx-auto w-full max-w-[1600px] px-3 pb-36 pt-5 sm:px-5 lg:pb-8">
       <header className="mb-4 flex flex-wrap items-center gap-3">
         <Link href={`/admin/exam/${examId}`} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-brand-700" aria-label="Về kết quả đề"><ArrowLeft size={18} aria-hidden="true" /></Link>
         <div className="min-w-0 flex-1">
@@ -534,7 +543,8 @@ function GradeWorkspace() {
             </div>
           </section>
 
-          <aside aria-label="Phiếu chấm" className="min-w-0 space-y-3 lg:sticky lg:top-16">
+          <aside aria-label="Phiếu chấm" className="min-w-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 lg:sticky lg:top-16">
+            <div id="phieu-cham-noi-dung" className={`min-w-0 space-y-3 max-lg:max-h-[62dvh] max-lg:overflow-y-auto max-lg:rounded-t-3xl max-lg:border max-lg:border-b-0 max-lg:border-gray-200 max-lg:bg-gray-50 max-lg:p-3 max-lg:shadow-2xl ${sheetOpen ? "" : "max-lg:hidden"}`}>
             <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-[var(--shadow-soft)]">
               <p className="truncate font-display font-bold text-gray-900">{currentItem?.studentName ?? current?.data.submission?.studentName ?? "Học sinh"}</p>
               <p className="truncate text-xs text-gray-500">{currentItem?.studentEmail}</p>
@@ -567,7 +577,7 @@ function GradeWorkspace() {
               </div>
             )}
 
-            <div className="max-h-[calc(100vh-22rem)] space-y-2.5 overflow-y-auto rounded-3xl border border-gray-200 bg-white p-3 shadow-[var(--shadow-soft)] lg:max-h-[calc(100vh-24rem)]">
+            <div className="space-y-2.5 rounded-3xl border border-gray-200 bg-white p-3 shadow-[var(--shadow-soft)] lg:max-h-[calc(100vh-24rem)] lg:overflow-y-auto">
               {essayQuestions.map((question) => {
                 const number = exam.questions.indexOf(question) + 1;
                 const max = maxPoints.get(question.id) ?? 0;
@@ -610,9 +620,9 @@ function GradeWorkspace() {
                 className="w-full resize-y rounded-xl border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-brand-400" />
             </div>
 
-            {notice && <p role="status" className="rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">{notice}</p>}
-            {!notice && (dirty || autoNote) && <p role="status" className={`px-1 text-xs font-semibold ${dirty ? "text-amber-700" : autoNote.startsWith("Chưa") ? "text-rose-700" : "text-emerald-700"}`}>{dirty ? "Có thay đổi chưa lưu…" : autoNote}</p>}
-            <div className="grid grid-cols-[auto_1fr] gap-2">
+            {notice && <p role="status" className="max-lg:hidden rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">{notice}</p>}
+            {!notice && (dirty || autoNote) && <p role="status" className={`max-lg:hidden px-1 text-xs font-semibold ${dirty ? "text-amber-700" : autoNote.startsWith("Chưa") ? "text-rose-700" : "text-emerald-700"}`}>{dirty ? "Có thay đổi chưa lưu…" : autoNote}</p>}
+            <div className="hidden grid-cols-[auto_1fr] gap-2 lg:grid">
               <button type="button" onClick={() => void save(false)} disabled={Boolean(saving) || !current} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:border-brand-300 disabled:opacity-50">
                 {saving === "draft" ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}Lưu nháp
               </button>
@@ -621,7 +631,37 @@ function GradeWorkspace() {
                 {currentItem?.gradingStatus === "graded" ? "Cập nhật điểm" : "Hoàn tất & chấm bài tiếp"}
               </button>
             </div>
-            <p className="px-1 text-[11px] leading-5 text-gray-400">Học sinh chỉ thấy điểm, bài chữa và nhận xét sau khi bấm Hoàn tất. Phím tắt: V P H T S E, Ctrl+Z, [ bài trước, ] bài sau. Bản nháp tự lưu sau 8 giây.</p>
+            <p className="hidden px-1 lg:block text-[11px] leading-5 text-gray-400">Học sinh chỉ thấy điểm, bài chữa và nhận xét sau khi bấm Hoàn tất. Phím tắt: V P H T S E, Ctrl+Z, [ bài trước, ] bài sau. Bản nháp tự lưu sau 8 giây.</p>
+                      </div>
+            <div className="border-t border-gray-200 bg-white px-3 pt-2 shadow-[0_-8px_24px_-12px_rgb(16_24_40/.3)] lg:hidden" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+              {statusLine && <p role="status" className="mb-1 truncate text-[11px] font-semibold text-gray-600">{statusLine}</p>}
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => cycleQuestion(-1)} disabled={questionIndex <= 0} aria-label="Câu trước" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-600 disabled:opacity-30"><ChevronLeft size={18} aria-hidden="true" /></button>
+                <span className="min-w-0 flex-1 text-center font-display text-sm font-bold text-gray-900">Câu {activeNumber}<span className="ml-1 text-xs font-semibold text-gray-400">({questionIndex + 1}/{essayQuestions.length})</span></span>
+                <button type="button" onClick={() => cycleQuestion(1)} disabled={questionIndex >= essayQuestions.length - 1} aria-label="Câu sau" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-600 disabled:opacity-30"><ChevronRight size={18} aria-hidden="true" /></button>
+                {activeQuestion !== null && (
+                  <label className="flex shrink-0 items-center gap-1 text-sm">
+                    <span className="sr-only">Điểm câu {activeNumber}</span>
+                    <input type="number" inputMode="decimal" min={0} max={activeMax} step={0.25} value={scores[activeQuestion] ?? ""}
+                      onChange={(event) => { setScores({ ...scores, [activeQuestion]: event.target.value }); setDirty(true); }}
+                      className="h-11 w-[4.5rem] rounded-xl border border-gray-200 px-2 text-right font-display font-bold tabular-nums outline-none focus:border-brand-400" />
+                    <span className="text-gray-500">/ {fmt(activeMax)}</span>
+                  </label>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button type="button" onClick={() => setSheetOpen((open) => !open)} aria-expanded={sheetOpen} aria-controls="phieu-cham-noi-dung" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl bg-indigo-50 px-3 text-left text-indigo-800">
+                  {sheetOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronUp size={16} aria-hidden="true" />}
+                  <span className="min-w-0 truncate text-xs font-semibold">Tổng <span className="font-display text-base font-extrabold tabular-nums">{fmt(autoTotal + p4)}</span> · {sheetOpen ? "Đóng phiếu" : "Mở phiếu chấm"}</span>
+                </button>
+                <button type="button" onClick={() => void save(false)} disabled={Boolean(saving) || !current} aria-label="Lưu nháp" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-700 disabled:opacity-50">
+                  {saving === "draft" ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+                </button>
+                <button type="button" onClick={() => void save(true)} disabled={Boolean(saving) || !current || !allScored || Boolean(invalid)} className="edu-btn inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-white disabled:opacity-50">
+                  {saving === "final" ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}{currentItem?.gradingStatus === "graded" ? "Cập nhật" : "Hoàn tất"}
+                </button>
+              </div>
+            </div>
           </aside>
         </div>
       )}
