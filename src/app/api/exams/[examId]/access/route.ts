@@ -44,6 +44,10 @@ export async function POST(
     const metadata = publicMetadata(exam);
 
     const isTeacher = authUser.role === "admin" || authUser.role === "mod";
+    // Đề bị quản trị hệ thống ẩn: học sinh không vào được, giáo viên vẫn xem để biết lý do.
+    if (!isTeacher && exam.moderation?.hidden === true) {
+      return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    }
     if (!isTeacher && isClassOnly(exam.targetType, exam.targetClassIds)) {
       const targets = new Set<string>(exam.targetClassIds);
       const memberships = await adminDb.collection("classes").where("studentIds", "array-contains", authUser.uid).select().get();

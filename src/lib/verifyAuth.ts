@@ -22,6 +22,8 @@ export async function verifyAuth(req: NextRequest): Promise<AuthContextData | nu
     const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
     let role = "student"; // Default role
     if (userDoc.exists) {
+      // Tài khoản bị quản trị khoá: từ chối ngay cả khi token cũ còn hạn.
+      if (userDoc.data()?.disabled === true) return null;
       role = userDoc.data()?.role || "student";
     }
 

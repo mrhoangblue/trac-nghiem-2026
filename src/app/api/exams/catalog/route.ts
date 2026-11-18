@@ -9,12 +9,12 @@ export async function GET(request: NextRequest) {
   try {
     const user = await verifyAuth(request);
     if (!user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-    const snapshot = await adminDb.collection("exams").select("title", "description", "questionCount", "gradeLevel", "examType", "coverImageUrl", "duration", "requiresPassword", "targetType", "targetClassIds", "part1Count", "part2Count", "part3Count", "part4Count").get();
+    const snapshot = await adminDb.collection("exams").select("title", "description", "questionCount", "gradeLevel", "examType", "coverImageUrl", "duration", "requiresPassword", "targetType", "targetClassIds", "part1Count", "part2Count", "part3Count", "part4Count", "moderation").get();
     // The public catalog only lists public exams. Class-only exams are reached
     // from the class page, for students and teachers alike.
     const visible = snapshot.docs.filter((item) => {
       const data = item.data();
-      return !isClassOnly(data.targetType, data.targetClassIds);
+      return !isClassOnly(data.targetType, data.targetClassIds) && data.moderation?.hidden !== true;
     });
     const exams = await Promise.all(visible.map(async (item) => {
       const data = item.data();

@@ -183,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) return;
     if (!user) return;
     if (OPEN_ROUTES.includes(pathname)) return; // already there — don't loop
+    if (pathname.startsWith("/system")) return; // khu quản trị hệ thống không cần hồ sơ học sinh/giáo viên
     if (!userProfile) {
       router.replace("/onboarding");
     }
