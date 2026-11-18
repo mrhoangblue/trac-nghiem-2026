@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import {
-  ArrowLeft, Check, ChevronDown, Eraser, Hand, Highlighter, Loader2, Minus, PenLine, Plus, Redo2, Save, Send, Sparkles, Stamp, Type, Undo2,
+  ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Eraser, Hand, Highlighter, Loader2, Minus, PenLine, Plus, Redo2, Save, Send, Sparkles, Stamp, Type, Undo2,
 } from "lucide-react";
 import AdminGuard from "@/components/AdminGuard";
 import StateIcon from "@/components/StateIcon";
@@ -90,6 +90,12 @@ function GradeWorkspace() {
   const [ai, setAi] = useState<{ id: string; result: AiGradingResult | null; configured: boolean } | null>(null);
   const [aiBusy, setAiBusy] = useState<"one" | "all" | null>(null);
   const [aiProgress, setAiProgress] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending">("all");
+  const [autoNote, setAutoNote] = useState("");
+  // Bản mới nhất của phiếu chấm, để tự lưu và phím tắt đọc được mà không phải gắn lại.
+  const latest = useRef({ id: "", dirty: false, invalid: false, body: "" });
+  const autoInflight = useRef<Promise<boolean> | null>(null);
+  const navRef = useRef<(delta: number) => void>(() => {});
 
   const essayQuestions = useMemo(() => exam?.questions.filter((question) => question.type === "essay") ?? [], [exam]);
   const maxPoints = useMemo(() => exam ? essayQuestionPoints(exam.questions, exam.part4TotalScore) : new Map<number, number>(), [exam]);
@@ -283,6 +289,11 @@ function GradeWorkspace() {
         if (event.shiftKey) redo(); else undo();
         return;
       }
+      if (!event.metaKey && !event.ctrlKey && (event.key === "[" || event.key === "]")) {
+        event.preventDefault();
+        navRef.current(event.key === "]" ? 1 : -1);
+        return;
+      }
       const match = TOOLS.find((item) => item.shortcut.toLowerCase() === event.key.toLowerCase());
       if (match && !event.metaKey && !event.ctrlKey) setTool(match.value);
     };
@@ -301,8 +312,64 @@ function GradeWorkspace() {
     return !Number.isFinite(value) || value < 0 || value > (maxPoints.get(question.id) ?? 0);
   });
 
+  useEffect(() => {
+    latest.current = {
+      id: current?.id ?? "",
+      dirty,
+      invalid: Boolean(invalid),
+      body: JSON.stringify({ essayScores: scores, essayComments: comments, generalComment, annotations: history.present, final: false }),
+    };
+  });
+
+  // Lưu nháp ngầm: không đổi danh sách, không công bố điểm; học sinh không thấy.
+  const autoSave = useCallback((): Promise<boolean> => {
+    if (autoInflight.current) return autoInflight.current;
+    const snapshot = latest.current;
+    if (!user || !snapshot.id) return Promise.resolve(false);
+    if (!snapshot.dirty) return Promise.resolve(true);
+    if (snapshot.invalid) return Promise.resolve(false);
+    const run = (async () => {
+      try {
+        const response = await fetch(`/api/submissions/${encodeURIComponent(snapshot.id)}/grade`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+          body: snapshot.body,
+        });
+        if (!response.ok) throw new Error("SAVE_FAILED");
+        // Chỉ coi là sạch khi trong lúc lưu giáo viên chưa sửa thêm gì.
+        if (latest.current.id === snapshot.id && latest.current.body === snapshot.body) setDirty(false);
+        setAutoNote(`Đã tự lưu nháp lúc ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`);
+        return true;
+      } catch {
+        setAutoNote("Chưa tự lưu được, kiểm tra mạng.");
+        return false;
+      } finally {
+        autoInflight.current = null;
+      }
+    })();
+    autoInflight.current = run;
+    return run;
+  }, [user]);
+
+  // Sửa xong dừng tay 8 giây thì tự lưu nháp.
+  useEffect(() => {
+    if (!dirty || saving) return;
+    const timer = window.setTimeout(() => { void autoSave(); }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [dirty, saving, scores, comments, generalComment, history.present, autoSave]);
+
+  // Đóng tab hay tải lại khi chưa lưu: trình duyệt hỏi lại.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
   const save = async (final: boolean) => {
     if (!user || !current) return;
+    // Chờ lượt tự lưu đang chạy xong, tránh nó ghi đè bản nháp sau khi đã công bố.
+    if (autoInflight.current) await autoInflight.current;
     if (invalid) { setNotice(`Điểm câu ${exam!.questions.indexOf(invalid) + 1} vượt quá điểm tối đa.`); return; }
     if (final && !allScored) { setNotice("Cần nhập điểm cho mọi câu tự luận trước khi hoàn tất."); return; }
     setSaving(final ? "final" : "draft");
@@ -316,6 +383,7 @@ function GradeWorkspace() {
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error ?? "SAVE_FAILED");
       setDirty(false);
+      setAutoNote("");
       const items = await loadList();
       if (final) {
         const next = items?.find((item) => item.gradingStatus === "pending" && item.id !== current.id);
@@ -332,10 +400,27 @@ function GradeWorkspace() {
     }
   };
 
-  const openSubmission = (id: string) => {
-    if (dirty && !window.confirm("Bài đang chấm chưa lưu. Chuyển bài khác và bỏ thay đổi?")) return;
+  const openSubmission = async (id: string) => {
+    if (id === selectedId) return;
+    if (dirty) {
+      // Lưu nháp trước khi chuyển; chỉ hỏi khi không lưu được.
+      const saved = await autoSave();
+      if (!saved && !window.confirm("Không lưu nháp được. Chuyển bài khác và bỏ thay đổi?")) return;
+    }
     router.push(`/admin/grade/${examId}?s=${id}`);
   };
+
+  const visibleList = useMemo(
+    () => (list ?? []).filter((item) => filter === "all" || item.gradingStatus === "pending" || item.id === selectedId),
+    [list, filter, selectedId],
+  );
+  const position = visibleList.findIndex((item) => item.id === selectedId);
+  useEffect(() => {
+    navRef.current = (delta: number) => {
+      const target = visibleList[position + delta];
+      if (target) void openSubmission(target.id);
+    };
+  });
 
   if (error) {
     return (
@@ -362,17 +447,30 @@ function GradeWorkspace() {
           <h1 className="truncate font-display text-lg font-extrabold text-gray-900 sm:text-xl">{exam.title}</h1>
         </div>
         {list.length > 0 && (
-          <label className="relative min-w-0 sm:w-80">
-            <span className="sr-only">Chọn bài làm</span>
-            <select value={selectedId ?? ""} onChange={(event) => openSubmission(event.target.value)} className="h-11 w-full appearance-none truncate rounded-xl border border-gray-200 bg-white pl-3 pr-9 text-sm font-semibold text-gray-800 outline-none focus:border-brand-400">
-              {list.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.gradingStatus === "pending" ? "Chờ chấm" : "Đã chấm"} · {item.studentName}{item.isTeacherPreview ? " (bài thử GV)" : ""} · {item.essayFileCount} trang
-                </option>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+            <div role="group" aria-label="Lọc bài" className="flex h-11 shrink-0 rounded-xl border border-gray-200 bg-white p-0.5 text-xs font-semibold">
+              {([["all", `Tất cả ${list.length}`], ["pending", `Chờ chấm ${pendingCount}`]] as const).map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setFilter(value)} aria-pressed={filter === value}
+                  className={`rounded-[10px] px-2.5 transition ${filter === value ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{label}</button>
               ))}
-            </select>
-            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
-          </label>
+            </div>
+            <button type="button" onClick={() => navRef.current(-1)} disabled={position <= 0} title="Bài trước ([)" aria-label="Bài trước"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-brand-700 disabled:opacity-30"><ChevronLeft size={18} aria-hidden="true" /></button>
+            <label className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
+              <span className="sr-only">Chọn bài làm</span>
+              <select value={selectedId ?? ""} onChange={(event) => void openSubmission(event.target.value)} className="h-11 w-full appearance-none truncate rounded-xl border border-gray-200 bg-white pl-3 pr-9 text-sm font-semibold text-gray-800 outline-none focus:border-brand-400">
+                {visibleList.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.gradingStatus === "pending" ? "Chờ chấm" : "Đã chấm"} · {item.studentName}{item.isTeacherPreview ? " (bài thử GV)" : ""} · {item.essayFileCount} trang
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            </label>
+            <button type="button" onClick={() => navRef.current(1)} disabled={position < 0 || position >= visibleList.length - 1} title="Bài sau (])" aria-label="Bài sau"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-brand-700 disabled:opacity-30"><ChevronRight size={18} aria-hidden="true" /></button>
+            {position >= 0 && <span className="shrink-0 text-xs font-semibold tabular-nums text-gray-500">{position + 1}/{visibleList.length}</span>}
+          </div>
         )}
       </header>
 
@@ -513,6 +611,7 @@ function GradeWorkspace() {
             </div>
 
             {notice && <p role="status" className="rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">{notice}</p>}
+            {!notice && (dirty || autoNote) && <p role="status" className={`px-1 text-xs font-semibold ${dirty ? "text-amber-700" : autoNote.startsWith("Chưa") ? "text-rose-700" : "text-emerald-700"}`}>{dirty ? "Có thay đổi chưa lưu…" : autoNote}</p>}
             <div className="grid grid-cols-[auto_1fr] gap-2">
               <button type="button" onClick={() => void save(false)} disabled={Boolean(saving) || !current} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:border-brand-300 disabled:opacity-50">
                 {saving === "draft" ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}Lưu nháp
@@ -522,7 +621,7 @@ function GradeWorkspace() {
                 {currentItem?.gradingStatus === "graded" ? "Cập nhật điểm" : "Hoàn tất & chấm bài tiếp"}
               </button>
             </div>
-            <p className="px-1 text-[11px] leading-5 text-gray-400">Học sinh chỉ thấy điểm, bài chữa và nhận xét sau khi bấm Hoàn tất. Phím tắt: V P H T S E, Ctrl+Z.</p>
+            <p className="px-1 text-[11px] leading-5 text-gray-400">Học sinh chỉ thấy điểm, bài chữa và nhận xét sau khi bấm Hoàn tất. Phím tắt: V P H T S E, Ctrl+Z, [ bài trước, ] bài sau. Bản nháp tự lưu sau 8 giây.</p>
           </aside>
         </div>
       )}
