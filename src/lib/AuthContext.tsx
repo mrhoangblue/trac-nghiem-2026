@@ -18,8 +18,6 @@ import {
 import {
   doc,
   getDoc,
-  setDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter, usePathname } from "next/navigation";
